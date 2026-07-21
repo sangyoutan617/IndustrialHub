@@ -1,0 +1,166 @@
+import 'package:flutter/material.dart';
+import '../../models/demand_forecast.dart';
+import '../../services/demand_service.dart';
+
+class DemandFormScreen extends StatefulWidget {
+  final int factoryId;
+  final DemandForecast? forecast;
+
+  const DemandFormScreen({super.key, required this.factoryId, this.forecast});
+
+  @override
+  State<DemandFormScreen> createState() => _DemandFormScreenState();
+}
+
+class _DemandFormScreenState extends State<DemandFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _service = DemandService();
+
+  late final _nameController = TextEditingController(
+    text: widget.forecast?.productName,
+  );
+  late final _requiredController = TextEditingController(
+    text: widget.forecast?.requiredPerDay.toString(),
+  );
+  DateTime? _periodStart;
+  DateTime? _periodEnd;
+  bool _isSaving = false;
+
+  bool get _isEditing => widget.forecast != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _periodStart = widget.forecast?.periodStart;
+    _periodEnd = widget.forecast?.periodEnd;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _requiredController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate({required bool isStart}) async {
+    final initial = (isStart ? _periodStart : _periodEnd) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _periodStart = picked;
+      } else {
+        _periodEnd = picked;
+      }
+    });
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'Not set';
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      final forecast = DemandForecast(
+        demandId: widget.forecast?.demandId ?? 0,
+        factoryId: widget.factoryId,
+        productName: _nameController.text.trim(),
+        requiredPerDay: int.parse(_requiredController.text),
+        periodStart: _periodStart,
+        periodEnd: _periodEnd,
+      );
+      if (_isEditing) {
+        await _service.updateForecast(widget.forecast!.demandId, forecast);
+      } else {
+        await _service.createForecast(forecast);
+      }
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save demand forecast. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(_isEditing ? 'Edit demand' : 'Add demand')),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Product name',
+                  helperText:
+                      'Match the product name used in Finished Stock to link them',
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _requiredController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Required units per day',
+                ),
+                validator: (v) {
+                  final parsed = int.tryParse(v ?? '');
+                  if (parsed == null || parsed < 0) {
+                    return 'Enter a non-negative whole number';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Period start (optional)'),
+                subtitle: Text(_formatDate(_periodStart)),
+                trailing: const Icon(Icons.calendar_today_outlined),
+                onTap: () => _pickDate(isStart: true),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Period end (optional)'),
+                subtitle: Text(_formatDate(_periodEnd)),
+                trailing: const Icon(Icons.calendar_today_outlined),
+                onTap: () => _pickDate(isStart: false),
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _isSaving ? null : _save,
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
