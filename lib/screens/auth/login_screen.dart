@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 import 'signup_screen.dart';
 
@@ -78,16 +79,36 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.factory,
-                    size: 56,
-                    color: Theme.of(context).colorScheme.primary,
+                  Center(
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.factory,
+                        size: 32,
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Text(
                     'Industrial Hub',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Innovation Platform',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                   const SizedBox(height: 32),
                   TextFormField(
@@ -121,22 +142,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? const SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Sign in'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SignupScreen(),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
                             ),
-                          ),
-                    child: const Text("Don't have an account? Sign up"),
+                          )
+                        : const Text('Log in'),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       const Expanded(child: Divider()),
@@ -163,6 +176,34 @@ class _LoginScreenState extends State<LoginScreen> {
                           )
                         : const Icon(Icons.g_mobiledata, size: 24),
                     label: const Text('Continue with Google'),
+                  ),
+                  const SizedBox(height: 20),
+                  Center(
+                    child: TextButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const SignupScreen(),
+                              ),
+                            ),
+                      child: RichText(
+                        text: TextSpan(
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: Colors.grey.shade700),
+                          children: const [
+                            TextSpan(text: 'No account? '),
+                            TextSpan(
+                              text: 'Sign up',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),

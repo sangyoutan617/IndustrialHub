@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/demand_forecast.dart';
 import '../../models/finished_stock.dart';
 import '../../services/demand_service.dart';
@@ -183,6 +184,12 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         )
         .length;
 
+    final withCover = _covers.where((c) => c.daysOfCover != null).toList();
+    final mostUrgent = withCover.isEmpty
+        ? null
+        : (withCover.toList()
+            ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!))).first;
+
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -190,40 +197,61 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         children: [
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _summaryStat(
-                    'Products',
-                    _covers.length.toString(),
-                    scheme.primary,
+                  Text(
+                    'Days of cover',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
-                  _summaryStat(
-                    'Low stock',
-                    lowStockCount.toString(),
-                    scheme.error,
+                  const SizedBox(height: 4),
+                  Text(
+                    mostUrgent != null
+                        ? '${mostUrgent.daysOfCover!.toStringAsFixed(1)} days'
+                        : '—',
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryDark,
+                    ),
                   ),
-                  _summaryStat(
-                    'Overstocked',
-                    overstockCount.toString(),
-                    scheme.tertiary,
-                  ),
+                  if (mostUrgent?.stockOutDate != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Stock-out predicted: ${_formatDate(mostUrgent!.stockOutDate!)}',
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.inventory_2_outlined),
-              title: const Text('Finished stock'),
-              subtitle: Text(
-                '${_covers.length} products — manage quantities and movements',
+          Row(
+            children: [
+              Expanded(
+                child: _summaryStat(
+                  'Products',
+                  _covers.length.toString(),
+                  scheme.primary,
+                ),
               ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _openStockList,
-            ),
+              Expanded(
+                child: _summaryStat(
+                  'Low stock',
+                  lowStockCount.toString(),
+                  scheme.error,
+                ),
+              ),
+              Expanded(
+                child: _summaryStat(
+                  'Overstocked',
+                  overstockCount.toString(),
+                  AppColors.primaryDark,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           if (_covers.isEmpty)
@@ -241,6 +269,12 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             ),
             const SizedBox(height: 8),
             for (final cover in _covers) _buildCoverCard(cover, scheme),
+            const SizedBox(height: 8),
+            _dashedButton(
+              icon: Icons.add,
+              label: 'Log stock movement',
+              onTap: _openStockList,
+            ),
           ],
           const SizedBox(height: 24),
           Row(
@@ -342,20 +376,82 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text('${cover.stock.currentQuantity} units in stock'),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: cover.requiredPerDay != null && cover.requiredPerDay! > 0
+                    ? (cover.stock.currentQuantity /
+                            (cover.requiredPerDay! * _overstockDaysThreshold))
+                        .clamp(0.0, 1.0)
+                    : 0,
+                minHeight: 6,
+                backgroundColor: AppColors.primaryLight,
+                valueColor: AlwaysStoppedAnimation(cover.statusColor(scheme)),
+              ),
+            ),
+            const SizedBox(height: 6),
             if (cover.daysOfCover != null) ...[
-              Text('${cover.daysOfCover!.toStringAsFixed(1)} days of cover'),
+              Text(
+                'Demand ${cover.requiredPerDay}/day · '
+                '${cover.daysOfCover!.toStringAsFixed(1)} days of cover',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
               if (cover.stockOutDate != null)
                 Text(
-                  'Predicted stock-out: ${cover.stockOutDate!.year}-'
-                  '${cover.stockOutDate!.month.toString().padLeft(2, '0')}-'
-                  '${cover.stockOutDate!.day.toString().padLeft(2, '0')}',
+                  'Predicted stock-out: ${_formatDate(cover.stockOutDate!)}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
-            ],
+            ] else
+              Text(
+                'No demand set',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _dashedButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.5),
+            style: BorderStyle.solid,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: AppColors.primaryDark),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.primaryDark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }
