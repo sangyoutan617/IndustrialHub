@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -12,10 +13,20 @@ class AboutScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Icon(
-              Icons.factory,
-              size: 56,
-              color: Theme.of(context).colorScheme.primary,
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.factory,
+                  size: 32,
+                  color: AppColors.primary,
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             Text(

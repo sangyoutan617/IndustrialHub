@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/machine.dart';
 import '../../models/manpower.dart';
 import '../../services/capacity_service.dart';
@@ -216,7 +217,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
         color: _justFlipped
-            ? scheme.tertiaryContainer
+            ? AppColors.primaryAccent
             : scheme.primaryContainer,
         borderRadius: BorderRadius.circular(16),
       ),
