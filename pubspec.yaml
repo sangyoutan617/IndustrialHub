@@ -37,6 +37,7 @@ dependencies:
   supabase_flutter: ^2.5.0
   provider: ^6.1.0
   fl_chart: ^0.68.0
+  shared_preferences: ^2.5.0
 
 dev_dependencies:
   flutter_test:
@@ -110,9 +111,9 @@ flutter_launcher_icons:
     image_path: "assets/icon/icon.png"
 
 flutter_native_splash:
-  color: "#3F51B5"
-  image: assets/icon/icon_foreground.png
+  color: "#EAF3DE"
+  image: assets/icon/splash_icon.png
   android_12:
-    image: assets/icon/icon_foreground.png
-    color: "#3F51B5"
-  web: false
+    image: assets/icon/splash_icon.png
+    color: "#EAF3DE"
+  web: true
