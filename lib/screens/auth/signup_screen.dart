@@ -17,6 +17,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
 
   @override
   void dispose() {
@@ -45,6 +46,22 @@ class _SignupScreenState extends State<SignupScreen> {
       _showError('Unable to create account. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isGoogleLoading = true);
+    try {
+      await _authService.signInWithGoogle();
+      // Success continues outside this screen — AuthGate's onAuthStateChange
+      // listener picks up the session once the browser flow completes and
+      // redirects back into the app.
+    } on AuthException catch (e) {
+      _showError(e.message);
+    } catch (e) {
+      _showError('Unable to sign in with Google. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
     }
   }
 
@@ -152,6 +169,34 @@ class _SignupScreenState extends State<SignupScreen> {
                             ),
                           )
                         : const Text('Sign up'),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'or',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: (_isLoading || _isGoogleLoading)
+                        ? null
+                        : _signInWithGoogle,
+                    icon: _isGoogleLoading
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.g_mobiledata, size: 24),
+                    label: const Text('Continue with Google'),
                   ),
                   const SizedBox(height: 20),
                   Center(
