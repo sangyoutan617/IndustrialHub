@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/session_prefs.dart';
+import '../admin/admin_login_screen.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+  bool _rememberMe = false;
 
   @override
   void dispose() {
@@ -34,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      await SessionPrefs.setRememberMe(_rememberMe);
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {
@@ -46,6 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _isGoogleLoading = true);
     try {
+      await SessionPrefs.setRememberMe(_rememberMe);
       await _authService.signInWithGoogle();
       // Success continues outside this screen — AuthGate's onAuthStateChange
       // listener picks up the session once the browser flow completes and
@@ -135,7 +140,34 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: Checkbox(
+                          value: _rememberMe,
+                          onChanged: _isLoading
+                              ? null
+                              : (value) => setState(
+                                  () => _rememberMe = value ?? false,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _isLoading
+                            ? null
+                            : () => setState(() => _rememberMe = !_rememberMe),
+                        child: Text(
+                          'Remember me for 30 days',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
                   FilledButton(
                     onPressed: _isLoading ? null : _submit,
                     child: _isLoading
@@ -202,6 +234,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Center(
+                    child: TextButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AdminLoginScreen(),
+                              ),
+                            ),
+                      child: Text(
+                        'Admin login',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: Colors.grey.shade500),
                       ),
                     ),
                   ),
