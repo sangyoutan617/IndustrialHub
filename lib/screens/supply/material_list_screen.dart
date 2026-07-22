@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/raw_material.dart';
 import '../../services/capacity_service.dart';
 import '../../services/material_service.dart';
@@ -173,12 +174,42 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   Widget _buildReady() {
     final scheme = Theme.of(context).colorScheme;
     final reorderCount = _risks.where((r) => r.needsReorder).length;
+    final mostUrgent = _risks.where((r) => r.needsReorder).isEmpty
+        ? null
+        : (_risks.where((r) => r.needsReorder).toList()
+            ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!))).first;
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (mostUrgent != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppColors.primaryDark),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Reorder now — ${mostUrgent.daysOfCover!.toStringAsFixed(0)} days cover, '
+                      '${mostUrgent.minSupplierLeadDays} day lead',
+                      style: const TextStyle(
+                        color: AppColors.primaryDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -193,7 +224,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   _summaryStat(
                     'Reorder now',
                     reorderCount.toString(),
-                    scheme.error,
+                    AppColors.primaryDark,
                   ),
                 ],
               ),
@@ -279,12 +310,16 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: scheme.error.withValues(alpha: 0.15),
+                      color: AppColors.primaryLight,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
+                    child: const Text(
                       'Reorder now',
-                      style: TextStyle(color: scheme.error, fontSize: 12),
+                      style: TextStyle(
+                        color: AppColors.primaryDark,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 Row(
@@ -303,6 +338,22 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
               ],
             ),
             Text('${material.currentStock} ${material.unit} in stock'),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: risk.daysOfCover != null && risk.minSupplierLeadDays != null
+                    ? (risk.daysOfCover! / (risk.minSupplierLeadDays! * 3))
+                        .clamp(0.0, 1.0)
+                    : (risk.daysOfCover == null ? 0 : 1),
+                minHeight: 6,
+                backgroundColor: AppColors.primaryLight,
+                valueColor: AlwaysStoppedAnimation(
+                  risk.needsReorder ? AppColors.primaryDark : AppColors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
             if (risk.daysOfCover != null) ...[
               Text(
                 '${risk.daysOfCover!.toStringAsFixed(1)} days of cover at planned production',

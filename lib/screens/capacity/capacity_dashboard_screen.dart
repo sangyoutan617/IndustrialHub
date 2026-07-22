@@ -1,5 +1,5 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../services/capacity_service.dart';
 import '../../widgets/empty_state.dart';
@@ -72,7 +72,8 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
 
   Widget _buildReady() {
     final snapshot = _snapshot!;
-    final scheme = Theme.of(context).colorScheme;
+    final isMachineLimiting =
+        snapshot.machineCapacity <= snapshot.manpowerCapacity;
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -80,168 +81,155 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Card(
-            color: scheme.primaryContainer,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Effective capacity',
-                    style: Theme.of(context).textTheme.labelLarge,
+                    'Daily production ceiling',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
+                  const SizedBox(height: 4),
                   Text(
-                    '${snapshot.effectiveCapacity.toStringAsFixed(0)} units/day',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    '${snapshot.effectiveCapacity.toStringAsFixed(0)} units',
+                    style: const TextStyle(
+                      fontSize: 28,
                       fontWeight: FontWeight.bold,
+                      color: AppColors.primaryDark,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Chip(
-                    label: Text('Bottleneck: ${snapshot.bottleneckResource}'),
+                  const SizedBox(height: 20),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: _capacityBar(
+                          label: 'Machine',
+                          value: snapshot.machineCapacity,
+                          maxValue: [
+                            snapshot.machineCapacity,
+                            snapshot.manpowerCapacity,
+                            1.0,
+                          ].reduce((a, b) => a > b ? a : b),
+                          isLimiter: isMachineLimiting,
+                          color: AppColors.primaryAccent,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _capacityBar(
+                          label: 'Labour',
+                          value: snapshot.manpowerCapacity,
+                          maxValue: [
+                            snapshot.machineCapacity,
+                            snapshot.manpowerCapacity,
+                            1.0,
+                          ].reduce((a, b) => a > b ? a : b),
+                          isLimiter: !isMachineLimiting,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Machine vs manpower capacity',
-                    style: Theme.of(context).textTheme.titleMedium,
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _navigateAndRefresh(
+                    MachineListScreen(factoryId: widget.factory.factoryId),
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(height: 180, child: _buildBarChart(snapshot)),
-                ],
+                  icon: const Icon(Icons.settings_outlined),
+                  label: const Text('Machines'),
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _navigateAndRefresh(
+                    ManpowerListScreen(factoryId: widget.factory.factoryId),
+                  ),
+                  icon: const Icon(Icons.people_outline),
+                  label: const Text('Manpower'),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          _buildNavTile(
-            icon: Icons.precision_manufacturing_outlined,
-            title: 'Machines',
-            subtitle: '${snapshot.machines.length} recorded',
-            onTap: () => _navigateAndRefresh(
-              MachineListScreen(factoryId: widget.factory.factoryId),
-            ),
-          ),
-          _buildNavTile(
-            icon: Icons.groups_outlined,
-            title: 'Manpower',
-            subtitle: '${snapshot.shifts.length} shifts recorded',
-            onTap: () => _navigateAndRefresh(
-              ManpowerListScreen(factoryId: widget.factory.factoryId),
-            ),
-          ),
-          _buildNavTile(
-            icon: Icons.tune,
-            title: 'What-if simulator',
-            subtitle: 'Explore hypothetical capacity live',
-            onTap: () => _navigateAndRefresh(
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () => _navigateAndRefresh(
               SimulatorScreen(factoryId: widget.factory.factoryId),
             ),
+            icon: const Icon(Icons.tune),
+            label: const Text('Open what-if simulator'),
           ),
-          _buildNavTile(
-            icon: Icons.public,
-            title: 'Benchmark vs Malaysia',
-            subtitle: 'Compare against DOSM national data',
-            onTap: () =>
-                _navigateAndRefresh(BenchmarkScreen(factory: widget.factory)),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.public, color: AppColors.primary),
+              title: const Text('Benchmark vs Malaysia'),
+              subtitle: const Text('Compare against DOSM national data'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () =>
+                  _navigateAndRefresh(BenchmarkScreen(factory: widget.factory)),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBarChart(CapacitySnapshot snapshot) {
-    final maxY =
-        [
-          snapshot.machineCapacity,
-          snapshot.manpowerCapacity,
-          1.0,
-        ].reduce((a, b) => a > b ? a : b) *
-        1.2;
-    return BarChart(
-      BarChartData(
-        maxY: maxY,
-        gridData: const FlGridData(show: false),
-        borderData: FlBorderData(show: false),
-        titlesData: FlTitlesData(
-          leftTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
+  Widget _capacityBar({
+    required String label,
+    required double value,
+    required double maxValue,
+    required bool isLimiter,
+    required Color color,
+  }) {
+    const maxHeight = 90.0;
+    final height = maxValue > 0
+        ? (value / maxValue * maxHeight).clamp(6.0, maxHeight)
+        : 6.0;
+    return Column(
+      children: [
+        Text(
+          value.toStringAsFixed(0),
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.primaryDark,
           ),
-          topTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                final label = value == 0
-                    ? 'Machine'
-                    : (value == 1 ? 'Manpower' : '');
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(label),
-                );
-              },
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(6),
             ),
           ),
         ),
-        barGroups: [
-          BarChartGroupData(
-            x: 0,
-            barRods: [
-              BarChartRodData(
-                toY: snapshot.machineCapacity,
-                color: Theme.of(context).colorScheme.primary,
-                width: 40,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(4),
-                ),
+        const SizedBox(height: 6),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+        if (isLimiter)
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Text(
+              'limiter',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
               ),
-            ],
+            ),
           ),
-          BarChartGroupData(
-            x: 1,
-            barRods: [
-              BarChartRodData(
-                toY: snapshot.manpowerCapacity,
-                color: Theme.of(context).colorScheme.secondary,
-                width: 40,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(4),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
+      ],
     );
   }
 }
