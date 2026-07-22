@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../models/ipi_benchmark.dart';
 import '../../models/msic_code.dart';
@@ -176,6 +177,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
         children: [
           Card(
             child: ListTile(
+              leading: const Icon(Icons.category_outlined, color: AppColors.primary),
               title: Text(
                 _msic?.description ?? _factory.msicCode ?? 'Unknown industry',
               ),
@@ -200,26 +202,70 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   Widget _buildYourFactoryCard() {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Your factory',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
-              'Achievable output: ${_effectiveCapacity.toStringAsFixed(0)} units/day',
+              '${_effectiveCapacity.toStringAsFixed(0)} units/day',
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primaryDark,
+              ),
             ),
-            Text('Total workers: $_totalWorkers'),
-            Text(
-              _outputPerWorker != null
-                  ? 'Output per worker: ${_outputPerWorker!.toStringAsFixed(2)} units/worker/day'
-                  : 'Output per worker: not available (no workers recorded)',
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _statTile('Total workers', '$_totalWorkers'),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _statTile(
+                    'Output / worker',
+                    _outputPerWorker != null
+                        ? '${_outputPerWorker!.toStringAsFixed(2)}/day'
+                        : 'n/a',
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _statTile(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: AppColors.primaryDark.withValues(alpha: 0.75)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryDark,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -309,7 +355,12 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                         ],
                         isCurved: true,
                         dotData: const FlDotData(show: false),
-                        color: Theme.of(context).colorScheme.primary,
+                        color: AppColors.primary,
+                        barWidth: 3,
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: AppColors.primaryLight,
+                        ),
                       ),
                     ],
                   ),
