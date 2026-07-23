@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/raw_material.dart';
+import 'supply_exceptions.dart';
 
 class MaterialService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -41,6 +42,27 @@ class MaterialService {
   }
 
   Future<void> deleteMaterial(int materialId) async {
+    final linkedSuppliers = await _client
+        .from('suppliers')
+        .select('supplier_id')
+        .eq('material_id', materialId)
+        .limit(1);
+    if ((linkedSuppliers as List).isNotEmpty) {
+      throw const SupplyInUseException(
+        'This material still has suppliers linked to it — remove those '
+        'suppliers first.',
+      );
+    }
+    final linkedOrders = await _client
+        .from('purchase_orders')
+        .select('po_id')
+        .eq('material_id', materialId)
+        .limit(1);
+    if ((linkedOrders as List).isNotEmpty) {
+      throw const SupplyInUseException(
+        'This material has purchase order history — it cannot be removed.',
+      );
+    }
     await _client.from('raw_materials').delete().eq('material_id', materialId);
   }
 }

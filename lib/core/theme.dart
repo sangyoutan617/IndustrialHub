@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 /// SDG green palette used across the prototype screens.
 class AppColors {
-  static const primary = Color(0xFF639922);
-  static const primaryDark = Color(0xFF27500A);
-  static const primaryLight = Color(0xFFEAF3DE);
-  static const primaryAccent = Color(0xFFC0DD97);
+  static const primary = Color(0xFF16794F);
+  static const primaryDark = Color(0xFF0E4030);
+  static const primaryLight = Color(0xFFE9F3EE);
+  static const primaryAccent = Color(0xFFA3D0BB);
 }
 
 class AppTheme {
@@ -22,6 +22,13 @@ class AppTheme {
       onSecondary: Colors.white,
       secondaryContainer: AppColors.primaryAccent,
       onSecondaryContainer: AppColors.primaryDark,
+      // Pinned so ColorScheme.fromSeed never auto-generates a stray
+      // blue-cyan tertiary — every screen that reads scheme.tertiary
+      // (e.g. the stock dashboard's "Overstocked" label) stays on-palette.
+      tertiary: AppColors.primaryDark,
+      onTertiary: Colors.white,
+      tertiaryContainer: AppColors.primaryLight,
+      onTertiaryContainer: AppColors.primaryDark,
       surface: Colors.white,
     );
 

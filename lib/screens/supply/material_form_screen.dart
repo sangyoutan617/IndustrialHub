@@ -31,6 +31,9 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
   late final _reorderController = TextEditingController(
     text: (widget.material?.reorderLevel ?? 0).toString(),
   );
+  late final _safetyStockController = TextEditingController(
+    text: (widget.material?.safetyStockDays ?? 3).toString(),
+  );
   bool _isSaving = false;
 
   bool get _isEditing => widget.material != null;
@@ -42,6 +45,7 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
     _unitController.dispose();
     _consumptionController.dispose();
     _reorderController.dispose();
+    _safetyStockController.dispose();
     super.dispose();
   }
 
@@ -59,6 +63,7 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
             : _unitController.text.trim(),
         consumptionPerUnit: double.parse(_consumptionController.text),
         reorderLevel: double.parse(_reorderController.text),
+        safetyStockDays: int.parse(_safetyStockController.text),
       );
       if (_isEditing) {
         await _service.updateMaterial(widget.material!.materialId, material);
@@ -142,6 +147,24 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                 ),
                 decoration: const InputDecoration(labelText: 'Reorder level'),
                 validator: (v) => _requiredNumber(v, min: 0),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _safetyStockController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Safety stock (days)',
+                  helperText:
+                      'Extra buffer kept on top of supplier lead time when '
+                      'deciding the latest safe reorder date',
+                ),
+                validator: (v) {
+                  final parsed = int.tryParse(v ?? '');
+                  if (parsed == null || parsed < 0) {
+                    return 'Enter a non-negative whole number';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 24),
               FilledButton(
