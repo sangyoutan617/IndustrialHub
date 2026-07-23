@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
+import '../../models/purchase_order.dart';
+import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
-import '../../services/material_service.dart';
+import '../../services/mrp_service.dart';
 import '../../services/supplier_service.dart';
+import '../../services/supply_exceptions.dart';
+import '../../services/supply_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
+import 'supplier_comparison_screen.dart';
 import 'supplier_form_screen.dart';
+
+const _openStatuses = [
+  PurchaseOrderStatus.pending,
+  PurchaseOrderStatus.processing,
+  PurchaseOrderStatus.shipped,
+];
 
 class SupplierListScreen extends StatefulWidget {
   final int factoryId;
@@ -19,12 +30,15 @@ class SupplierListScreen extends StatefulWidget {
 enum _LoadState { loading, error, ready }
 
 class _SupplierListScreenState extends State<SupplierListScreen> {
-  final _materialService = MaterialService();
+  final _supplyService = SupplyService();
   final _supplierService = SupplierService();
 
   _LoadState _state = _LoadState.loading;
   List<Supplier> _suppliers = [];
+  List<RawMaterial> _materials = [];
+  List<PurchaseOrder> _orders = [];
   Map<int, String> _materialNames = {};
+  bool _sortByReliability = false;
 
   @override
   void initState() {
@@ -35,22 +49,35 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final materials = await _materialService.getMaterials(widget.factoryId);
-      final materialIds = materials.map((m) => m.materialId).toList();
-      final suppliers = await _supplierService.getSuppliersForMaterials(
-        materialIds,
-      );
+      final overview = await _supplyService.load(widget.factoryId);
       setState(() {
-        _suppliers = suppliers;
-        _materialNames = {
-          for (final m in materials) m.materialId: m.materialName,
-        };
+        _suppliers = overview.suppliers;
+        _materials = overview.materials;
+        _orders = overview.orders;
+        _materialNames = overview.materialNames;
         _state = _LoadState.ready;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('supply: failed to load suppliers: $e');
       setState(() => _state = _LoadState.error);
     }
   }
+
+  List<Supplier> get _sortedSuppliers {
+    final list = List<Supplier>.from(_suppliers);
+    if (_sortByReliability) {
+      list.sort((a, b) => b.reliabilityRating.compareTo(a.reliabilityRating));
+    } else {
+      list.sort((a, b) => a.supplierName.compareTo(b.supplierName));
+    }
+    return list;
+  }
+
+  int _openOrderCount(int supplierId) => _orders
+      .where(
+        (o) => o.supplierId == supplierId && _openStatuses.contains(o.status),
+      )
+      .length;
 
   Future<void> _openForm({Supplier? supplier}) async {
     final saved = await Navigator.of(context).push<bool>(
@@ -72,7 +99,11 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     try {
       await _supplierService.deleteSupplier(supplier.supplierId);
       _load();
-    } catch (_) {
+    } on SupplyInUseException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } catch (e) {
+      debugPrint('supply: failed to delete supplier: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -82,10 +113,108 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     }
   }
 
+  Future<void> _quickRate(Supplier supplier) async {
+    var rating = supplier.reliabilityRating;
+    final saved = await showDialog<double>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Rate ${supplier.supplierName}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('${rating.toStringAsFixed(1)} ★'),
+              Slider(
+                value: rating,
+                min: 0,
+                max: 5,
+                divisions: 10,
+                label: rating.toStringAsFixed(1),
+                onChanged: (v) => setDialogState(() => rating = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, rating),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == null) return;
+    try {
+      await _supplierService.updateRating(supplier.supplierId, saved);
+      _load();
+    } catch (e) {
+      debugPrint('supply: failed to update rating: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not update rating. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openComparison() async {
+    final materialsWithSuppliers = _materials
+        .where(
+          (m) => _suppliers.any((s) => s.materialId == m.materialId),
+        )
+        .toList();
+    if (materialsWithSuppliers.isEmpty) return;
+    final materialId = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Compare suppliers for'),
+        children: [
+          for (final material in materialsWithSuppliers)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, material.materialId),
+              child: Text(material.materialName),
+            ),
+        ],
+      ),
+    );
+    if (materialId == null || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SupplierComparisonScreen(
+          factoryId: widget.factoryId,
+          materialId: materialId,
+          materialName: _materialNames[materialId] ?? 'Material',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Suppliers')),
+      appBar: AppBar(
+        title: const Text('Suppliers'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.compare_arrows),
+            tooltip: 'Compare suppliers',
+            onPressed: _state == _LoadState.ready ? _openComparison : null,
+          ),
+          IconButton(
+            icon: Icon(
+              _sortByReliability ? Icons.star : Icons.sort_by_alpha,
+            ),
+            tooltip: _sortByReliability ? 'Sorted by reliability' : 'Sort by name',
+            onPressed: () =>
+                setState(() => _sortByReliability = !_sortByReliability),
+          ),
+        ],
+      ),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openForm(),
@@ -113,23 +242,33 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
           onRefresh: _load,
           child: ListView.builder(
             padding: const EdgeInsets.all(8),
-            itemCount: _suppliers.length,
+            itemCount: _sortedSuppliers.length,
             itemBuilder: (context, index) {
-              final supplier = _suppliers[index];
+              final supplier = _sortedSuppliers[index];
               final materialName =
                   _materialNames[supplier.materialId] ?? 'Unknown material';
+              final effectiveLead = MrpService.effectiveLeadDays(supplier);
+              final openCount = _openOrderCount(supplier.supplierId);
               return Card(
                 child: ListTile(
                   title: Text(supplier.supplierName),
                   subtitle: Text(
-                    'Supplies $materialName · ${supplier.leadTimeDays}d lead time · '
-                    '${supplier.reliabilityRating.toStringAsFixed(1)}★'
+                    'Supplies $materialName · quoted ${supplier.leadTimeDays}d '
+                    '→ effective ${effectiveLead}d lead · '
+                    '$openCount open PO${openCount == 1 ? '' : 's'}'
                     '${supplier.location != null ? ' · ${supplier.location}' : ''}',
                   ),
+                  leading: _StarRow(rating: supplier.reliabilityRating),
                   onTap: () => _openForm(supplier: supplier),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _delete(supplier),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'rate') _quickRate(supplier);
+                      if (value == 'delete') _delete(supplier);
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'rate', child: Text('Rate')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    ],
                   ),
                 ),
               );
@@ -137,5 +276,31 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
           ),
         );
     }
+  }
+}
+
+class _StarRow extends StatelessWidget {
+  final double rating;
+
+  const _StarRow({required this.rating});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 90,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 1; i <= 5; i++)
+            Icon(
+              rating >= i
+                  ? Icons.star
+                  : (rating >= i - 0.5 ? Icons.star_half : Icons.star_border),
+              size: 14,
+              color: Colors.amber.shade700,
+            ),
+        ],
+      ),
+    );
   }
 }
