@@ -6,6 +6,7 @@ class RawMaterial {
   final String unit;
   final double consumptionPerUnit;
   final double reorderLevel;
+  final int safetyStockDays;
 
   const RawMaterial({
     required this.materialId,
@@ -15,6 +16,7 @@ class RawMaterial {
     required this.unit,
     required this.consumptionPerUnit,
     required this.reorderLevel,
+    this.safetyStockDays = 3,
   });
 
   factory RawMaterial.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,9 @@ class RawMaterial {
       unit: json['unit'] as String? ?? 'kg',
       consumptionPerUnit: (json['consumption_per_unit'] as num).toDouble(),
       reorderLevel: (json['reorder_level'] as num?)?.toDouble() ?? 0,
+      // Falls back to 3 when the column hasn't been migrated yet, so the
+      // app keeps working against an older database schema.
+      safetyStockDays: (json['safety_stock_days'] as num?)?.toInt() ?? 3,
     );
   }
 
@@ -37,6 +42,7 @@ class RawMaterial {
       'unit': unit,
       'consumption_per_unit': consumptionPerUnit,
       'reorder_level': reorderLevel,
+      'safety_stock_days': safetyStockDays,
     };
   }
 }

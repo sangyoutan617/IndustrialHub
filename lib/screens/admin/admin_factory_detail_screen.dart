@@ -4,6 +4,8 @@ import '../../models/factory.dart';
 import '../../models/raw_material.dart';
 import '../../services/bottleneck_service.dart';
 import '../../services/material_service.dart';
+import '../../services/mrp_service.dart';
+import '../../services/supplier_service.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -29,6 +31,7 @@ enum _LoadState { loading, error, ready }
 class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   final _materialService = MaterialService();
   final _bottleneckService = BottleneckService();
+  final _supplierService = SupplierService();
 
   _LoadState _state = _LoadState.loading;
   BottleneckResult? _bottleneck;
@@ -64,12 +67,31 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   }
 
   Future<void> _raisePurchaseOrder(RawMaterial material) async {
+    final suppliers = await _supplierService.getSuppliersForMaterials([
+      material.materialId,
+    ]);
+    final supplier = MrpService.bestSupplier(suppliers);
+    if (supplier == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No supplier assigned to ${material.materialName} yet — add one first.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => OrderFormScreen(
           factoryId: widget.factory.factoryId,
-          initialMaterialId: material.materialId,
-          initialQuantity: material.reorderLevel - material.currentStock,
+          prefill: OrderFormPrefill(
+            materialId: material.materialId,
+            supplierId: supplier.supplierId,
+            quantity: material.reorderLevel - material.currentStock,
+          ),
         ),
       ),
     );
