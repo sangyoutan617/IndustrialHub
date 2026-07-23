@@ -25,6 +25,8 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
   DateTime? _periodStart;
   DateTime? _periodEnd;
   bool _isSaving = false;
+  bool _isSuggesting = false;
+  String? _suggestError;
 
   bool get _isEditing => widget.forecast != null;
 
@@ -58,6 +60,36 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
         _periodEnd = picked;
       }
     });
+  }
+
+  Future<void> _suggestFromHistory() async {
+    final productName = _nameController.text.trim();
+    if (productName.isEmpty) {
+      setState(() => _suggestError = 'Enter a product name first.');
+      return;
+    }
+    setState(() {
+      _isSuggesting = true;
+      _suggestError = null;
+    });
+    try {
+      final suggestion = await _service.suggestRequiredPerDay(
+        factoryId: widget.factoryId,
+        productName: productName,
+      );
+      if (suggestion == null) {
+        setState(
+          () => _suggestError =
+              'No shipment history found for "$productName" in the last 30 days.',
+        );
+      } else {
+        _requiredController.text = suggestion.round().toString();
+      }
+    } catch (_) {
+      setState(() => _suggestError = 'Could not load shipment history.');
+    } finally {
+      if (mounted) setState(() => _isSuggesting = false);
+    }
   }
 
   String _formatDate(DateTime? date) {
@@ -122,6 +154,8 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Required units per day',
+                  helperText:
+                      'A number you set, or derive one from shipment history below',
                 ),
                 validator: (v) {
                   final parsed = int.tryParse(v ?? '');
@@ -131,6 +165,29 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                   return null;
                 },
               ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _isSuggesting ? null : _suggestFromHistory,
+                  icon: _isSuggesting
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_graph, size: 18),
+                  label: const Text('Suggest from shipment history'),
+                ),
+              ),
+              if (_suggestError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _suggestError!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               const SizedBox(height: 16),
               ListTile(
                 contentPadding: EdgeInsets.zero,

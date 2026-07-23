@@ -10,7 +10,17 @@ import '../../widgets/loading_indicator.dart';
 class OrderFormScreen extends StatefulWidget {
   final int factoryId;
 
-  const OrderFormScreen({super.key, required this.factoryId});
+  /// When set (e.g. raised from a low-stock alert), the supplier dropdown is
+  /// narrowed to suppliers of this material and quantity is pre-filled.
+  final int? initialMaterialId;
+  final double? initialQuantity;
+
+  const OrderFormScreen({
+    super.key,
+    required this.factoryId,
+    this.initialMaterialId,
+    this.initialQuantity,
+  });
 
   @override
   State<OrderFormScreen> createState() => _OrderFormScreenState();
@@ -31,10 +41,14 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   DateTime _orderDate = DateTime.now();
   DateTime? _expectedDelivery;
   bool _isSaving = false;
+  bool _noSupplierForMaterial = false;
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialQuantity != null) {
+      _quantityController.text = widget.initialQuantity!.toStringAsFixed(0);
+    }
     _load();
   }
 
@@ -43,11 +57,26 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     try {
       final materials = await _materialService.getMaterials(widget.factoryId);
       final materialIds = materials.map((m) => m.materialId).toList();
-      final suppliers = await _supplierService.getSuppliersForMaterials(
+      final allSuppliers = await _supplierService.getSuppliersForMaterials(
         materialIds,
       );
+
+      var suppliers = allSuppliers;
+      var noSupplierForMaterial = false;
+      if (widget.initialMaterialId != null) {
+        final matching = allSuppliers
+            .where((s) => s.materialId == widget.initialMaterialId)
+            .toList();
+        if (matching.isNotEmpty) {
+          suppliers = matching;
+        } else {
+          noSupplierForMaterial = allSuppliers.isNotEmpty;
+        }
+      }
+
       setState(() {
         _suppliers = suppliers;
+        _noSupplierForMaterial = noSupplierForMaterial;
         if (suppliers.isNotEmpty) _selectSupplier(suppliers.first.supplierId);
         _state = _LoadState.ready;
       });
@@ -158,6 +187,14 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (_noSupplierForMaterial)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    'No supplier is assigned to that material yet — showing all suppliers instead.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               DropdownButtonFormField<int>(
                 initialValue: _selectedSupplierId,
                 decoration: const InputDecoration(labelText: 'Supplier'),

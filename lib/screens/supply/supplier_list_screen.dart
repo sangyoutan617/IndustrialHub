@@ -7,6 +7,15 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'supplier_form_screen.dart';
 
+String _leadTimeLine(Supplier supplier, SupplierLeadTimeStats? stats) {
+  if (stats == null) return '${supplier.leadTimeDays}d promised lead time';
+  final onTime = stats.onTimePercent != null
+      ? ' · ${stats.onTimePercent!.toStringAsFixed(0)}% on-time'
+      : '';
+  return 'Promised ${supplier.leadTimeDays}d · '
+      'Actual avg ${stats.actualAverageDays.toStringAsFixed(1)}d$onTime';
+}
+
 class SupplierListScreen extends StatefulWidget {
   final int factoryId;
 
@@ -25,6 +34,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
   _LoadState _state = _LoadState.loading;
   List<Supplier> _suppliers = [];
   Map<int, String> _materialNames = {};
+  Map<int, SupplierLeadTimeStats> _leadTimeStats = {};
 
   @override
   void initState() {
@@ -40,11 +50,15 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       final suppliers = await _supplierService.getSuppliersForMaterials(
         materialIds,
       );
+      final leadTimeStats = await _supplierService.getActualLeadTimeStats(
+        suppliers.map((s) => s.supplierId).toList(),
+      );
       setState(() {
         _suppliers = suppliers;
         _materialNames = {
           for (final m in materials) m.materialId: m.materialName,
         };
+        _leadTimeStats = leadTimeStats;
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -118,11 +132,12 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
               final supplier = _suppliers[index];
               final materialName =
                   _materialNames[supplier.materialId] ?? 'Unknown material';
+              final stats = _leadTimeStats[supplier.supplierId];
               return Card(
                 child: ListTile(
                   title: Text(supplier.supplierName),
                   subtitle: Text(
-                    'Supplies $materialName · ${supplier.leadTimeDays}d lead time · '
+                    'Supplies $materialName · ${_leadTimeLine(supplier, stats)} · '
                     '${supplier.reliabilityRating.toStringAsFixed(1)}★'
                     '${supplier.location != null ? ' · ${supplier.location}' : ''}',
                   ),
