@@ -50,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _isGoogleLoading = true);
     try {
-      await SessionPrefs.setRememberMe(_rememberMe);
+      await SessionPrefs.markPendingOAuthRememberMe(_rememberMe);
       await _authService.signInWithGoogle();
       // Success continues outside this screen — AuthGate's onAuthStateChange
       // listener picks up the session once the browser flow completes and
