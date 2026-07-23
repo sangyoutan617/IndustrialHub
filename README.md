@@ -87,17 +87,26 @@ To refresh them:
   alongside this change; not committed as a migration file since this repo
   has no `supabase/migrations` folder, same as every other schema change in
   this module.
-- **"Limit + load more" pagination is demonstrated on one screen** (the
-  purchase-orders list, `order_list_screen.dart` /
-  `OrderService.getOrdersPageForMaterials()`), matching Priority 6's own
-  "doing this for ONE calculation is enough to make the point" reasoning —
-  not applied to every list. It was deliberately **not** applied to the
-  admin Users list (`admin_users_screen.dart`), which already has full-list
-  client-side search; paginating it would mean either only searching
-  already-loaded users or rebuilding search as a server-side query, and the
-  existing full-fetch is a reasonable bound for this app's scale. Extend the
-  same pattern to other long lists (materials, suppliers, machines) if they
-  grow large enough in practice to need it.
+- **"Limit + load more" pagination was built on the purchase-orders list**
+  (`order_list_screen.dart` / `OrderService.getOrdersPageForMaterials()`),
+  matching Priority 6's own "doing this for ONE calculation is enough to
+  make the point" reasoning — not applied to every list. It was later
+  **superseded**, not kept: a teammate's "Supply" PR (merged into `main`
+  after this was written) independently rebuilt that same screen with
+  status filtering, inline editing, and deletion, and fetches the full
+  order list rather than paginating it. Since that version is a genuine
+  improvement in every other respect, the merge resolution adopted it
+  wholesale and dropped the pagination method rather than trying to bolt
+  "load more" onto a screen that also does client-side status filtering
+  (the same tension noted below for the admin Users list). The pattern
+  itself is still worth applying to a long, unfiltered, ever-growing list
+  if one shows up later — it just isn't demonstrated live in this repo
+  anymore.
+- It was deliberately **not** applied to the admin Users list
+  (`admin_users_screen.dart`), which already has full-list client-side
+  search; paginating it would mean either only searching already-loaded
+  users or rebuilding search as a server-side query, and the existing
+  full-fetch is a reasonable bound for this app's scale.
 
 ## Production trend (Priority 3)
 
