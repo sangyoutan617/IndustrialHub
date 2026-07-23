@@ -22,15 +22,18 @@ class FactoryService {
   }) async {
     final row = await _client
         .from('factories')
-        .insert(
-          Factory(
+        .insert({
+          ...Factory(
             factoryId: 0,
             factoryName: factoryName,
             location: location,
             state: state,
             msicCode: msicCode,
           ).toInsertJson(),
-        )
+          // Required by the "own or admin" RLS policy's WITH CHECK — see
+          // Priority 2 in Improvements_Spec.md.
+          'owner_id': _client.auth.currentUser?.id,
+        })
         .select()
         .single();
     return Factory.fromJson(row);

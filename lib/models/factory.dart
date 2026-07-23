@@ -4,6 +4,7 @@ class Factory {
   final String? location;
   final String? state;
   final String? msicCode;
+  final String? ownerId;
 
   const Factory({
     required this.factoryId,
@@ -11,6 +12,7 @@ class Factory {
     this.location,
     this.state,
     this.msicCode,
+    this.ownerId,
   });
 
   factory Factory.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class Factory {
       location: json['location'] as String?,
       state: json['state'] as String?,
       msicCode: json['msic_code'] as String?,
+      ownerId: json['owner_id'] as String?,
     );
   }
 
