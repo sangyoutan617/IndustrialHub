@@ -20,6 +20,8 @@ class OrderListScreen extends StatefulWidget {
 
 enum _LoadState { loading, error, ready }
 
+const _pageSize = 20;
+
 class _OrderListScreenState extends State<OrderListScreen> {
   final _materialService = MaterialService();
   final _supplierService = SupplierService();
@@ -29,6 +31,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
   List<PurchaseOrder> _orders = [];
   Map<int, String> _materialNames = {};
   Map<int, String> _supplierNames = {};
+  List<int> _materialIds = [];
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
@@ -44,19 +49,48 @@ class _OrderListScreenState extends State<OrderListScreen> {
       final suppliers = await _supplierService.getSuppliersForMaterials(
         materialIds,
       );
-      final orders = await _orderService.getOrdersForMaterials(materialIds);
+      final orders = await _orderService.getOrdersPageForMaterials(
+        materialIds,
+        limit: _pageSize,
+        offset: 0,
+      );
       setState(() {
         _orders = orders;
+        _materialIds = materialIds;
         _materialNames = {
           for (final m in materials) m.materialId: m.materialName,
         };
         _supplierNames = {
           for (final s in suppliers) s.supplierId: s.supplierName,
         };
+        _hasMore = orders.length == _pageSize;
         _state = _LoadState.ready;
       });
     } catch (_) {
       setState(() => _state = _LoadState.error);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final nextPage = await _orderService.getOrdersPageForMaterials(
+        _materialIds,
+        limit: _pageSize,
+        offset: _orders.length,
+      );
+      setState(() {
+        _orders = [..._orders, ...nextPage];
+        _hasMore = nextPage.length == _pageSize;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load more orders.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -148,8 +182,23 @@ class _OrderListScreenState extends State<OrderListScreen> {
           onRefresh: _load,
           child: ListView.builder(
             padding: const EdgeInsets.all(8),
-            itemCount: _orders.length,
-            itemBuilder: (context, index) => _buildOrderCard(_orders[index]),
+            itemCount: _orders.length + (_hasMore ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index == _orders.length) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: _isLoadingMore
+                        ? const CircularProgressIndicator()
+                        : OutlinedButton(
+                            onPressed: _loadMore,
+                            child: const Text('Load more'),
+                          ),
+                  ),
+                );
+              }
+              return _buildOrderCard(_orders[index]);
+            },
           ),
         );
     }

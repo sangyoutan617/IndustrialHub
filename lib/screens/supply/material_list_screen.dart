@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
 import '../../services/capacity_service.dart';
 import '../../services/material_service.dart';
+import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
@@ -11,27 +13,86 @@ import 'material_form_screen.dart';
 import 'order_list_screen.dart';
 import 'supplier_list_screen.dart';
 
+const _incomingStatuses = {
+  PurchaseOrderStatus.pending,
+  PurchaseOrderStatus.processing,
+  PurchaseOrderStatus.shipped,
+};
+
+/// Projected day (from now) that stock hits zero, given a constant burn
+/// rate and a set of incoming deliveries. Walks each delivery in arrival
+/// order, checking whether the burn would zero out stock before that
+/// delivery lands; the first such gap is the real stock-out day. Returns
+/// null if stock never hits zero within [horizonDays].
+double? _projectedStockOutDay({
+  required double currentStock,
+  required double burnRatePerDay,
+  required List<(double quantity, double arrivalDay)> incoming,
+  double horizonDays = 90,
+}) {
+  if (burnRatePerDay <= 0) return null;
+
+  final events = List<(double, double)>.from(incoming)
+    ..sort((a, b) => a.$2.compareTo(b.$2));
+
+  var balance = currentStock;
+  var day = 0.0;
+  for (final (quantity, arrivalDay) in events) {
+    final clampedArrival = arrivalDay < day ? day : arrivalDay;
+    if (clampedArrival > horizonDays) break;
+    final elapsed = clampedArrival - day;
+    final daysToZero = balance / burnRatePerDay;
+    if (daysToZero <= elapsed) {
+      return day + daysToZero;
+    }
+    balance -= burnRatePerDay * elapsed;
+    balance += quantity;
+    day = clampedArrival;
+  }
+
+  final daysToZero = balance / burnRatePerDay;
+  final finalDay = day + daysToZero;
+  return finalDay <= horizonDays ? finalDay : null;
+}
+
 class _MaterialRisk {
   final RawMaterial material;
   final double? burnRatePerDay;
   final double? daysOfCover;
+  final double? projectedStockOutDay;
   final DateTime? stockOutDate;
-  final int? minSupplierLeadDays;
+  final double? minSupplierLeadDays;
+  final PurchaseOrder? coveringOrder;
+  final int? coveringOrderArrivalDays;
 
   _MaterialRisk({
     required this.material,
     this.burnRatePerDay,
     this.daysOfCover,
+    this.projectedStockOutDay,
     this.stockOutDate,
     this.minSupplierLeadDays,
+    this.coveringOrder,
+    this.coveringOrderArrivalDays,
   });
 
+  /// Incoming-aware: a delivery already on the way can push this back past
+  /// the reorder threshold even though the raw burn-down alone would not.
   bool get needsReorder =>
+      projectedStockOutDay != null &&
+      minSupplierLeadDays != null &&
+      projectedStockOutDay! <= minSupplierLeadDays!;
+
+  bool get hasSupplier => minSupplierLeadDays != null;
+
+  /// True when the raw burn-down (ignoring incoming deliveries) would have
+  /// triggered a reorder, but an incoming delivery covers it instead.
+  bool get isCoveredByIncoming =>
+      coveringOrder != null &&
+      !needsReorder &&
       daysOfCover != null &&
       minSupplierLeadDays != null &&
       daysOfCover! <= minSupplierLeadDays!;
-
-  bool get hasSupplier => minSupplierLeadDays != null;
 }
 
 class MaterialListScreen extends StatefulWidget {
@@ -49,6 +110,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   final _materialService = MaterialService();
   final _supplierService = SupplierService();
   final _capacityService = CapacityService();
+  final _orderService = OrderService();
 
   _LoadState _state = _LoadState.loading;
   List<_MaterialRisk> _risks = [];
@@ -73,18 +135,32 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       final suppliers = await _supplierService.getSuppliersForMaterials(
         materialIds,
       );
+      final orders = await _orderService.getOrdersForMaterials(materialIds);
       final snapshot = await _capacityService.getSnapshot(widget.factoryId);
+      final leadTimeStats = await _supplierService.getActualLeadTimeStats(
+        suppliers.map((s) => s.supplierId).toList(),
+      );
 
-      final leadTimeByMaterial = <int, int>{};
+      // Reorder alerts use the worse of the supplier's promised lead time
+      // and their actual average — a habitually-late supplier shouldn't get
+      // the benefit of their own claim.
+      final leadTimeByMaterial = <int, double>{};
       for (final supplier in suppliers) {
         final materialId = supplier.materialId;
         if (materialId == null) continue;
+        final actualAverage = leadTimeStats[supplier.supplierId]?.actualAverageDays;
+        final effectiveLeadDays = actualAverage == null
+            ? supplier.leadTimeDays.toDouble()
+            : (supplier.leadTimeDays > actualAverage
+                  ? supplier.leadTimeDays.toDouble()
+                  : actualAverage);
         final existing = leadTimeByMaterial[materialId];
-        if (existing == null || supplier.leadTimeDays < existing) {
-          leadTimeByMaterial[materialId] = supplier.leadTimeDays;
+        if (existing == null || effectiveLeadDays < existing) {
+          leadTimeByMaterial[materialId] = effectiveLeadDays;
         }
       }
 
+      final now = DateTime.now();
       final risks = materials.map((material) {
         final burnRate = snapshot.effectiveCapacity > 0
             ? material.consumptionPerUnit * snapshot.effectiveCapacity
@@ -95,12 +171,59 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
         final stockOutDate = daysOfCover != null
             ? DateTime.now().add(Duration(days: daysOfCover.floor()))
             : null;
+
+        final incomingOrders =
+            orders
+                .where(
+                  (o) =>
+                      o.materialId == material.materialId &&
+                      _incomingStatuses.contains(o.status) &&
+                      o.expectedDelivery != null,
+                )
+                .toList()
+              ..sort((a, b) => a.expectedDelivery!.compareTo(b.expectedDelivery!));
+
+        double? projectedStockOutDay;
+        DateTime? projectedStockOutDate;
+        if (burnRate != null && burnRate > 0) {
+          final incoming = [
+            for (final o in incomingOrders)
+              (
+                o.quantity,
+                o.expectedDelivery!
+                    .difference(now)
+                    .inDays
+                    .toDouble()
+                    .clamp(0.0, double.infinity),
+              ),
+          ];
+          projectedStockOutDay = _projectedStockOutDay(
+            currentStock: material.currentStock,
+            burnRatePerDay: burnRate,
+            incoming: incoming,
+          );
+          projectedStockOutDate = projectedStockOutDay != null
+              ? now.add(Duration(days: projectedStockOutDay.floor()))
+              : null;
+        }
+
+        final coveringOrder = incomingOrders.isEmpty
+            ? null
+            : incomingOrders.first;
+        final coveringOrderArrivalDays = coveringOrder?.expectedDelivery!
+            .difference(now)
+            .inDays
+            .clamp(0, 1 << 30);
+
         return _MaterialRisk(
           material: material,
           burnRatePerDay: burnRate,
           daysOfCover: daysOfCover,
-          stockOutDate: stockOutDate,
+          projectedStockOutDay: projectedStockOutDay,
+          stockOutDate: projectedStockOutDate ?? stockOutDate,
           minSupplierLeadDays: leadTimeByMaterial[material.materialId],
+          coveringOrder: coveringOrder,
+          coveringOrderArrivalDays: coveringOrderArrivalDays,
         );
       }).toList();
 
@@ -200,7 +323,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   Expanded(
                     child: Text(
                       'Reorder now — ${mostUrgent.daysOfCover!.toStringAsFixed(0)} days cover, '
-                      '${mostUrgent.minSupplierLeadDays} day lead',
+                      '${mostUrgent.minSupplierLeadDays!.toStringAsFixed(1)} day lead',
                       style: const TextStyle(
                         color: AppColors.primaryDark,
                         fontWeight: FontWeight.w600,
@@ -358,7 +481,16 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
               Text(
                 '${risk.daysOfCover!.toStringAsFixed(1)} days of cover at planned production',
               ),
-              if (risk.stockOutDate != null)
+              if (risk.isCoveredByIncoming)
+                Text(
+                  'PO-${risk.coveringOrder!.poId} arriving in '
+                  '${risk.coveringOrderArrivalDays} day${risk.coveringOrderArrivalDays == 1 ? '' : 's'} — covered.',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+              else if (risk.stockOutDate != null)
                 Text(
                   'Predicted stock-out: ${risk.stockOutDate!.year}-'
                   '${risk.stockOutDate!.month.toString().padLeft(2, '0')}-'
@@ -375,7 +507,8 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
               )
             else
               Text(
-                'Fastest supplier lead time: ${risk.minSupplierLeadDays} days',
+                'Fastest supplier lead time (worse of promised/actual): '
+                '${risk.minSupplierLeadDays!.toStringAsFixed(1)} days',
               ),
           ],
         ),

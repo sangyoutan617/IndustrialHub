@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/demand_forecast.dart';
+import '../models/stock_movement.dart';
 
 class DemandService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -39,5 +40,43 @@ class DemandService {
 
   Future<void> deleteForecast(int demandId) async {
     await _client.from('demand_forecast').delete().eq('demand_id', demandId);
+  }
+
+  /// Suggests a required_per_day baseline from actual shipment history,
+  /// rather than leaving it as a number the user just types with no basis.
+  /// Purely a suggestion — the caller still lets the user override it.
+  /// Returns null if there's no matching finished_stock row (product name
+  /// hasn't been used yet) or no shipment_out movements to derive a rate
+  /// from.
+  Future<double?> suggestRequiredPerDay({
+    required int factoryId,
+    required String productName,
+    int lookbackDays = 30,
+  }) async {
+    final stockRow = await _client
+        .from('finished_stock')
+        .select('stock_id')
+        .eq('factory_id', factoryId)
+        .ilike('product_name', productName)
+        .maybeSingle();
+    if (stockRow == null) return null;
+    final stockId = stockRow['stock_id'] as int;
+
+    final since = DateTime.now().subtract(Duration(days: lookbackDays));
+    final rows = await _client
+        .from('stock_movements')
+        .select('quantity')
+        .eq('stock_id', stockId)
+        .eq('movement_type', StockMovementType.shipmentOut)
+        .gte('movement_date', since.toIso8601String().substring(0, 10));
+
+    final movements = rows as List;
+    if (movements.isEmpty) return null;
+
+    final totalShipped = movements.fold<double>(
+      0,
+      (sum, row) => sum + (row['quantity'] as num).abs(),
+    );
+    return totalShipped / lookbackDays;
   }
 }

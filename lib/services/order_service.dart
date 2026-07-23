@@ -18,6 +18,27 @@ class OrderService {
         .toList();
   }
 
+  /// Paginated variant for the purchase-orders list screen, which otherwise
+  /// fetches every order for the factory up front. Other callers (material
+  /// forecast, supplier lead-time stats) still need the full set and keep
+  /// using [getOrdersForMaterials].
+  Future<List<PurchaseOrder>> getOrdersPageForMaterials(
+    List<int> materialIds, {
+    required int limit,
+    required int offset,
+  }) async {
+    if (materialIds.isEmpty) return [];
+    final rows = await _client
+        .from('purchase_orders')
+        .select()
+        .inFilter('material_id', materialIds)
+        .order('order_date', ascending: false)
+        .range(offset, offset + limit - 1);
+    return (rows as List)
+        .map((row) => PurchaseOrder.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<PurchaseOrder> createOrder(
     PurchaseOrder order, {
     bool isSimulated = false,
@@ -70,6 +91,7 @@ class OrderService {
         .from('purchase_orders')
         .update({
           'status': PurchaseOrderStatus.delivered,
+          'delivered_at': DateTime.now().toUtc().toIso8601String(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('po_id', order.poId);

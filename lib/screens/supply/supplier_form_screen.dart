@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
 import '../../services/material_service.dart';
@@ -40,6 +41,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
   List<RawMaterial> _materials = [];
   int? _selectedMaterialId;
   bool _isSaving = false;
+  SupplierLeadTimeStats? _leadTimeStats;
 
   bool get _isEditing => widget.supplier != null;
 
@@ -54,11 +56,19 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
     setState(() => _state = _LoadState.loading);
     try {
       final materials = await _materialService.getMaterials(widget.factoryId);
+      SupplierLeadTimeStats? leadTimeStats;
+      if (widget.supplier != null) {
+        final stats = await _supplierService.getActualLeadTimeStats([
+          widget.supplier!.supplierId,
+        ]);
+        leadTimeStats = stats[widget.supplier!.supplierId];
+      }
       setState(() {
         _materials = materials;
         _selectedMaterialId ??= materials.isNotEmpty
             ? materials.first.materialId
             : null;
+        _leadTimeStats = leadTimeStats;
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -123,6 +133,42 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
     );
   }
 
+  Widget _buildLeadTimeCard() {
+    final stats = _leadTimeStats;
+    final promised = widget.supplier!.leadTimeDays;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Lead time',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              stats == null
+                  ? 'Promised $promised days · no delivered orders yet to compare'
+                  : 'Promised $promised days · Actual average '
+                        '${stats.actualAverageDays.toStringAsFixed(1)} days '
+                        '(${stats.deliveredCount} delivered order${stats.deliveredCount == 1 ? '' : 's'})',
+              style: const TextStyle(
+                color: AppColors.primaryDark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (stats?.onTimePercent != null) ...[
+              const SizedBox(height: 4),
+              Text('On-time: ${stats!.onTimePercent!.toStringAsFixed(0)}%'),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     switch (_state) {
       case _LoadState.loading:
@@ -142,6 +188,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (_isEditing) _buildLeadTimeCard(),
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Supplier name'),

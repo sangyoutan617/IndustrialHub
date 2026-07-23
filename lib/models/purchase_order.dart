@@ -16,6 +16,7 @@ class PurchaseOrder {
   final DateTime? expectedDelivery;
   final String status;
   final bool isSimulated;
+  final DateTime? deliveredAt;
 
   const PurchaseOrder({
     required this.poId,
@@ -26,6 +27,7 @@ class PurchaseOrder {
     this.expectedDelivery,
     required this.status,
     required this.isSimulated,
+    this.deliveredAt,
   });
 
   factory PurchaseOrder.fromJson(Map<String, dynamic> json) {
@@ -40,6 +42,9 @@ class PurchaseOrder {
           : null,
       status: json['status'] as String,
       isSimulated: json['is_simulated'] as bool? ?? false,
+      deliveredAt: json['delivered_at'] != null
+          ? DateTime.parse(json['delivered_at'] as String)
+          : null,
     );
   }
 
