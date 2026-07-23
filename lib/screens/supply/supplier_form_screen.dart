@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
 import '../../services/material_service.dart';
+import '../../services/mrp_service.dart';
+import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -22,6 +24,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _materialService = MaterialService();
   final _supplierService = SupplierService();
+  final _orderService = OrderService();
 
   late final _nameController = TextEditingController(
     text: widget.supplier?.supplierName,
@@ -32,13 +35,12 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
   late final _leadTimeController = TextEditingController(
     text: (widget.supplier?.leadTimeDays ?? 7).toString(),
   );
-  late final _ratingController = TextEditingController(
-    text: (widget.supplier?.reliabilityRating ?? 0).toString(),
-  );
+  late double _rating = widget.supplier?.reliabilityRating ?? 3;
 
   _LoadState _state = _LoadState.loading;
   List<RawMaterial> _materials = [];
   int? _selectedMaterialId;
+  double? _suggestedRating;
   bool _isSaving = false;
 
   bool get _isEditing => widget.supplier != null;
@@ -54,14 +56,27 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
     setState(() => _state = _LoadState.loading);
     try {
       final materials = await _materialService.getMaterials(widget.factoryId);
+      double? suggested;
+      final supplier = widget.supplier;
+      if (supplier != null && supplier.materialId != null) {
+        final orders = await _orderService.getOrdersForMaterials([
+          supplier.materialId!,
+        ]);
+        final history = orders
+            .where((o) => o.supplierId == supplier.supplierId)
+            .toList();
+        suggested = MrpService.suggestedRating(MrpService.onTimeRate(history));
+      }
       setState(() {
         _materials = materials;
         _selectedMaterialId ??= materials.isNotEmpty
             ? materials.first.materialId
             : null;
+        _suggestedRating = suggested;
         _state = _LoadState.ready;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('supply: failed to load supplier form data: $e');
       setState(() => _state = _LoadState.error);
     }
   }
@@ -71,7 +86,6 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
     _nameController.dispose();
     _locationController.dispose();
     _leadTimeController.dispose();
-    _ratingController.dispose();
     super.dispose();
   }
 
@@ -88,7 +102,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
             : _locationController.text.trim(),
         materialId: _selectedMaterialId,
         leadTimeDays: int.parse(_leadTimeController.text),
-        reliabilityRating: double.parse(_ratingController.text),
+        reliabilityRating: _rating,
         isSimulated: false,
       );
       if (_isEditing) {
@@ -101,7 +115,8 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
       }
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('supply: failed to save supplier: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -137,6 +152,16 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                 'Add a raw material first — a supplier must be linked to one.',
           );
         }
+        final leadTime = int.tryParse(_leadTimeController.text) ?? 0;
+        final effectiveLead = MrpService.effectiveLeadDays(
+          Supplier(
+            supplierId: 0,
+            supplierName: '',
+            leadTimeDays: leadTime,
+            reliabilityRating: _rating,
+            isSimulated: false,
+          ),
+        );
         return Form(
           key: _formKey,
           child: ListView(
@@ -180,6 +205,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                   labelText: 'Lead time (days)',
                   helperText: 'How long an order takes to arrive',
                 ),
+                onChanged: (_) => setState(() {}),
                 validator: (v) {
                   final parsed = int.tryParse(v ?? '');
                   if (parsed == null || parsed < 0) {
@@ -188,23 +214,62 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _ratingController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Reliability rating (0-5)',
-                ),
-                validator: (v) {
-                  final parsed = double.tryParse(v ?? '');
-                  if (parsed == null || parsed < 0 || parsed > 5) {
-                    return 'Enter a number between 0 and 5';
-                  }
-                  return null;
-                },
+              const SizedBox(height: 20),
+              Text(
+                'Reliability rating',
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
+              Row(
+                children: [
+                  for (var i = 1; i <= 5; i++)
+                    IconButton(
+                      icon: Icon(
+                        _rating >= i ? Icons.star : Icons.star_border,
+                        color: Colors.amber.shade700,
+                      ),
+                      onPressed: () => setState(() => _rating = i.toDouble()),
+                    ),
+                  Text('${_rating.toStringAsFixed(1)}★'),
+                ],
+              ),
+              Slider(
+                value: _rating,
+                min: 0,
+                max: 5,
+                divisions: 10,
+                label: _rating.toStringAsFixed(1),
+                onChanged: (v) => setState(() => _rating = v),
+              ),
+              Text(
+                'Quoted $leadTime d → planned $effectiveLead d effective lead at '
+                '${_rating.toStringAsFixed(1)}★',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              if (_suggestedRating != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Based on delivery history: suggested '
+                          '${_suggestedRating!.toStringAsFixed(1)}★',
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            setState(() => _rating = _suggestedRating!),
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: _isSaving ? null : _save,

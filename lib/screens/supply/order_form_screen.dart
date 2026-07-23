@@ -1,16 +1,39 @@
 import 'package:flutter/material.dart';
 import '../../models/purchase_order.dart';
+import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
-import '../../services/material_service.dart';
+import '../../services/mrp_service.dart';
 import '../../services/order_service.dart';
-import '../../services/supplier_service.dart';
+import '../../services/supply_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 
+/// Values used to pre-populate a new order — e.g. from the material
+/// dashboard's "Reorder" button, which already knows the best supplier
+/// and a suggested quantity.
+class OrderFormPrefill {
+  final int materialId;
+  final int supplierId;
+  final double? quantity;
+
+  const OrderFormPrefill({
+    required this.materialId,
+    required this.supplierId,
+    this.quantity,
+  });
+}
+
 class OrderFormScreen extends StatefulWidget {
   final int factoryId;
+  final PurchaseOrder? order;
+  final OrderFormPrefill? prefill;
 
-  const OrderFormScreen({super.key, required this.factoryId});
+  const OrderFormScreen({
+    super.key,
+    required this.factoryId,
+    this.order,
+    this.prefill,
+  });
 
   @override
   State<OrderFormScreen> createState() => _OrderFormScreenState();
@@ -20,17 +43,21 @@ enum _LoadState { loading, error, ready }
 
 class _OrderFormScreenState extends State<OrderFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _materialService = MaterialService();
-  final _supplierService = SupplierService();
+  final _supplyService = SupplyService();
   final _orderService = OrderService();
   final _quantityController = TextEditingController();
 
   _LoadState _state = _LoadState.loading;
+  List<RawMaterial> _materials = [];
   List<Supplier> _suppliers = [];
+  double _plannedProductionPerDay = 0;
+  int? _selectedMaterialId;
   int? _selectedSupplierId;
   DateTime _orderDate = DateTime.now();
   DateTime? _expectedDelivery;
   bool _isSaving = false;
+
+  bool get _isEditing => widget.order != null;
 
   @override
   void initState() {
@@ -41,30 +68,89 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final materials = await _materialService.getMaterials(widget.factoryId);
-      final materialIds = materials.map((m) => m.materialId).toList();
-      final suppliers = await _supplierService.getSuppliersForMaterials(
-        materialIds,
-      );
+      final overview = await _supplyService.load(widget.factoryId);
       setState(() {
-        _suppliers = suppliers;
-        if (suppliers.isNotEmpty) _selectSupplier(suppliers.first.supplierId);
+        _materials = overview.materials;
+        _suppliers = overview.suppliers;
+        _plannedProductionPerDay = overview.plannedProductionPerDay;
+
+        final order = widget.order;
+        final prefill = widget.prefill;
+        if (order != null) {
+          _selectedMaterialId = order.materialId;
+          _selectedSupplierId = order.supplierId;
+          _orderDate = order.orderDate;
+          _expectedDelivery = order.expectedDelivery;
+          _quantityController.text = order.quantity.toString();
+          // A supplier can be re-pointed to a different material after this
+          // PO was raised against it. If that happened, the dropdown below
+          // would be handed a value that isn't among its own items (a
+          // framework assertion) — clear it so the user re-picks instead.
+          final orderSupplier = _suppliers.where(
+            (s) => s.supplierId == order.supplierId,
+          );
+          if (orderSupplier.isEmpty ||
+              orderSupplier.first.materialId != order.materialId) {
+            _selectedSupplierId = null;
+          }
+        } else if (prefill != null) {
+          _selectedMaterialId = prefill.materialId;
+          _selectedSupplierId = prefill.supplierId;
+          if (prefill.quantity != null && prefill.quantity! > 0) {
+            _quantityController.text = prefill.quantity!.toStringAsFixed(0);
+          }
+          _applyLeadTimeToExpectedDelivery();
+        } else if (_materials.isNotEmpty) {
+          _selectedMaterialId = _materials.first.materialId;
+          _autoSelectSupplierForMaterial();
+        }
         _state = _LoadState.ready;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('supply: failed to load order form data: $e');
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  List<Supplier> get _suppliersForSelectedMaterial => _suppliers
+      .where((s) => s.materialId == _selectedMaterialId)
+      .toList();
+
+  Supplier? get _selectedSupplier {
+    final matches = _suppliers.where((s) => s.supplierId == _selectedSupplierId);
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  RawMaterial? get _selectedMaterial {
+    final matches = _materials.where((m) => m.materialId == _selectedMaterialId);
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  void _autoSelectSupplierForMaterial() {
+    final options = _suppliersForSelectedMaterial;
+    _selectedSupplierId = options.isNotEmpty ? options.first.supplierId : null;
+    _applyLeadTimeToExpectedDelivery();
+  }
+
+  void _selectMaterial(int? materialId) {
+    setState(() {
+      _selectedMaterialId = materialId;
+      _autoSelectSupplierForMaterial();
+    });
   }
 
   void _selectSupplier(int? supplierId) {
     setState(() {
       _selectedSupplierId = supplierId;
-      final matches = _suppliers.where((s) => s.supplierId == supplierId);
-      final supplier = matches.isEmpty ? null : matches.first;
-      _expectedDelivery = supplier != null
-          ? _orderDate.add(Duration(days: supplier.leadTimeDays))
-          : null;
+      _applyLeadTimeToExpectedDelivery();
     });
+  }
+
+  void _applyLeadTimeToExpectedDelivery() {
+    final supplier = _selectedSupplier;
+    _expectedDelivery = supplier != null
+        ? _orderDate.add(Duration(days: MrpService.effectiveLeadDays(supplier)))
+        : null;
   }
 
   @override
@@ -79,13 +165,18 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(2020),
+      // The delivery can't be expected before the order is even placed.
+      firstDate: isOrderDate ? DateTime(2020) : _orderDate,
       lastDate: DateTime(2100),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     setState(() {
       if (isOrderDate) {
         _orderDate = picked;
+        // Keep the auto-derived expected delivery in sync with the new
+        // order date instead of leaving it stale (and possibly now
+        // earlier than the order date itself).
+        _applyLeadTimeToExpectedDelivery();
       } else {
         _expectedDelivery = picked;
       }
@@ -97,35 +188,51 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  String? _coverageHelperText() {
+    final material = _selectedMaterial;
+    final quantity = double.tryParse(_quantityController.text);
+    if (material == null || quantity == null || quantity <= 0) return null;
+    final burnRate = material.consumptionPerUnit * _plannedProductionPerDay;
+    if (burnRate <= 0) return null;
+    final days = quantity / burnRate;
+    return 'Covers ~${days.toStringAsFixed(0)} days of planned production';
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedSupplierId == null) return;
-    final supplier = _suppliers.firstWhere(
-      (s) => s.supplierId == _selectedSupplierId,
-    );
+    if (_selectedMaterialId == null || _selectedSupplierId == null) return;
+    if (_expectedDelivery != null && _expectedDelivery!.isBefore(_orderDate)) {
+      _showMessage('Expected delivery can\'t be before the order date.');
+      return;
+    }
     setState(() => _isSaving = true);
     try {
-      await _orderService.createOrder(
-        PurchaseOrder(
-          poId: 0,
-          supplierId: supplier.supplierId,
-          materialId: supplier.materialId!,
-          quantity: double.parse(_quantityController.text),
-          orderDate: _orderDate,
-          expectedDelivery: _expectedDelivery,
-          status: PurchaseOrderStatus.pending,
-          isSimulated: false,
-        ),
+      final order = PurchaseOrder(
+        poId: widget.order?.poId ?? 0,
+        supplierId: _selectedSupplierId!,
+        materialId: _selectedMaterialId!,
+        quantity: double.parse(_quantityController.text),
+        orderDate: _orderDate,
+        expectedDelivery: _expectedDelivery,
+        deliveredAt: widget.order?.deliveredAt,
+        status: widget.order?.status ?? PurchaseOrderStatus.pending,
+        isSimulated: false,
       );
+      if (_isEditing) {
+        await _orderService.updateOrder(widget.order!.poId, order);
+      } else {
+        await _orderService.createOrder(order);
+      }
       if (!mounted) return;
       Navigator.pop(context, true);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not create order. Please try again.'),
-        ),
-      );
+    } catch (e) {
+      debugPrint('supply: failed to save order: $e');
+      _showMessage('Could not save order. Please try again.');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -134,7 +241,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('New purchase order')),
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Edit purchase order' : 'New purchase order'),
+      ),
       body: SafeArea(child: _buildBody()),
     );
   }
@@ -146,38 +255,70 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       case _LoadState.error:
         return EmptyState.error(onAction: _load);
       case _LoadState.ready:
-        if (_suppliers.isEmpty) {
+        if (_materials.isEmpty) {
           return const EmptyState(
-            icon: Icons.local_shipping_outlined,
+            icon: Icons.inventory_outlined,
             message:
-                'Add a supplier first — a purchase order must be placed with one.',
+                'Add a raw material first — a purchase order must be placed for one.',
           );
         }
+        final supplierOptions = _suppliersForSelectedMaterial;
+        final coverageText = _coverageHelperText();
         return Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               DropdownButtonFormField<int>(
-                initialValue: _selectedSupplierId,
-                decoration: const InputDecoration(labelText: 'Supplier'),
+                initialValue: _selectedMaterialId,
+                decoration: const InputDecoration(labelText: 'Material'),
                 items: [
-                  for (final supplier in _suppliers)
+                  for (final material in _materials)
                     DropdownMenuItem(
-                      value: supplier.supplierId,
-                      child: Text(supplier.supplierName),
+                      value: material.materialId,
+                      child: Text(material.materialName),
                     ),
                 ],
-                onChanged: _selectSupplier,
+                onChanged: _isEditing ? null : _selectMaterial,
                 validator: (v) => v == null ? 'Required' : null,
               ),
+              const SizedBox(height: 16),
+              if (supplierOptions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'This material has no supplier yet — add one before '
+                    'raising a purchase order for it.',
+                  ),
+                )
+              else
+                DropdownButtonFormField<int>(
+                  initialValue: _selectedSupplierId,
+                  decoration: const InputDecoration(labelText: 'Supplier'),
+                  items: [
+                    for (final supplier in supplierOptions)
+                      DropdownMenuItem(
+                        value: supplier.supplierId,
+                        child: Text(
+                          '${supplier.supplierName} '
+                          '(${MrpService.effectiveLeadDays(supplier)}d lead)',
+                        ),
+                      ),
+                  ],
+                  onChanged: _selectSupplier,
+                  validator: (v) => v == null ? 'Required' : null,
+                ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _quantityController,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(labelText: 'Quantity'),
+                decoration: InputDecoration(
+                  labelText: 'Quantity',
+                  helperText: coverageText,
+                ),
+                onChanged: (_) => setState(() {}),
                 validator: (v) {
                   final parsed = double.tryParse(v ?? '');
                   if (parsed == null || parsed <= 0) {
@@ -203,7 +344,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
               ),
               const SizedBox(height: 24),
               FilledButton(
-                onPressed: _isSaving ? null : _save,
+                onPressed: (_isSaving || supplierOptions.isEmpty) ? null : _save,
                 child: _isSaving
                     ? const SizedBox(
                         height: 20,

@@ -1,38 +1,18 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../models/raw_material.dart';
-import '../../services/capacity_service.dart';
 import '../../services/material_service.dart';
-import '../../services/supplier_service.dart';
+import '../../services/mrp_service.dart';
+import '../../services/supply_exceptions.dart';
+import '../../services/supply_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'material_form_screen.dart';
+import 'order_form_screen.dart';
 import 'order_list_screen.dart';
 import 'supplier_list_screen.dart';
-
-class _MaterialRisk {
-  final RawMaterial material;
-  final double? burnRatePerDay;
-  final double? daysOfCover;
-  final DateTime? stockOutDate;
-  final int? minSupplierLeadDays;
-
-  _MaterialRisk({
-    required this.material,
-    this.burnRatePerDay,
-    this.daysOfCover,
-    this.stockOutDate,
-    this.minSupplierLeadDays,
-  });
-
-  bool get needsReorder =>
-      daysOfCover != null &&
-      minSupplierLeadDays != null &&
-      daysOfCover! <= minSupplierLeadDays!;
-
-  bool get hasSupplier => minSupplierLeadDays != null;
-}
 
 class MaterialListScreen extends StatefulWidget {
   final int factoryId;
@@ -47,11 +27,11 @@ enum _LoadState { loading, error, ready }
 
 class _MaterialListScreenState extends State<MaterialListScreen> {
   final _materialService = MaterialService();
-  final _supplierService = SupplierService();
-  final _capacityService = CapacityService();
+  final _supplyService = SupplyService();
 
   _LoadState _state = _LoadState.loading;
-  List<_MaterialRisk> _risks = [];
+  SupplyOverview? _overview;
+  bool _needsActionOnly = false;
 
   @override
   void initState() {
@@ -68,49 +48,40 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final materials = await _materialService.getMaterials(widget.factoryId);
-      final materialIds = materials.map((m) => m.materialId).toList();
-      final suppliers = await _supplierService.getSuppliersForMaterials(
-        materialIds,
-      );
-      final snapshot = await _capacityService.getSnapshot(widget.factoryId);
-
-      final leadTimeByMaterial = <int, int>{};
-      for (final supplier in suppliers) {
-        final materialId = supplier.materialId;
-        if (materialId == null) continue;
-        final existing = leadTimeByMaterial[materialId];
-        if (existing == null || supplier.leadTimeDays < existing) {
-          leadTimeByMaterial[materialId] = supplier.leadTimeDays;
-        }
-      }
-
-      final risks = materials.map((material) {
-        final burnRate = snapshot.effectiveCapacity > 0
-            ? material.consumptionPerUnit * snapshot.effectiveCapacity
-            : null;
-        final daysOfCover = (burnRate != null && burnRate > 0)
-            ? material.currentStock / burnRate
-            : null;
-        final stockOutDate = daysOfCover != null
-            ? DateTime.now().add(Duration(days: daysOfCover.floor()))
-            : null;
-        return _MaterialRisk(
-          material: material,
-          burnRatePerDay: burnRate,
-          daysOfCover: daysOfCover,
-          stockOutDate: stockOutDate,
-          minSupplierLeadDays: leadTimeByMaterial[material.materialId],
-        );
-      }).toList();
-
+      final overview = await _supplyService.load(widget.factoryId);
       setState(() {
-        _risks = risks;
+        _overview = overview;
         _state = _LoadState.ready;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('supply: failed to load overview: $e');
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  List<MaterialPlan> get _sortedPlans {
+    final plans = List<MaterialPlan>.from(_overview?.plans ?? const []);
+    int priority(SupplyRisk risk) => switch (risk) {
+      SupplyRisk.stockedOut => 0,
+      SupplyRisk.reorderNow => 1,
+      SupplyRisk.watch => 2,
+      SupplyRisk.healthy => 3,
+      SupplyRisk.noSupplier => 4,
+    };
+    plans.sort((a, b) {
+      final p = priority(a.risk).compareTo(priority(b.risk));
+      if (p != 0) return p;
+      final aDate = a.orderByDate;
+      final bDate = b.orderByDate;
+      if (aDate == null && bDate == null) return 0;
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      return aDate.compareTo(bDate);
+    });
+    if (_needsActionOnly) {
+      return plans.where((p) => p.needsAttention).toList();
+    }
+    return plans;
   }
 
   Future<void> _openForm({RawMaterial? material}) async {
@@ -118,6 +89,24 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       MaterialPageRoute(
         builder: (_) =>
             MaterialFormScreen(factoryId: widget.factoryId, material: material),
+      ),
+    );
+    if (saved == true) _load();
+  }
+
+  Future<void> _openReorderForm(MaterialPlan plan) async {
+    final supplier = plan.bestSupplier;
+    if (supplier == null) return;
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => OrderFormScreen(
+          factoryId: widget.factoryId,
+          prefill: OrderFormPrefill(
+            materialId: plan.material.materialId,
+            supplierId: supplier.supplierId,
+            quantity: plan.suggestedQty,
+          ),
+        ),
       ),
     );
     if (saved == true) _load();
@@ -134,7 +123,11 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     try {
       await _materialService.deleteMaterial(material.materialId);
       _load();
-    } catch (_) {
+    } on SupplyInUseException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } catch (e) {
+      debugPrint('supply: failed to delete material: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -147,6 +140,14 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   Future<void> _navigateAndRefresh(Widget screen) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     _load();
+  }
+
+  void _showProjection(MaterialPlan plan) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _ProjectionSheet(plan: plan),
+    );
   }
 
   @override
@@ -173,18 +174,30 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
 
   Widget _buildReady() {
     final scheme = Theme.of(context).colorScheme;
-    final reorderCount = _risks.where((r) => r.needsReorder).length;
-    final mostUrgent = _risks.where((r) => r.needsReorder).isEmpty
-        ? null
-        : (_risks.where((r) => r.needsReorder).toList()
-            ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!))).first;
+    final overview = _overview!;
+    final plans = overview.plans;
+    // Partitioned so reorderCount + watchCount always equals the number of
+    // plans the "Needs action" filter below would show — a material that's
+    // below its reorder level but not yet risk::watch/reorderNow used to be
+    // invisible in both headline numbers while still showing up once the
+    // filter chip was tapped.
+    bool isReorder(MaterialPlan p) =>
+        p.risk == SupplyRisk.reorderNow || p.risk == SupplyRisk.stockedOut;
+    final reorderCount = plans.where(isReorder).length;
+    final watchCount = plans
+        .where(
+          (p) =>
+              !isReorder(p) && (p.risk == SupplyRisk.watch || p.belowReorderLevel),
+        )
+        .length;
+    final noCapacityData = overview.plannedProductionPerDay <= 0;
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (mostUrgent != null)
+          if (noCapacityData)
             Container(
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 16),
@@ -194,13 +207,16 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: AppColors.primaryDark),
+                  const Icon(Icons.info_outline, color: AppColors.primaryDark),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Reorder now — ${mostUrgent.daysOfCover!.toStringAsFixed(0)} days cover, '
-                      '${mostUrgent.minSupplierLeadDays} day lead',
+                      'No capacity set up yet — add machines or shifts on '
+                      'the Capacity tab, otherwise stock-out predictions '
+                      'below can\'t be calculated and every material will '
+                      'read as safe.',
                       style: const TextStyle(
                         color: AppColors.primaryDark,
                         fontWeight: FontWeight.w600,
@@ -212,19 +228,37 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
             ),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _summaryStat(
-                    'Materials',
-                    _risks.length.toString(),
-                    scheme.primary,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _summaryStat('Materials', plans.length.toString(), scheme.primary),
+                      _summaryStat(
+                        'Reorder now',
+                        reorderCount.toString(),
+                        scheme.error,
+                      ),
+                      _summaryStat(
+                        'Watch',
+                        watchCount.toString(),
+                        Colors.orange.shade800,
+                      ),
+                    ],
                   ),
-                  _summaryStat(
-                    'Reorder now',
-                    reorderCount.toString(),
-                    AppColors.primaryDark,
+                  const Divider(height: 24),
+                  Text(
+                    'Planned production: '
+                    '${overview.plannedProductionPerDay.toStringAsFixed(0)} units/day',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    overview.productionFromForecast
+                        ? 'from demand forecast'
+                        : 'assuming full capacity — set a demand forecast to refine this',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -252,9 +286,19 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Raw materials', style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Raw materials', style: Theme.of(context).textTheme.titleMedium),
+              FilterChip(
+                label: const Text('Needs action'),
+                selected: _needsActionOnly,
+                onSelected: (v) => setState(() => _needsActionOnly = v),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
-          if (_risks.isEmpty)
+          if (plans.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: EmptyState(
@@ -263,8 +307,16 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                     'No materials yet. Add one to start tracking supply risk.',
               ),
             )
+          else if (_sortedPlans.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: EmptyState(
+                icon: Icons.check_circle_outline,
+                message: 'Nothing needs action right now.',
+              ),
+            )
           else
-            for (final risk in _risks) _buildMaterialCard(risk, scheme),
+            for (final plan in _sortedPlans) _buildMaterialCard(plan, scheme),
         ],
       ),
     );
@@ -286,97 +338,225 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     );
   }
 
-  Widget _buildMaterialCard(_MaterialRisk risk, ColorScheme scheme) {
-    final material = risk.material;
+  Color _riskColor(SupplyRisk risk, ColorScheme scheme) {
+    switch (risk) {
+      case SupplyRisk.stockedOut:
+      case SupplyRisk.reorderNow:
+        return scheme.error;
+      case SupplyRisk.watch:
+        return Colors.orange.shade800;
+      case SupplyRisk.noSupplier:
+        return scheme.outline;
+      case SupplyRisk.healthy:
+        return AppColors.primaryDark;
+    }
+  }
+
+  String _riskLabel(SupplyRisk risk) {
+    switch (risk) {
+      case SupplyRisk.stockedOut:
+        return 'Stocked out';
+      case SupplyRisk.reorderNow:
+        return 'Reorder now';
+      case SupplyRisk.watch:
+        return 'Watch';
+      case SupplyRisk.noSupplier:
+        return 'No supplier';
+      case SupplyRisk.healthy:
+        return 'Healthy';
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildMaterialCard(MaterialPlan plan, ColorScheme scheme) {
+    final material = plan.material;
+    final riskColor = _riskColor(plan.risk, scheme);
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    material.materialName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _showProjection(plan),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      material.materialName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
-                ),
-                if (risk.needsReorder)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: riskColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
-                      'Reorder now',
+                    child: Text(
+                      _riskLabel(plan.risk),
                       style: TextStyle(
-                        color: AppColors.primaryDark,
+                        color: riskColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: () => _openForm(material: material),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => _openForm(material: material),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _delete(material),
+                  ),
+                ],
+              ),
+              Text(
+                '${material.currentStock.toStringAsFixed(0)} ${material.unit} in stock'
+                '${plan.inboundTotal > 0 ? ' · ${plan.inboundTotal.toStringAsFixed(0)} ${material.unit} inbound' : ''}',
+              ),
+              if (plan.overdueOrderCount > 0)
+                Text(
+                  '${plan.overdueOrderCount} '
+                  '${plan.overdueOrderCount == 1 ? 'batch' : 'batches'} overdue '
+                  '(${plan.overdueInboundTotal.toStringAsFixed(0)} ${material.unit}) '
+                  '— cover below assumes it still arrives',
+                  style: TextStyle(color: scheme.error),
+                ),
+              if (plan.belowReorderLevel)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Below reorder level (${material.reorderLevel.toStringAsFixed(0)} ${material.unit})',
+                    style: TextStyle(
+                      color: scheme.error,
+                      fontWeight: FontWeight.w600,
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _delete(material),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              if (plan.daysOfCover != null) ...[
+                Text(
+                  '${plan.daysOfCover!.toStringAsFixed(0)} days of cover at planned production',
+                ),
+                if (plan.stockOutDate != null)
+                  Text('Predicted stock-out: ${_formatDate(plan.stockOutDate!)}'),
+              ] else
+                Text(
+                  '${MrpService.defaultHorizonDays}+ days of cover — no stock-out projected',
+                ),
+              if (plan.orderByDate != null && plan.bestSupplier != null)
+                Text(
+                  'Order by ${_formatDate(plan.orderByDate!)} — '
+                  '${plan.bestSupplier!.supplierName}, '
+                  '${plan.effectiveLeadDays} day effective lead',
+                  style: TextStyle(color: riskColor, fontWeight: FontWeight.w600),
+                )
+              else if (plan.bestSupplier == null)
+                Text(
+                  'No supplier assigned',
+                  style: TextStyle(color: scheme.outline),
+                ),
+              if ((plan.risk == SupplyRisk.reorderNow ||
+                      plan.risk == SupplyRisk.stockedOut ||
+                      plan.risk == SupplyRisk.watch) &&
+                  plan.bestSupplier != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: FilledButton.tonal(
+                    onPressed: () => _openReorderForm(plan),
+                    child: Text(
+                      'Reorder ${plan.suggestedQty?.toStringAsFixed(0) ?? ''} ${material.unit}',
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectionSheet extends StatelessWidget {
+  final MaterialPlan plan;
+
+  const _ProjectionSheet({required this.plan});
+
+  @override
+  Widget build(BuildContext context) {
+    final days = plan.dailyBalances.length > 30
+        ? plan.dailyBalances.sublist(0, 30)
+        : plan.dailyBalances;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${plan.material.materialName} — 30-day projection',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 200,
+              child: LineChart(
+                LineChartData(
+                  titlesData: const FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    topTitles: AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                  ),
+                  gridData: const FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: [
+                        for (var i = 0; i < days.length; i++)
+                          FlSpot(i.toDouble(), days[i]),
+                      ],
+                      isCurved: true,
+                      dotData: const FlDotData(show: false),
+                      color: AppColors.primary,
+                      barWidth: 3,
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: AppColors.primaryLight,
+                      ),
                     ),
                   ],
                 ),
-              ],
-            ),
-            Text('${material.currentStock} ${material.unit} in stock'),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: risk.daysOfCover != null && risk.minSupplierLeadDays != null
-                    ? (risk.daysOfCover! / (risk.minSupplierLeadDays! * 3))
-                        .clamp(0.0, 1.0)
-                    : (risk.daysOfCover == null ? 0 : 1),
-                minHeight: 6,
-                backgroundColor: AppColors.primaryLight,
-                valueColor: AlwaysStoppedAnimation(
-                  risk.needsReorder ? AppColors.primaryDark : AppColors.primary,
-                ),
               ),
             ),
-            const SizedBox(height: 6),
-            if (risk.daysOfCover != null) ...[
-              Text(
-                '${risk.daysOfCover!.toStringAsFixed(1)} days of cover at planned production',
-              ),
-              if (risk.stockOutDate != null)
-                Text(
-                  'Predicted stock-out: ${risk.stockOutDate!.year}-'
-                  '${risk.stockOutDate!.month.toString().padLeft(2, '0')}-'
-                  '${risk.stockOutDate!.day.toString().padLeft(2, '0')}',
-                ),
-            ] else
-              const Text(
-                'No planned production yet — add machines/manpower to estimate burn rate',
-              ),
-            if (!risk.hasSupplier)
-              Text(
-                'No supplier assigned',
-                style: TextStyle(color: scheme.outline),
-              )
-            else
-              Text(
-                'Fastest supplier lead time: ${risk.minSupplierLeadDays} days',
-              ),
+            const SizedBox(height: 12),
+            Text(
+              plan.stockOutDate != null
+                  ? 'Balance is projected to cross zero on '
+                        '${plan.stockOutDate!.year}-${plan.stockOutDate!.month.toString().padLeft(2, '0')}-${plan.stockOutDate!.day.toString().padLeft(2, '0')}.'
+                  : 'Balance stays positive for the shown window.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
       ),
