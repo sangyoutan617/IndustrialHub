@@ -20,6 +20,12 @@ class OrderListScreen extends StatefulWidget {
 
 enum _LoadState { loading, error, ready }
 
+const _openStatuses = [
+  PurchaseOrderStatus.pending,
+  PurchaseOrderStatus.processing,
+  PurchaseOrderStatus.shipped,
+];
+
 class _OrderListScreenState extends State<OrderListScreen> {
   final _materialService = MaterialService();
   final _supplierService = SupplierService();
@@ -29,6 +35,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   List<PurchaseOrder> _orders = [];
   Map<int, String> _materialNames = {};
   Map<int, String> _supplierNames = {};
+  String? _statusFilter;
 
   @override
   void initState() {
@@ -55,15 +62,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
         };
         _state = _LoadState.ready;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('supply: failed to load orders: $e');
       setState(() => _state = _LoadState.error);
     }
   }
 
-  Future<void> _openForm() async {
+  List<PurchaseOrder> get _filteredOrders {
+    if (_statusFilter == null) return _orders;
+    return _orders.where((o) => o.status == _statusFilter).toList();
+  }
+
+  Future<void> _openForm({PurchaseOrder? order}) async {
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => OrderFormScreen(factoryId: widget.factoryId),
+        builder: (_) =>
+            OrderFormScreen(factoryId: widget.factoryId, order: order),
       ),
     );
     if (saved == true) _load();
@@ -73,7 +87,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
     try {
       await _orderService.updateStatus(order.poId, newStatus);
       _load();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('supply: failed to update order status: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -96,7 +111,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
     try {
       await _orderService.receiveDelivery(order);
       _load();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('supply: failed to receive delivery: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -117,13 +133,34 @@ class _OrderListScreenState extends State<OrderListScreen> {
     await _advanceStatus(order, PurchaseOrderStatus.cancelled);
   }
 
+  Future<void> _deletePermanently(PurchaseOrder order) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete order permanently?',
+      message: 'This removes the cancelled order from history for good.',
+    );
+    if (!confirmed) return;
+    try {
+      await _orderService.deleteOrder(order.poId);
+      _load();
+    } catch (e) {
+      debugPrint('supply: failed to delete order: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not delete order. Please try again.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Purchase orders')),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
-        onPressed: _openForm,
+        onPressed: () => _openForm(),
         child: const Icon(Icons.add),
       ),
     );
@@ -141,23 +178,72 @@ class _OrderListScreenState extends State<OrderListScreen> {
             icon: Icons.receipt_long_outlined,
             message: 'No purchase orders yet.',
             actionLabel: 'New order',
-            onAction: _openForm,
+            onAction: () => _openForm(),
           );
         }
+        final filtered = _filteredOrders;
         return RefreshIndicator(
           onRefresh: _load,
-          child: ListView.builder(
+          child: ListView(
             padding: const EdgeInsets.all(8),
-            itemCount: _orders.length,
-            itemBuilder: (context, index) => _buildOrderCard(_orders[index]),
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All'),
+                      selected: _statusFilter == null,
+                      onSelected: (_) => setState(() => _statusFilter = null),
+                    ),
+                    for (final status in PurchaseOrderStatus.all)
+                      ChoiceChip(
+                        label: Text(status),
+                        selected: _statusFilter == status,
+                        onSelected: (_) =>
+                            setState(() => _statusFilter = status),
+                      ),
+                  ],
+                ),
+              ),
+              if (filtered.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: EmptyState(
+                    icon: Icons.filter_alt_off_outlined,
+                    message: 'No orders match this filter.',
+                  ),
+                )
+              else
+                for (final order in filtered) _buildOrderCard(order),
+            ],
           ),
         );
     }
   }
 
+  String _relativeDeliveryText(PurchaseOrder order) {
+    final expected = order.expectedDelivery;
+    if (expected == null) return '';
+    final today = DateTime.now();
+    final days = DateTime(
+      expected.year,
+      expected.month,
+      expected.day,
+    ).difference(DateTime(today.year, today.month, today.day)).inDays;
+    if (days > 0) return ' · arriving in $days day${days == 1 ? '' : 's'}';
+    if (days == 0) return ' · arriving today';
+    return ' · overdue by ${-days} day${-days == 1 ? '' : 's'}';
+  }
+
   Widget _buildOrderCard(PurchaseOrder order) {
     final materialName = _materialNames[order.materialId] ?? 'Unknown material';
     final supplierName = _supplierNames[order.supplierId] ?? 'Unknown supplier';
+    final isOpen = _openStatuses.contains(order.status);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -179,7 +265,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
             Text('$supplierName · ${order.quantity} units'),
             Text(
               'Ordered ${_formatDate(order.orderDate)}'
-              '${order.expectedDelivery != null ? ' · expected ${_formatDate(order.expectedDelivery!)}' : ''}',
+              '${order.expectedDelivery != null ? ' · expected ${_formatDate(order.expectedDelivery!)}' : ''}'
+              '${isOpen ? _relativeDeliveryText(order) : ''}',
             ),
             const SizedBox(height: 8),
             Row(children: _actionsFor(order)),
@@ -193,6 +280,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
     switch (order.status) {
       case PurchaseOrderStatus.pending:
         return [
+          TextButton(
+            onPressed: () => _openForm(order: order),
+            child: const Text('Edit'),
+          ),
           TextButton(
             onPressed: () =>
                 _advanceStatus(order, PurchaseOrderStatus.processing),
@@ -223,6 +314,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
           TextButton(
             onPressed: () => _cancel(order),
             child: const Text('Cancel'),
+          ),
+        ];
+      case PurchaseOrderStatus.cancelled:
+        return [
+          TextButton(
+            onPressed: () => _deletePermanently(order),
+            child: const Text('Delete permanently'),
           ),
         ];
       default:
