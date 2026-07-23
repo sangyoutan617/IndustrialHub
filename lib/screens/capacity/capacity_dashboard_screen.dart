@@ -7,6 +7,7 @@ import '../../widgets/loading_indicator.dart';
 import 'benchmark_screen.dart';
 import 'machine_list_screen.dart';
 import 'manpower_list_screen.dart';
+import 'production_trend_screen.dart';
 import 'simulator_screen.dart';
 
 class CapacityDashboardScreen extends StatefulWidget {
@@ -177,6 +178,17 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () =>
                   _navigateAndRefresh(BenchmarkScreen(factory: widget.factory)),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.show_chart, color: AppColors.primary),
+              title: const Text('Production trend'),
+              subtitle: const Text('Daily output vs ceiling over time'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _navigateAndRefresh(
+                ProductionTrendScreen(factory: widget.factory),
+              ),
             ),
           ),
         ],
