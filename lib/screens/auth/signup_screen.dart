@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/session_prefs.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -52,6 +53,7 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _isGoogleLoading = true);
     try {
+      await SessionPrefs.markOAuthLoginPending();
       await _authService.signInWithGoogle();
       // Success continues outside this screen — AuthGate's onAuthStateChange
       // listener picks up the session once the browser flow completes and

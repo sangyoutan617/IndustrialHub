@@ -128,6 +128,26 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _signOut() async {
+    try {
+      await _authService.signOut();
+      if (!mounted) return;
+      // Usually a no-op (AuthGate renders HomeScreen in place, so the
+      // sign-out stream event alone swaps it back to LoginScreen). But a
+      // non-admin who came in via the admin login link reaches HomeScreen
+      // pushed on top of AuthGate instead — pop back down so that path
+      // also lands on LoginScreen rather than an inert HomeScreen.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not sign out. Please try again.'),
+        ),
+      );
+    }
+  }
+
   void _pickFactory() {
     if (_factories.isEmpty) {
       _createFactory();
@@ -193,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',
-            onPressed: () => _authService.signOut(),
+            onPressed: _signOut,
           ),
         ],
       ),

@@ -50,11 +50,20 @@ class _AuthGateState extends State<AuthGate> {
   // "Remember me" is an app-level boundary on top of Supabase's own session
   // persistence: if the box wasn't checked at login (or the 30 days are up),
   // sign out on this cold start even though a valid session still exists.
+  //
+  // Web OAuth (Google) redirects away and back, which reloads the whole app
+  // and lands here immediately after a login the user just completed — that
+  // one cold start must not undo it, regardless of the remember-me choice,
+  // the same way a same-page email/password login is never touched by this
+  // check until some later cold start. See SessionPrefs.markOAuthLoginPending.
   Future<void> _enforceRememberMeWindow() async {
     if (_initialSession != null) {
-      final stayLoggedIn = await SessionPrefs.shouldStayLoggedIn();
-      if (!stayLoggedIn) {
-        await Supabase.instance.client.auth.signOut();
+      final oauthJustCompleted = await SessionPrefs.consumeOAuthLoginPending();
+      if (!oauthJustCompleted) {
+        final stayLoggedIn = await SessionPrefs.shouldStayLoggedIn();
+        if (!stayLoggedIn) {
+          await Supabase.instance.client.auth.signOut();
+        }
       }
     }
     if (mounted) setState(() => _checkedRememberMe = true);
