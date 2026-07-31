@@ -42,6 +42,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
   int? _selectedMaterialId;
   double? _suggestedRating;
   bool _isSaving = false;
+  int _loadToken = 0;
 
   bool get _isEditing => widget.supplier != null;
 
@@ -53,6 +54,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
   }
 
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
       final materials = await _materialService.getMaterials(widget.factoryId);
@@ -67,6 +69,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
             .toList();
         suggested = MrpService.suggestedRating(MrpService.onTimeRate(history));
       }
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _materials = materials;
         _selectedMaterialId ??= materials.isNotEmpty
@@ -77,6 +80,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
       });
     } catch (e) {
       debugPrint('supply: failed to load supplier form data: $e');
+      if (!mounted || token != _loadToken) return;
       setState(() => _state = _LoadState.error);
     }
   }

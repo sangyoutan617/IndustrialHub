@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SessionPrefs {
   static const _rememberUntilKey = 'remember_until_millis';
   static const _oauthPendingRememberKey = 'oauth_pending_remember_me';
+  static const _pendingPasswordRecoveryKey = 'pending_password_recovery';
   static const _rememberDuration = Duration(days: 30);
 
   static Future<void> setRememberMe(bool remember) async {
@@ -33,6 +34,7 @@ class SessionPrefs {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_rememberUntilKey);
     await prefs.remove(_oauthPendingRememberKey);
+    await prefs.remove(_pendingPasswordRecoveryKey);
   }
 
   /// Web OAuth completes via a full page reload, which looks identical to a
@@ -53,6 +55,26 @@ class SessionPrefs {
     if (!prefs.containsKey(_oauthPendingRememberKey)) return null;
     final value = prefs.getBool(_oauthPendingRememberKey);
     await prefs.remove(_oauthPendingRememberKey);
+    return value;
+  }
+
+  /// A password-recovery link also lands via a full page reload on web,
+  /// which the remember-me restart check would otherwise treat as a stale
+  /// session and sign straight out before the reset screen ever appears.
+  /// Set right before the reset email is requested; consumed by AuthGate
+  /// on the cold start that follows the link.
+  static Future<void> markPendingPasswordRecovery() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_pendingPasswordRecoveryKey, true);
+  }
+
+  /// Reads and clears the flag from [markPendingPasswordRecovery]. True
+  /// means this cold start should be treated as a recovery in progress
+  /// even before the `passwordRecovery` auth event has been observed.
+  static Future<bool> consumePendingPasswordRecovery() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getBool(_pendingPasswordRecoveryKey) ?? false;
+    await prefs.remove(_pendingPasswordRecoveryKey);
     return value;
   }
 }
