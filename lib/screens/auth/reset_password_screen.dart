@@ -38,7 +38,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Password updated. Please sign in again.'),
+          content: Text(
+            'Password updated. You can now sign in with your email and '
+            'password.',
+          ),
         ),
       );
       // Force a fresh sign-in with the new password rather than letting the

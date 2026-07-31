@@ -26,10 +26,21 @@ class AuthService {
     );
   }
 
-  /// Sends a password-reset email. Supabase does not error when [email]
-  /// isn't registered, so this stays silent either way — the caller should
-  /// show the same message regardless, to avoid letting the form be used
-  /// to check which emails have an account.
+  /// Whether [email] belongs to a registered account. Goes through the
+  /// `email_is_registered` RPC (a SECURITY DEFINER function) because the
+  /// anon client can't query `auth.users` directly — see the migration
+  /// note above that function's SQL for how to create it.
+  Future<bool> isEmailRegistered(String email) async {
+    final result = await _client.rpc(
+      'email_is_registered',
+      params: {'p_email': email},
+    );
+    return result as bool;
+  }
+
+  /// Sends a password-reset email. Supabase itself does not error when
+  /// [email] isn't registered — callers that want to reject unregistered
+  /// emails up front should check [isEmailRegistered] first.
   Future<void> sendPasswordReset(String email) async {
     await _client.auth.resetPasswordForEmail(
       email,

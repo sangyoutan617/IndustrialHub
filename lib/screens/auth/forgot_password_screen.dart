@@ -25,30 +25,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final email = _emailController.text.trim();
     setState(() => _isLoading = true);
     try {
-      await _authService.sendPasswordReset(_emailController.text.trim());
+      final isRegistered = await _authService.isEmailRegistered(email);
+      if (!isRegistered) {
+        _showError('This email is not registered. Please sign up first.');
+        return;
+      }
+      await _authService.sendPasswordReset(email);
       // Only mark a recovery as pending once the request actually went
       // out — otherwise a failed send would leave a stray flag for
       // AuthGate to misread on some unrelated later cold start.
       await SessionPrefs.markPendingPasswordRecovery();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            // Deliberately the same message whether or not the email is
-            // registered — Supabase itself doesn't error on an unknown
-            // address, and this form must not become a way to check which
-            // emails have an account.
-            'If that email is registered, a reset link has been sent.',
-          ),
-        ),
+        const SnackBar(content: Text('Reset link sent — check your email.')),
       );
       Navigator.of(context).pop();
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {
-      _showError('Could not send the reset email. Please try again.');
+      _showError('Could not process that request. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -106,7 +104,53 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       color: Colors.grey.shade600,
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          color: AppColors.primaryDark,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: AppColors.primaryDark.withValues(
+                                  alpha: 0.85,
+                                ),
+                              ),
+                              children: const [
+                                TextSpan(
+                                  text: 'Signed up with Google? ',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                TextSpan(
+                                  text:
+                                      'You don\'t need a reset link — go back '
+                                      'and use Continue with Google. Setting '
+                                      'a password here also works: you\'ll '
+                                      'then be able to sign in either way.',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
