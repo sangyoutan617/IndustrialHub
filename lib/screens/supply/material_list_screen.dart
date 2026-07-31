@@ -33,6 +33,12 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   SupplyOverview? _overview;
   bool _needsActionOnly = false;
 
+  // Bumped on every _load() call; a response is only applied if it's still
+  // the most recent one requested. Without this, switching factories or
+  // pulling to refresh mid-flight can let a slower, stale response
+  // overwrite a newer one that already landed.
+  int _loadToken = 0;
+
   @override
   void initState() {
     super.initState();
@@ -46,15 +52,18 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   }
 
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
       final overview = await _supplyService.load(widget.factoryId);
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _overview = overview;
         _state = _LoadState.ready;
       });
     } catch (e) {
       debugPrint('supply: failed to load overview: $e');
+      if (!mounted || token != _loadToken) return;
       setState(() => _state = _LoadState.error);
     }
   }
@@ -91,6 +100,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
             MaterialFormScreen(factoryId: widget.factoryId, material: material),
       ),
     );
+    if (!mounted) return;
     if (saved == true) _load();
   }
 
@@ -109,6 +119,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
         ),
       ),
     );
+    if (!mounted) return;
     if (saved == true) _load();
   }
 
@@ -122,6 +133,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     if (!confirmed) return;
     try {
       await _materialService.deleteMaterial(material.materialId);
+      if (!mounted) return;
       _load();
     } on SupplyInUseException catch (e) {
       if (!mounted) return;
@@ -139,6 +151,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
 
   Future<void> _navigateAndRefresh(Widget screen) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    if (!mounted) return;
     _load();
   }
 

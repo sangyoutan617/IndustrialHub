@@ -63,6 +63,24 @@ class MaterialService {
         'This material has purchase order history — it cannot be removed.',
       );
     }
-    await _client.from('raw_materials').delete().eq('material_id', materialId);
+    // The checks above are a friendly fast path — they can still race with
+    // a supplier/order inserted between the SELECT and this DELETE. The
+    // database's own foreign-key constraint is the real backstop: if that
+    // fires, surface it the same way as a pre-checked conflict rather than
+    // letting a raw PostgrestException reach the UI.
+    try {
+      await _client
+          .from('raw_materials')
+          .delete()
+          .eq('material_id', materialId);
+    } on PostgrestException catch (e) {
+      if (e.code == '23503') {
+        throw const SupplyInUseException(
+          'This material is now linked to a supplier or purchase order — '
+          'it cannot be removed.',
+        );
+      }
+      rethrow;
+    }
   }
 }

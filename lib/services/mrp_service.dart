@@ -262,6 +262,12 @@ class MrpService {
   /// a review period, net of what's already on hand or inbound. Rounded
   /// up to the nearest 10 so the suggestion reads as a sensible order
   /// quantity rather than a jagged decimal.
+  ///
+  /// [inboundTotal] here should only include deliveries expected to land
+  /// within the target cover window (lead time + safety stock + review
+  /// period) — a shipment arriving well beyond that window doesn't cover
+  /// today's shortfall, so it must not offset it. See [buildPlan], which
+  /// computes that windowed figure and is the only real caller.
   static double suggestedQty({
     required double burnRatePerDay,
     required double onHand,
@@ -274,6 +280,26 @@ class MrpService {
     final raw = burnRatePerDay * targetCoverDays - onHand - inboundTotal;
     if (raw <= 0) return 0;
     return (raw / 10).ceil() * 10.0;
+  }
+
+  /// Sum of [inbound] deliveries dated on or before the target cover
+  /// window (lead time + safety stock + review period) from today —
+  /// the boundary day itself still counts. Feeds [suggestedQty]; see its
+  /// doc comment for why the window matters.
+  static double _inboundWithinCoverWindow({
+    required List<InboundDelivery> inbound,
+    required DateTime startOfToday,
+    required int effectiveLeadDays,
+    required int safetyStockDays,
+  }) {
+    final windowEnd = startOfToday.add(
+      Duration(
+        days: effectiveLeadDays + safetyStockDays + reviewPeriodDays,
+      ),
+    );
+    return inbound
+        .where((delivery) => !delivery.date.isAfter(windowEnd))
+        .fold<double>(0, (sum, d) => sum + d.quantity);
   }
 
   /// Builds the full read-out for one material: burn rate from planned
@@ -352,7 +378,17 @@ class MrpService {
         ? suggestedQty(
             burnRatePerDay: burnRate,
             onHand: material.currentStock,
-            inboundTotal: inboundTotal,
+            // Only count deliveries landing within the target cover window
+            // — a shipment arriving well after that window doesn't help
+            // cover the shortfall being sized right now, so it must not
+            // suppress the suggestion (unlike `inboundTotal` above, which
+            // is the full in-flight figure shown to the user as-is).
+            inboundTotal: _inboundWithinCoverWindow(
+              inbound: inbound,
+              startOfToday: startOfToday,
+              effectiveLeadDays: leadDays,
+              safetyStockDays: material.safetyStockDays,
+            ),
             effectiveLeadDays: leadDays,
             safetyStockDays: material.safetyStockDays,
           )

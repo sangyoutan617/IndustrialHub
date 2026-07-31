@@ -1,31 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
-import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
-import '../home/home_screen.dart';
-import 'admin_home_screen.dart';
+import '../../services/session_prefs.dart';
 
-class AdminLoginScreen extends StatefulWidget {
-  const AdminLoginScreen({super.key});
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
-  State<AdminLoginScreen> createState() => _AdminLoginScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _AdminLoginScreenState extends State<AdminLoginScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _authService = AuthService();
-  final _adminService = AdminService();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   bool _isLoading = false;
-  bool _obscurePassword = true;
 
   @override
   void dispose() {
     _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -33,28 +27,28 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      await _authService.signIn(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-      final userId = _authService.currentUser?.id;
-      final isAdmin = userId != null && await _adminService.isAdmin(userId);
+      await _authService.sendPasswordReset(_emailController.text.trim());
+      // Only mark a recovery as pending once the request actually went
+      // out — otherwise a failed send would leave a stray flag for
+      // AuthGate to misread on some unrelated later cold start.
+      await SessionPrefs.markPendingPasswordRecovery();
       if (!mounted) return;
-      // Keep AuthGate (the first route) alive underneath — it's what
-      // reacts to sign-out by showing LoginScreen again. Wiping it out
-      // with `(route) => false` would leave nothing listening once this
-      // screen calls signOut() later.
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) =>
-              isAdmin ? const AdminHomeScreen() : const HomeScreen(),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            // Deliberately the same message whether or not the email is
+            // registered — Supabase itself doesn't error on an unknown
+            // address, and this form must not become a way to check which
+            // emails have an account.
+            'If that email is registered, a reset link has been sent.',
+          ),
         ),
-        (route) => route.isFirst,
       );
+      Navigator.of(context).pop();
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {
-      _showError('Unable to sign in. Please try again.');
+      _showError('Could not send the reset email. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -70,7 +64,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin login')),
+      appBar: AppBar(title: const Text('Reset password')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -90,7 +84,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
-                        Icons.admin_panel_settings_outlined,
+                        Icons.lock_reset,
                         size: 32,
                         color: AppColors.primary,
                       ),
@@ -98,7 +92,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Admin access',
+                    'Forgot your password?',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w600,
@@ -106,7 +100,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Industrial Hub oversight',
+                    'Enter your email and we\'ll send you a reset link.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.grey.shade600,
@@ -125,30 +119,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                        ),
-                        onPressed: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Password is required';
-                      }
-                      return null;
-                    },
-                  ),
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _isLoading ? null : _submit,
@@ -161,7 +131,20 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Sign in'),
+                        : const Text('Send reset link'),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      child: Text(
+                        'Back to log in',
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AppColors.primary),
+                      ),
+                    ),
                   ),
                 ],
               ),
