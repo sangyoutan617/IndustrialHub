@@ -39,6 +39,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
   List<PurchaseOrder> _orders = [];
   Map<int, String> _materialNames = {};
   bool _sortByReliability = false;
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -47,9 +48,11 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
   }
 
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
       final overview = await _supplyService.load(widget.factoryId);
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _suppliers = overview.suppliers;
         _materials = overview.materials;
@@ -59,6 +62,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       });
     } catch (e) {
       debugPrint('supply: failed to load suppliers: $e');
+      if (!mounted || token != _loadToken) return;
       setState(() => _state = _LoadState.error);
     }
   }
@@ -86,6 +90,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
             SupplierFormScreen(factoryId: widget.factoryId, supplier: supplier),
       ),
     );
+    if (!mounted) return;
     if (saved == true) _load();
   }
 
@@ -98,6 +103,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     if (!confirmed) return;
     try {
       await _supplierService.deleteSupplier(supplier.supplierId);
+      if (!mounted) return;
       _load();
     } on SupplyInUseException catch (e) {
       if (!mounted) return;
@@ -150,6 +156,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     if (saved == null) return;
     try {
       await _supplierService.updateRating(supplier.supplierId, saved);
+      if (!mounted) return;
       _load();
     } catch (e) {
       debugPrint('supply: failed to update rating: $e');

@@ -2,29 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 import '../../services/auth_service.dart';
-import '../../services/session_prefs.dart';
 
-class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+/// Shown by AuthGate in place of the normal signed-in home screen while a
+/// password-recovery session is active — see main.dart's `_isRecoveringPassword`
+/// tracking for how that's detected.
+class ResetPasswordScreen extends StatefulWidget {
+  const ResetPasswordScreen({super.key});
 
   @override
-  State<SignupScreen> createState() => _SignupScreenState();
+  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _authService = AuthService();
-  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
-  bool _isLoading = false;
-  bool _isGoogleLoading = false;
+  bool _isSaving = false;
+  bool _isCancelling = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
   @override
   void dispose() {
-    _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
@@ -32,42 +32,35 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    setState(() => _isSaving = true);
     try {
-      await _authService.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+      await _authService.updatePassword(_passwordController.text);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created. You can now sign in.')),
+        const SnackBar(
+          content: Text('Password updated. Please sign in again.'),
+        ),
       );
-      Navigator.of(context).pop();
+      // Force a fresh sign-in with the new password rather than letting the
+      // recovery session carry straight into the app — a clean, explicit
+      // end to the flow instead of silently reusing a session that started
+      // as a recovery link.
+      await _authService.signOut();
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {
-      _showError('Unable to create account. Please try again.');
+      _showError('Could not update the password. Please try again.');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    setState(() => _isGoogleLoading = true);
+  Future<void> _cancel() async {
+    setState(() => _isCancelling = true);
     try {
-      // No "remember me" checkbox on signup — signing up implies intent to
-      // stay signed in, so default to remembering across the OAuth redirect.
-      await SessionPrefs.markPendingOAuthRememberMe(true);
-      await _authService.signInWithGoogle();
-      // Success continues outside this screen — AuthGate's onAuthStateChange
-      // listener picks up the session once the browser flow completes and
-      // redirects back into the app.
-    } on AuthException catch (e) {
-      _showError(e.message);
-    } catch (e) {
-      _showError('Unable to sign in with Google. Please try again.');
+      await _authService.signOut();
     } finally {
-      if (mounted) setState(() => _isGoogleLoading = false);
+      if (mounted) setState(() => _isCancelling = false);
     }
   }
 
@@ -80,8 +73,9 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final busy = _isSaving || _isCancelling;
     return Scaffold(
-      appBar: AppBar(title: const Text('Create account')),
+      appBar: AppBar(title: const Text('Set a new password')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -101,7 +95,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
-                        Icons.factory,
+                        Icons.password,
                         size: 32,
                         color: AppColors.primary,
                       ),
@@ -109,39 +103,18 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Create your account',
+                    'Choose a new password',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Join Industrial Hub',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
                   const SizedBox(height: 32),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Email is required';
-                      }
-                      if (!value.contains('@')) return 'Enter a valid email';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: 'New password',
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword
@@ -165,7 +138,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     controller: _confirmController,
                     obscureText: _obscureConfirm,
                     decoration: InputDecoration(
-                      labelText: 'Confirm password',
+                      labelText: 'Confirm new password',
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscureConfirm
@@ -186,8 +159,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _isLoading ? null : _submit,
-                    child: _isLoading
+                    onPressed: busy ? null : _submit,
+                    child: _isSaving
                         ? const SizedBox(
                             height: 20,
                             width: 20,
@@ -196,57 +169,16 @@ class _SignupScreenState extends State<SignupScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Sign up'),
+                        : const Text('Update password'),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          'or',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: (_isLoading || _isGoogleLoading)
-                        ? null
-                        : _signInWithGoogle,
-                    icon: _isGoogleLoading
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.g_mobiledata, size: 24),
-                    label: const Text('Continue with Google'),
-                  ),
-                  const SizedBox(height: 20),
                   Center(
                     child: TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      child: RichText(
-                        text: TextSpan(
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: Colors.grey.shade700),
-                          children: const [
-                            TextSpan(text: 'Already have an account? '),
-                            TextSpan(
-                              text: 'Log in',
-                              style: TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                      onPressed: busy ? null : _cancel,
+                      child: Text(
+                        'Cancel and sign out',
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: Colors.grey.shade700),
                       ),
                     ),
                   ),

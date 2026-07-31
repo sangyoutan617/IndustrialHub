@@ -495,6 +495,121 @@ void main() {
       );
     });
 
+    test('an inbound delivery landing beyond the target cover window does '
+        'not offset the suggested order quantity', () {
+      // supplier defaults: leadTimeDays 7, reliabilityRating 5 ->
+      // effectiveLeadDays 7. material defaults: safetyStockDays 3.
+      // targetCoverDays = 7 + 3 + reviewPeriodDays(14) = 24.
+      final material = _material(currentStock: 0, consumptionPerUnit: 1);
+      final supplier = _supplier();
+      final baseline = MrpService.buildPlan(
+        material: material,
+        suppliersForMaterial: [supplier],
+        ordersForMaterial: const [],
+        plannedProductionPerDay: 10,
+        today: today,
+      );
+      // burnRate 10 * targetCoverDays 24 - onHand 0 - inbound(windowed) 0
+      // = 240, already a multiple of 10.
+      expect(baseline.suggestedQty, 240);
+
+      final farFutureOrder = MrpService.buildPlan(
+        material: material,
+        suppliersForMaterial: [supplier],
+        ordersForMaterial: [
+          _order(
+            orderDate: today,
+            expectedDelivery: today.add(const Duration(days: 90)),
+            quantity: 1000,
+            status: PurchaseOrderStatus.processing,
+          ),
+        ],
+        plannedProductionPerDay: 10,
+        today: today,
+      );
+      // The order is still open and still counted in the displayed total...
+      expect(farFutureOrder.inboundTotal, 1000);
+      // ...but it lands 90 days out, far past the 24-day cover window, so
+      // it must not reduce how much should be ordered right now.
+      expect(farFutureOrder.suggestedQty, 240);
+    });
+
+    test('an inbound delivery landing within the target cover window nets '
+        'against the suggested order quantity as before', () {
+      final material = _material(currentStock: 0, consumptionPerUnit: 1);
+      final supplier = _supplier();
+      final plan = MrpService.buildPlan(
+        material: material,
+        suppliersForMaterial: [supplier],
+        ordersForMaterial: [
+          _order(
+            orderDate: today,
+            expectedDelivery: today.add(const Duration(days: 10)),
+            quantity: 190,
+            status: PurchaseOrderStatus.processing,
+          ),
+        ],
+        plannedProductionPerDay: 10,
+        today: today,
+      );
+      // raw = 240 - 0 - 190 = 50.
+      expect(plan.suggestedQty, 50);
+    });
+
+    test('a delivery landing exactly on the target cover boundary still '
+        'counts toward the suggested quantity', () {
+      final material = _material(currentStock: 0, consumptionPerUnit: 1);
+      final supplier = _supplier();
+      final plan = MrpService.buildPlan(
+        material: material,
+        suppliersForMaterial: [supplier],
+        ordersForMaterial: [
+          _order(
+            orderDate: today,
+            // targetCoverDays is exactly 24 for this material/supplier pair.
+            expectedDelivery: today.add(const Duration(days: 24)),
+            quantity: 40,
+            status: PurchaseOrderStatus.processing,
+          ),
+        ],
+        plannedProductionPerDay: 10,
+        today: today,
+      );
+      // raw = 240 - 0 - 40 = 200.
+      expect(plan.suggestedQty, 200);
+    });
+
+    test('mixes an in-window and an out-of-window order: inboundTotal sums '
+        'both, but suggestedQty only nets the in-window one', () {
+      final material = _material(currentStock: 0, consumptionPerUnit: 1);
+      final supplier = _supplier();
+      final plan = MrpService.buildPlan(
+        material: material,
+        suppliersForMaterial: [supplier],
+        ordersForMaterial: [
+          _order(
+            poId: 1,
+            orderDate: today,
+            expectedDelivery: today.add(const Duration(days: 10)),
+            quantity: 100,
+            status: PurchaseOrderStatus.processing,
+          ),
+          _order(
+            poId: 2,
+            orderDate: today,
+            expectedDelivery: today.add(const Duration(days: 90)),
+            quantity: 1000,
+            status: PurchaseOrderStatus.processing,
+          ),
+        ],
+        plannedProductionPerDay: 10,
+        today: today,
+      );
+      expect(plan.inboundTotal, 1100);
+      // raw = 240 - 0 - 100 (only the in-window order) = 140.
+      expect(plan.suggestedQty, 140);
+    });
+
     test('delivered and cancelled orders are excluded from inbound — their '
         'stock is already reflected in current_stock', () {
       final plan = MrpService.buildPlan(
