@@ -61,18 +61,36 @@ class SupplierService {
   }
 
   Future<void> deleteSupplier(int supplierId) async {
-    final openOrders = await _client
+    // Blocks on ANY purchase order history, not just open ones — matching
+    // MaterialService.deleteMaterial's rule. A supplier with only
+    // Delivered/Cancelled orders looked safe to remove, but deleting it
+    // orphans those orders (they'd render "Unknown supplier") and erases
+    // the delivery history that on-time-rate and supplier comparison
+    // depend on.
+    final linkedOrders = await _client
         .from('purchase_orders')
         .select('po_id')
         .eq('supplier_id', supplierId)
-        .not('status', 'in', '(Delivered,Cancelled)')
         .limit(1);
-    if ((openOrders as List).isNotEmpty) {
+    if ((linkedOrders as List).isNotEmpty) {
       throw const SupplyInUseException(
-        'This supplier has an open purchase order — cancel or complete it '
-        'before removing the supplier.',
+        'This supplier has purchase order history — it cannot be removed. '
+        'Cancel any open orders first; delivered orders keep this supplier '
+        'in use permanently.',
       );
     }
-    await _client.from('suppliers').delete().eq('supplier_id', supplierId);
+    // Friendly fast path above; the database's foreign-key constraint is
+    // the real guarantee against an order inserted in between.
+    try {
+      await _client.from('suppliers').delete().eq('supplier_id', supplierId);
+    } on PostgrestException catch (e) {
+      if (e.code == '23503') {
+        throw const SupplyInUseException(
+          'This supplier now has purchase order history — it cannot be '
+          'removed.',
+        );
+      }
+      rethrow;
+    }
   }
 }

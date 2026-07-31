@@ -56,6 +56,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   DateTime _orderDate = DateTime.now();
   DateTime? _expectedDelivery;
   bool _isSaving = false;
+  int _loadToken = 0;
 
   bool get _isEditing => widget.order != null;
 
@@ -66,9 +67,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   }
 
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
       final overview = await _supplyService.load(widget.factoryId);
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _materials = overview.materials;
         _suppliers = overview.suppliers;
@@ -108,6 +111,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       });
     } catch (e) {
       debugPrint('supply: failed to load order form data: $e');
+      if (!mounted || token != _loadToken) return;
       setState(() => _state = _LoadState.error);
     }
   }

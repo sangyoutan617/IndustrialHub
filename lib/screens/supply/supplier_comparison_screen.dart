@@ -34,6 +34,7 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
 
   _LoadState _state = _LoadState.loading;
   List<SupplierComparison> _comparisons = [];
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -42,6 +43,7 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
   }
 
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
       final suppliers = await _supplierService.getSuppliersForMaterials([
@@ -50,6 +52,7 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
       final orders = await _orderService.getOrdersForMaterials([
         widget.materialId,
       ]);
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _comparisons = MrpService.compareSuppliers(
           suppliersForMaterial: suppliers,
@@ -59,6 +62,7 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
       });
     } catch (e) {
       debugPrint('supply: failed to load supplier comparison: $e');
+      if (!mounted || token != _loadToken) return;
       setState(() => _state = _LoadState.error);
     }
   }

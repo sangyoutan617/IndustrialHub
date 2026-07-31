@@ -36,6 +36,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   Map<int, String> _materialNames = {};
   Map<int, String> _supplierNames = {};
   String? _statusFilter;
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -44,6 +45,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
       final materials = await _materialService.getMaterials(widget.factoryId);
@@ -52,6 +54,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         materialIds,
       );
       final orders = await _orderService.getOrdersForMaterials(materialIds);
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _orders = orders;
         _materialNames = {
@@ -64,6 +67,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       });
     } catch (e) {
       debugPrint('supply: failed to load orders: $e');
+      if (!mounted || token != _loadToken) return;
       setState(() => _state = _LoadState.error);
     }
   }
@@ -80,12 +84,14 @@ class _OrderListScreenState extends State<OrderListScreen> {
             OrderFormScreen(factoryId: widget.factoryId, order: order),
       ),
     );
+    if (!mounted) return;
     if (saved == true) _load();
   }
 
   Future<void> _advanceStatus(PurchaseOrder order, String newStatus) async {
     try {
       await _orderService.updateStatus(order.poId, newStatus);
+      if (!mounted) return;
       _load();
     } catch (e) {
       debugPrint('supply: failed to update order status: $e');
@@ -110,6 +116,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     if (!confirmed) return;
     try {
       await _orderService.receiveDelivery(order);
+      if (!mounted) return;
       _load();
     } catch (e) {
       debugPrint('supply: failed to receive delivery: $e');
@@ -142,6 +149,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     if (!confirmed) return;
     try {
       await _orderService.deleteOrder(order.poId);
+      if (!mounted) return;
       _load();
     } catch (e) {
       debugPrint('supply: failed to delete order: $e');

@@ -26,6 +26,25 @@ class AuthService {
     );
   }
 
+  /// Sends a password-reset email. Supabase does not error when [email]
+  /// isn't registered, so this stays silent either way — the caller should
+  /// show the same message regardless, to avoid letting the form be used
+  /// to check which emails have an account.
+  Future<void> sendPasswordReset(String email) async {
+    await _client.auth.resetPasswordForEmail(
+      email,
+      redirectTo: kIsWeb
+          ? Uri.base.origin
+          : 'io.supabase.industrialhub://login-callback/',
+    );
+  }
+
+  /// Sets a new password on the current session — used to finish a
+  /// password-reset flow once the recovery link has signed the user in.
+  Future<void> updatePassword(String newPassword) async {
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
+  }
+
   Future<void> signOut() async {
     await _client.auth.signOut();
     await SessionPrefs.clear();
