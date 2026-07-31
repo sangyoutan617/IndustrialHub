@@ -41,7 +41,20 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       await SessionPrefs.setRememberMe(_rememberMe);
     } on AuthException catch (e) {
-      _showError(e.message);
+      // Supabase deliberately doesn't distinguish "wrong password" from "no
+      // such account" in this message (that's its own anti-enumeration
+      // measure), so the same hint below is safe to show for either case —
+      // it doesn't leak which one actually happened. This is also exactly
+      // the case a Google-only account hits when someone tries a password
+      // it never had, so the hint doubles as the fix for that dead end.
+      if (e.message == 'Invalid login credentials') {
+        _showError(
+          'Invalid login credentials. If you signed up with Google, use '
+          'Continue with Google instead.',
+        );
+      } else {
+        _showError(e.message);
+      }
     } catch (e) {
       _showError('Unable to sign in. Please try again.');
     } finally {
