@@ -120,7 +120,17 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             DemandFormScreen(factoryId: widget.factoryId, forecast: forecast),
       ),
     );
-    if (saved == true) _load();
+    if (saved == true) {
+      _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            forecast == null ? 'Demand forecast added' : 'Demand forecast updated',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _deleteDemand(DemandForecast forecast) async {
@@ -134,6 +144,10 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     try {
       await _demandService.deleteForecast(forecast.demandId);
       _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Demand forecast removed')),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

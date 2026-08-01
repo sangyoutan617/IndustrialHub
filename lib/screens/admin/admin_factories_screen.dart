@@ -3,6 +3,7 @@ import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../services/factory_service.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'admin_factory_detail_screen.dart';
 
@@ -53,12 +54,23 @@ class _AdminFactoriesScreenState extends State<AdminFactoriesScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load factories. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         if (_factories.isEmpty) {
-          return const EmptyState(
-            icon: Icons.factory_outlined,
-            message: 'No factories exist yet.',
+          return RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              children: const [
+                SizedBox(height: 80),
+                EmptyState(
+                  icon: Icons.factory_outlined,
+                  title: 'No factories exist yet',
+                ),
+              ],
+            ),
           );
         }
         return _buildReady();

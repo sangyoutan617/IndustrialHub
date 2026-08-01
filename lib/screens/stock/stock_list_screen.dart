@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../models/finished_stock.dart';
 import '../../models/stock_movement.dart';
 import '../../services/stock_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'stock_movement_form_screen.dart';
 
@@ -22,6 +24,7 @@ class _StockListScreenState extends State<StockListScreen> {
   final _service = StockService();
   _LoadState _state = _LoadState.loading;
   List<FinishedStock> _stock = [];
+  bool _isCreating = false;
 
   @override
   void initState() {
@@ -99,6 +102,7 @@ class _StockListScreenState extends State<StockListScreen> {
     );
     if (confirmed != true) return;
 
+    setState(() => _isCreating = true);
     try {
       await _service.createStock(
         widget.factoryId,
@@ -106,6 +110,10 @@ class _StockListScreenState extends State<StockListScreen> {
         int.parse(quantityController.text),
       );
       _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product added')),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -113,6 +121,8 @@ class _StockListScreenState extends State<StockListScreen> {
           content: Text('Could not create product. Please try again.'),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
     }
   }
 
@@ -128,6 +138,10 @@ class _StockListScreenState extends State<StockListScreen> {
     try {
       await _service.deleteStock(stock.stockId);
       _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product removed')),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -154,7 +168,7 @@ class _StockListScreenState extends State<StockListScreen> {
       appBar: AppBar(title: const Text('Finished stock')),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
-        onPressed: _createStock,
+        onPressed: _isCreating ? null : _createStock,
         child: const Icon(Icons.add),
       ),
     );
@@ -165,15 +179,26 @@ class _StockListScreenState extends State<StockListScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load finished stock. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         if (_stock.isEmpty) {
-          return EmptyState(
-            icon: Icons.inventory_2_outlined,
-            message:
-                'No products yet. Add one to start tracking finished stock.',
-            actionLabel: 'Add product',
-            onAction: _createStock,
+          return RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              children: [
+                const SizedBox(height: 80),
+                EmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'No products yet',
+                  subtitle: 'Add your first product to track finished stock.',
+                  actionLabel: 'Add product',
+                  onAction: _createStock,
+                ),
+              ],
+            ),
           );
         }
         return RefreshIndicator(
@@ -186,7 +211,7 @@ class _StockListScreenState extends State<StockListScreen> {
               return Card(
                 child: ListTile(
                   title: Text(stock.productName),
-                  subtitle: Text('${stock.currentQuantity} units in stock'),
+                  subtitle: Text('${formatUnits(stock.currentQuantity)} in stock'),
                   onTap: () => _openMovements(stock),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline),
@@ -233,6 +258,10 @@ class _MovementHistorySheetState extends State<_MovementHistorySheet> {
       setState(
         () => _future = widget.service.getMovements(widget.stock.stockId),
       );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Movement recorded')),
+      );
     }
   }
 
@@ -270,15 +299,21 @@ class _MovementHistorySheetState extends State<_MovementHistorySheet> {
                     return const LoadingIndicator();
                   }
                   if (snapshot.hasError) {
-                    return const EmptyState(
+                    return ErrorState(
                       message: 'Could not load movement history.',
+                      onRetry: () => setState(
+                        () => _future = widget.service.getMovements(
+                          widget.stock.stockId,
+                        ),
+                      ),
                     );
                   }
                   final movements = snapshot.data!;
                   if (movements.isEmpty) {
                     return const EmptyState(
                       icon: Icons.swap_vert,
-                      message: 'No movements recorded yet.',
+                      title: 'No movements recorded yet',
+                      subtitle: 'Record a production-in or shipment-out to see it here.',
                     );
                   }
                   return RefreshIndicator(
@@ -302,8 +337,7 @@ class _MovementHistorySheetState extends State<_MovementHistorySheet> {
                             '${_typeLabel(m.movementType)}  $sign$delta',
                           ),
                           subtitle: Text(
-                            '${m.movementDate.year}-${m.movementDate.month.toString().padLeft(2, '0')}-'
-                            '${m.movementDate.day.toString().padLeft(2, '0')}'
+                            '${formatDate(m.movementDate)}'
                             '${m.note != null ? ' — ${m.note}' : ''}',
                           ),
                         );

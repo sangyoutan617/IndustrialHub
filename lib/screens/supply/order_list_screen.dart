@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/purchase_order.dart';
 import '../../services/material_service.dart';
@@ -6,6 +7,7 @@ import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'order_form_screen.dart';
 
@@ -85,7 +87,25 @@ class _OrderListScreenState extends State<OrderListScreen> {
       ),
     );
     if (!mounted) return;
-    if (saved == true) _load();
+    if (saved == true) {
+      _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(order == null ? 'Order added' : 'Order updated')),
+      );
+    }
+  }
+
+  String _statusMessage(String newStatus) {
+    switch (newStatus) {
+      case PurchaseOrderStatus.processing:
+        return 'Order marked as processing';
+      case PurchaseOrderStatus.shipped:
+        return 'Order marked as shipped';
+      case PurchaseOrderStatus.cancelled:
+        return 'Order cancelled';
+      default:
+        return 'Order updated';
+    }
   }
 
   Future<void> _advanceStatus(PurchaseOrder order, String newStatus) async {
@@ -93,6 +113,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
       await _orderService.updateStatus(order.poId, newStatus);
       if (!mounted) return;
       _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_statusMessage(newStatus))),
+      );
     } catch (e) {
       debugPrint('supply: failed to update order status: $e');
       if (!mounted) return;
@@ -110,7 +133,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
       context,
       title: 'Receive delivery?',
       message:
-          'This adds ${order.quantity} to $materialName\'s stock and marks the order Delivered.',
+          'This adds ${formatUnits(order.quantity)} to $materialName\'s stock and marks the order Delivered.',
       confirmLabel: 'Receive',
     );
     if (!confirmed) return;
@@ -118,6 +141,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
       await _orderService.receiveDelivery(order);
       if (!mounted) return;
       _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Delivery received')),
+      );
     } catch (e) {
       debugPrint('supply: failed to receive delivery: $e');
       if (!mounted) return;
@@ -130,10 +156,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _cancel(PurchaseOrder order) async {
+    final materialName = _materialNames[order.materialId] ?? 'this material';
     final confirmed = await showConfirmDialog(
       context,
       title: 'Cancel order?',
-      message: 'This marks the order Cancelled. Stock is not affected.',
+      message:
+          'This marks the $materialName order Cancelled. Stock is not affected.',
       confirmLabel: 'Cancel order',
     );
     if (!confirmed) return;
@@ -141,16 +169,21 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _deletePermanently(PurchaseOrder order) async {
+    final materialName = _materialNames[order.materialId] ?? 'this material';
     final confirmed = await showConfirmDialog(
       context,
       title: 'Delete order permanently?',
-      message: 'This removes the cancelled order from history for good.',
+      message:
+          'This removes the cancelled $materialName order from history for good.',
     );
     if (!confirmed) return;
     try {
       await _orderService.deleteOrder(order.poId);
       if (!mounted) return;
       _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order deleted')),
+      );
     } catch (e) {
       debugPrint('supply: failed to delete order: $e');
       if (!mounted) return;
@@ -179,14 +212,26 @@ class _OrderListScreenState extends State<OrderListScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load purchase orders. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         if (_orders.isEmpty) {
-          return EmptyState(
-            icon: Icons.receipt_long_outlined,
-            message: 'No purchase orders yet.',
-            actionLabel: 'New order',
-            onAction: () => _openForm(),
+          return RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              children: [
+                const SizedBox(height: 80),
+                EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'No purchase orders yet',
+                  subtitle: 'Create an order to start tracking deliveries.',
+                  actionLabel: 'New order',
+                  onAction: () => _openForm(),
+                ),
+              ],
+            ),
           );
         }
         final filtered = _filteredOrders;
@@ -270,10 +315,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 _statusChip(order.status),
               ],
             ),
-            Text('$supplierName · ${order.quantity} units'),
+            Text('$supplierName · ${formatUnits(order.quantity)}'),
             Text(
-              'Ordered ${_formatDate(order.orderDate)}'
-              '${order.expectedDelivery != null ? ' · expected ${_formatDate(order.expectedDelivery!)}' : ''}'
+              'Ordered ${formatDate(order.orderDate)}'
+              '${order.expectedDelivery != null ? ' · expected ${formatDate(order.expectedDelivery!)}' : ''}'
               '${isOpen ? _relativeDeliveryText(order) : ''}',
             ),
             const SizedBox(height: 8),
@@ -358,9 +403,5 @@ class _OrderListScreenState extends State<OrderListScreen> {
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }
