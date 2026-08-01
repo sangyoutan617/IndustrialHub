@@ -1,11 +1,39 @@
 import 'package:flutter/material.dart';
 
 /// SDG green palette used across the prototype screens.
+///
+/// `primary`/`primaryDark`/`primaryLight`/`primaryAccent` are the original
+/// names and stay put — 20+ screens across every module already reference
+/// them directly. `primaryGreen`/`darkGreen`/`lightGreenFill`/`midGreen` are
+/// the same four values under the shared-widget spec's names; new code
+/// should prefer those, but both point at one literal each, so there is
+/// never a risk of the two sets drifting apart.
 class AppColors {
   static const primary = Color(0xFF16794F);
   static const primaryDark = Color(0xFF0E4030);
   static const primaryLight = Color(0xFFE9F3EE);
   static const primaryAccent = Color(0xFFA3D0BB);
+
+  static const primaryGreen = primary;
+  static const darkGreen = primaryDark;
+  static const lightGreenFill = primaryLight;
+  static const midGreen = primaryAccent;
+}
+
+/// Shared spacing scale — use these instead of ad hoc SizedBox/padding
+/// numbers so gaps stay consistent across modules.
+class AppSpacing {
+  static const s = 8.0;
+  static const m = 12.0;
+  static const l = 16.0;
+}
+
+/// Card look shared by every module's cardTheme, pulled out so the values
+/// are named instead of buried as literals inside [AppTheme.light].
+class AppCardStyle {
+  static const borderRadius = 14.0;
+  static const elevation = 0.0;
+  static const margin = EdgeInsets.zero;
 }
 
 class AppTheme {
@@ -45,10 +73,10 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: Colors.white,
-        elevation: 0,
-        margin: EdgeInsets.zero,
+        elevation: AppCardStyle.elevation,
+        margin: AppCardStyle.margin,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppCardStyle.borderRadius),
           side: BorderSide(color: Colors.grey.shade200),
         ),
       ),
