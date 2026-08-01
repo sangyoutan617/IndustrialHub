@@ -5,6 +5,7 @@ Future<bool> showConfirmDialog(
   required String title,
   required String message,
   String confirmLabel = 'Delete',
+  bool isDestructive = true,
 }) async {
   final confirmed = await showDialog<bool>(
     context: context,
@@ -17,9 +18,11 @@ Future<bool> showConfirmDialog(
           child: const Text('Cancel'),
         ),
         FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+          style: isDestructive
+              ? FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                )
+              : null,
           onPressed: () => Navigator.pop(context, true),
           child: Text(confirmLabel),
         ),
