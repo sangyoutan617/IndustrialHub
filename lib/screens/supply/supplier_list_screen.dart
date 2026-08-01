@@ -8,6 +8,7 @@ import '../../services/supply_exceptions.dart';
 import '../../services/supply_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'supplier_comparison_screen.dart';
 import 'supplier_form_screen.dart';
@@ -91,7 +92,14 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       ),
     );
     if (!mounted) return;
-    if (saved == true) _load();
+    if (saved == true) {
+      _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(supplier == null ? 'Supplier added' : 'Supplier updated'),
+        ),
+      );
+    }
   }
 
   Future<void> _delete(Supplier supplier) async {
@@ -105,6 +113,9 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       await _supplierService.deleteSupplier(supplier.supplierId);
       if (!mounted) return;
       _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Supplier deleted')),
+      );
     } on SupplyInUseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -158,6 +169,9 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       await _supplierService.updateRating(supplier.supplierId, saved);
       if (!mounted) return;
       _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rating updated')),
+      );
     } catch (e) {
       debugPrint('supply: failed to update rating: $e');
       if (!mounted) return;
@@ -235,14 +249,26 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load suppliers. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         if (_suppliers.isEmpty) {
-          return EmptyState(
-            icon: Icons.local_shipping_outlined,
-            message: 'No suppliers yet. Add one to enable reorder alerts.',
-            actionLabel: 'Add supplier',
-            onAction: () => _openForm(),
+          return RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              children: [
+                const SizedBox(height: 80),
+                EmptyState(
+                  icon: Icons.local_shipping_outlined,
+                  title: 'No suppliers yet',
+                  subtitle: 'Add your first supplier to enable reorder alerts.',
+                  actionLabel: 'Add supplier',
+                  onAction: () => _openForm(),
+                ),
+              ],
+            ),
           );
         }
         return RefreshIndicator(

@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/raw_material.dart';
 import '../../services/material_service.dart';
@@ -8,6 +9,7 @@ import '../../services/supply_exceptions.dart';
 import '../../services/supply_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'material_form_screen.dart';
 import 'order_form_screen.dart';
@@ -101,7 +103,14 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       ),
     );
     if (!mounted) return;
-    if (saved == true) _load();
+    if (saved == true) {
+      _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(material == null ? 'Material added' : 'Material updated'),
+        ),
+      );
+    }
   }
 
   Future<void> _openReorderForm(MaterialPlan plan) async {
@@ -120,7 +129,12 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       ),
     );
     if (!mounted) return;
-    if (saved == true) _load();
+    if (saved == true) {
+      _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Purchase order created')),
+      );
+    }
   }
 
   Future<void> _delete(RawMaterial material) async {
@@ -135,6 +149,9 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       await _materialService.deleteMaterial(material.materialId);
       if (!mounted) return;
       _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Material removed')),
+      );
     } on SupplyInUseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -179,7 +196,10 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load materials. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         return _buildReady();
     }
@@ -264,7 +284,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   const Divider(height: 24),
                   Text(
                     'Planned production: '
-                    '${overview.plannedProductionPerDay.toStringAsFixed(0)} units/day',
+                    '${formatUnits(overview.plannedProductionPerDay)}/day',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   Text(
@@ -316,8 +336,8 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
               padding: EdgeInsets.symmetric(vertical: 24),
               child: EmptyState(
                 icon: Icons.inventory_outlined,
-                message:
-                    'No materials yet. Add one to start tracking supply risk.',
+                title: 'No materials yet',
+                subtitle: 'Add your first material to start tracking supply risk.',
               ),
             )
           else if (_sortedPlans.isEmpty)
@@ -325,7 +345,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
               padding: EdgeInsets.symmetric(vertical: 24),
               child: EmptyState(
                 icon: Icons.check_circle_outline,
-                message: 'Nothing needs action right now.',
+                title: 'Nothing needs action right now',
               ),
             )
           else
@@ -380,10 +400,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     }
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
   Widget _buildMaterialCard(MaterialPlan plan, ColorScheme scheme) {
     final material = plan.material;
     final riskColor = _riskColor(plan.risk, scheme);
@@ -435,14 +451,14 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                 ],
               ),
               Text(
-                '${material.currentStock.toStringAsFixed(0)} ${material.unit} in stock'
-                '${plan.inboundTotal > 0 ? ' · ${plan.inboundTotal.toStringAsFixed(0)} ${material.unit} inbound' : ''}',
+                '${formatNumber(material.currentStock)} ${material.unit} in stock'
+                '${plan.inboundTotal > 0 ? ' · ${formatNumber(plan.inboundTotal)} ${material.unit} inbound' : ''}',
               ),
               if (plan.overdueOrderCount > 0)
                 Text(
                   '${plan.overdueOrderCount} '
                   '${plan.overdueOrderCount == 1 ? 'batch' : 'batches'} overdue '
-                  '(${plan.overdueInboundTotal.toStringAsFixed(0)} ${material.unit}) '
+                  '(${formatNumber(plan.overdueInboundTotal)} ${material.unit}) '
                   '— cover below assumes it still arrives',
                   style: TextStyle(color: scheme.error),
                 ),
@@ -450,7 +466,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    'Below reorder level (${material.reorderLevel.toStringAsFixed(0)} ${material.unit})',
+                    'Below reorder level (${formatNumber(material.reorderLevel)} ${material.unit})',
                     style: TextStyle(
                       color: scheme.error,
                       fontWeight: FontWeight.w600,
@@ -460,17 +476,17 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
               const SizedBox(height: 8),
               if (plan.daysOfCover != null) ...[
                 Text(
-                  '${plan.daysOfCover!.toStringAsFixed(0)} days of cover at planned production',
+                  '${formatDays(plan.daysOfCover!)} of cover at planned production',
                 ),
                 if (plan.stockOutDate != null)
-                  Text('Predicted stock-out: ${_formatDate(plan.stockOutDate!)}'),
+                  Text('Predicted stock-out: ${formatDate(plan.stockOutDate!)}'),
               ] else
                 Text(
                   '${MrpService.defaultHorizonDays}+ days of cover — no stock-out projected',
                 ),
               if (plan.orderByDate != null && plan.bestSupplier != null)
                 Text(
-                  'Order by ${_formatDate(plan.orderByDate!)} — '
+                  'Order by ${formatDate(plan.orderByDate!)} — '
                   '${plan.bestSupplier!.supplierName}, '
                   '${plan.effectiveLeadDays} day effective lead',
                   style: TextStyle(color: riskColor, fontWeight: FontWeight.w600),
@@ -489,7 +505,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   child: FilledButton.tonal(
                     onPressed: () => _openReorderForm(plan),
                     child: Text(
-                      'Reorder ${plan.suggestedQty?.toStringAsFixed(0) ?? ''} ${material.unit}',
+                      'Reorder ${plan.suggestedQty != null ? formatNumber(plan.suggestedQty!) : ''} ${material.unit}',
                     ),
                   ),
                 ),
@@ -566,7 +582,7 @@ class _ProjectionSheet extends StatelessWidget {
             Text(
               plan.stockOutDate != null
                   ? 'Balance is projected to cross zero on '
-                        '${plan.stockOutDate!.year}-${plan.stockOutDate!.month.toString().padLeft(2, '0')}-${plan.stockOutDate!.day.toString().padLeft(2, '0')}.'
+                        '${formatDate(plan.stockOutDate!)}.'
                   : 'Balance stays positive for the shown window.',
               style: Theme.of(context).textTheme.bodySmall,
             ),

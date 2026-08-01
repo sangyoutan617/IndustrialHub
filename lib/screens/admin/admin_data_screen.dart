@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../services/admin_data_service.dart';
 import '../../services/seed_service.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 
 enum _LoadState { loading, error, ready }
@@ -78,7 +78,10 @@ class _AdminDataScreenState extends State<AdminDataScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load data counts. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         return _buildReady();
     }
