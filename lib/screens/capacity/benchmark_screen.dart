@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../models/ipi_benchmark.dart';
@@ -8,6 +9,7 @@ import '../../models/productivity_benchmark.dart';
 import '../../services/capacity_service.dart';
 import '../../services/factory_service.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 
 class BenchmarkScreen extends StatefulWidget {
@@ -34,6 +36,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   MsicCode? _msic;
   ProductivityBenchmark? _productivity;
   List<IpiBenchmark> _ipiTrend = [];
+  bool _isAssigning = false;
 
   @override
   void initState() {
@@ -78,11 +81,14 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   }
 
   Future<void> _assignMsicCode() async {
+    if (_isAssigning) return;
+    setState(() => _isAssigning = true);
     List<MsicCode> options;
     try {
       options = await _capacityService.getMsicCodes();
     } catch (_) {
       if (!mounted) return;
+      setState(() => _isAssigning = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not load MSIC codes. Please try again.'),
@@ -92,6 +98,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
     }
     if (!mounted) return;
     if (options.isEmpty) {
+      setState(() => _isAssigning = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -122,7 +129,10 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
         ),
       ),
     );
-    if (selected == null) return;
+    if (selected == null) {
+      if (mounted) setState(() => _isAssigning = false);
+      return;
+    }
 
     try {
       final updated = await _factoryService.updateMsicCode(
@@ -131,6 +141,10 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
       );
       setState(() => _factory = updated);
       _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Industry code updated')),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -138,6 +152,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
           content: Text('Could not assign MSIC code. Please try again.'),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isAssigning = false);
     }
   }
 
@@ -154,13 +170,16 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load benchmark data. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.needsMsic:
         return EmptyState(
           icon: Icons.category_outlined,
-          message:
-              'This factory has no MSIC industry code assigned yet. Assign one to compare against '
-              'national DOSM benchmarks.',
+          title: 'No industry code assigned',
+          subtitle:
+              'Assign an MSIC code to compare against national DOSM benchmarks.',
           actionLabel: 'Assign MSIC code',
           onAction: _assignMsicCode,
         );
@@ -183,7 +202,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
               ),
               subtitle: Text('MSIC ${_factory.msicCode}'),
               trailing: TextButton(
-                onPressed: _assignMsicCode,
+                onPressed: _isAssigning ? null : _assignMsicCode,
                 child: const Text('Change'),
               ),
             ),
@@ -212,7 +231,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              '${_effectiveCapacity.toStringAsFixed(0)} units/day',
+              '${formatUnits(_effectiveCapacity)}/day',
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
@@ -230,7 +249,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                   child: _statTile(
                     'Output / worker',
                     _outputPerWorker != null
-                        ? '${_outputPerWorker!.toStringAsFixed(2)}/day'
+                        ? '${formatUnits(_outputPerWorker!)}/day'
                         : 'n/a',
                   ),
                 ),
@@ -288,11 +307,11 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
               Text('Sector: ${_productivity!.sector} (${_productivity!.year})'),
               if (_productivity!.valueAddedPerWorker != null)
                 Text(
-                  'Value added per worker: RM ${_productivity!.valueAddedPerWorker!.toStringAsFixed(0)} / year',
+                  'Value added per worker: RM ${formatNumber(_productivity!.valueAddedPerWorker!)} / year',
                 ),
               if (_productivity!.valueAddedPerHour != null)
                 Text(
-                  'Value added per hour: RM ${_productivity!.valueAddedPerHour!.toStringAsFixed(2)}',
+                  'Value added per hour: RM ${formatNumber(_productivity!.valueAddedPerHour!)}',
                 ),
               const SizedBox(height: 8),
               Text(
@@ -368,7 +387,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Latest reading: ${_ipiTrend.last.productionIndex.toStringAsFixed(1)} '
+                'Latest reading: ${formatNumber(_ipiTrend.last.productionIndex)} '
                 '(${_ipiTrend.length} month${_ipiTrend.length == 1 ? '' : 's'} shown)',
               ),
             ],

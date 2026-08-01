@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../services/capacity_service.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'benchmark_screen.dart';
 import 'machine_list_screen.dart';
@@ -65,7 +66,10 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load capacity data. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         return _buildReady();
     }
@@ -93,7 +97,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${snapshot.effectiveCapacity.toStringAsFixed(0)} units',
+                    formatUnits(snapshot.effectiveCapacity),
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -210,7 +214,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
     return Column(
       children: [
         Text(
-          value.toStringAsFixed(0),
+          formatNumber(value),
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,

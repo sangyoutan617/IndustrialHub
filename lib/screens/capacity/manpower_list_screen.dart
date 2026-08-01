@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../models/manpower.dart';
 import '../../services/capacity_service.dart';
 import '../../services/manpower_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'manpower_form_screen.dart';
 
@@ -49,7 +51,13 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
             ManpowerFormScreen(factoryId: widget.factoryId, shift: shift),
       ),
     );
-    if (saved == true) _load();
+    if (saved == true) {
+      _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(shift == null ? 'Shift added' : 'Shift updated')),
+      );
+    }
   }
 
   Future<void> _delete(Manpower shift) async {
@@ -63,6 +71,10 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
     try {
       await _service.deleteShift(shift.manpowerId);
       _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Shift removed')),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,15 +102,26 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load manpower shifts. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         if (_shifts.isEmpty) {
-          return EmptyState(
-            icon: Icons.groups_outlined,
-            message:
-                'No shifts yet. Add one to start tracking labour capacity.',
-            actionLabel: 'Add shift',
-            onAction: () => _openForm(),
+          return RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              children: [
+                const SizedBox(height: 80),
+                EmptyState(
+                  icon: Icons.groups_outlined,
+                  title: 'No shifts yet',
+                  subtitle: 'Add your first shift to track labour capacity.',
+                  actionLabel: 'Add shift',
+                  onAction: () => _openForm(),
+                ),
+              ],
+            ),
           );
         }
         final totalCapacity = CapacityService.computeManpowerCapacity(_shifts);
@@ -116,7 +139,7 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
                       const Icon(Icons.groups),
                       const SizedBox(width: 12),
                       Text(
-                        'Total labour capacity: ${totalCapacity.toStringAsFixed(1)} units/day',
+                        'Total labour capacity: ${formatUnits(totalCapacity)}/day',
                       ),
                     ],
                   ),
