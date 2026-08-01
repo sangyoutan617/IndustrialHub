@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/machine.dart';
 import '../../models/manpower.dart';
 import '../../services/capacity_service.dart';
-import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 
 class SimulatorScreen extends StatefulWidget {
@@ -132,7 +133,10 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load simulator data. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         return RefreshIndicator(
           onRefresh: _load,
@@ -173,7 +177,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
                 value: _uptimePercent,
                 min: 0,
                 max: 100,
-                display: '${_uptimePercent.toStringAsFixed(0)}%',
+                display: formatPercent(_uptimePercent),
                 onChanged: (v) => _onSliderChanged(() => _uptimePercent = v),
               ),
             ],
@@ -230,7 +234,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
             style: Theme.of(context).textTheme.labelLarge,
           ),
           Text(
-            '${_effectiveCapacity.toStringAsFixed(0)} units/day',
+            '${formatUnits(_effectiveCapacity)}/day',
             style: Theme.of(
               context,
             ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -239,12 +243,12 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
           Row(
             children: [
               Chip(
-                label: Text('Machine: ${_machineCapacity.toStringAsFixed(0)}'),
+                label: Text('Machine: ${formatNumber(_machineCapacity)}'),
               ),
               const SizedBox(width: 8),
               Chip(
                 label: Text(
-                  'Manpower: ${_manpowerCapacity.toStringAsFixed(0)}',
+                  'Manpower: ${formatNumber(_manpowerCapacity)}',
                 ),
               ),
             ],

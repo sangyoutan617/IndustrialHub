@@ -34,6 +34,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   _LoadState _state = _LoadState.loading;
   _Granularity _granularity = _Granularity.day;
   List<DailyProduction> _raw = [];
+  bool _isLogging = false;
 
   @override
   void initState() {
@@ -142,6 +143,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     if (actualOutput == null) return;
     final downtimeHours = double.tryParse(downtimeController.text) ?? 0;
 
+    setState(() => _isLogging = true);
     try {
       await _service.logProduction(
         factoryId: widget.factory.factoryId,
@@ -150,6 +152,10 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         downtimeHours: downtimeHours,
       );
       _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Production logged')),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -157,6 +163,8 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           content: Text('Could not log production. Please try again.'),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isLogging = false);
     }
   }
 
@@ -298,7 +306,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       appBar: AppBar(title: const Text('Production trend')),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openLogDialog,
+        onPressed: _isLogging ? null : _openLogDialog,
         icon: const Icon(Icons.add),
         label: const Text('Log production'),
       ),

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../models/machine.dart';
 import '../../services/capacity_service.dart';
 import '../../services/machine_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'machine_form_screen.dart';
 
@@ -49,7 +51,15 @@ class _MachineListScreenState extends State<MachineListScreen> {
             MachineFormScreen(factoryId: widget.factoryId, machine: machine),
       ),
     );
-    if (saved == true) _load();
+    if (saved == true) {
+      _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(machine == null ? 'Machine added' : 'Machine updated'),
+        ),
+      );
+    }
   }
 
   Future<void> _delete(Machine machine) async {
@@ -63,6 +73,10 @@ class _MachineListScreenState extends State<MachineListScreen> {
     try {
       await _service.deleteMachine(machine.machineId);
       _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Machine removed')),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,14 +104,26 @@ class _MachineListScreenState extends State<MachineListScreen> {
       case _LoadState.loading:
         return const LoadingIndicator();
       case _LoadState.error:
-        return EmptyState.error(onAction: _load);
+        return ErrorState(
+          message: 'Could not load machines. Please try again.',
+          onRetry: _load,
+        );
       case _LoadState.ready:
         if (_machines.isEmpty) {
-          return EmptyState(
-            icon: Icons.precision_manufacturing_outlined,
-            message: 'No machines yet. Add one to start tracking capacity.',
-            actionLabel: 'Add machine',
-            onAction: () => _openForm(),
+          return RefreshIndicator(
+            onRefresh: _load,
+            child: ListView(
+              children: [
+                const SizedBox(height: 80),
+                EmptyState(
+                  icon: Icons.precision_manufacturing_outlined,
+                  title: 'No machines yet',
+                  subtitle: 'Add your first machine to calculate capacity.',
+                  actionLabel: 'Add machine',
+                  onAction: () => _openForm(),
+                ),
+              ],
+            ),
           );
         }
         return RefreshIndicator(
@@ -116,7 +142,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
                   title: Text(machine.machineName),
                   subtitle: Text(
                     isActive
-                        ? '${contribution.toStringAsFixed(1)} units/day'
+                        ? '${formatUnits(contribution)}/day'
                         : 'Excluded from capacity (${machine.status})',
                   ),
                   leading: CircleAvatar(
