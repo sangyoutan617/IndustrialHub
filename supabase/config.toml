@@ -1,0 +1,7 @@
+# Minimal config so `supabase functions deploy` targets the right project
+# without extra flags. This repo doesn't run the local Supabase stack, so
+# nothing beyond project_id + the function's own settings is defined here.
+project_id = "ypjsbfufdgiheslcwwbv"
+
+[functions.gemini-generate]
+verify_jwt = true

@@ -3,6 +3,7 @@ import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../services/capacity_service.dart';
+import '../../widgets/ai_insight_card.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import 'benchmark_screen.dart';
@@ -142,6 +143,11 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          AiInsightCard(
+            buildPrompt: () => _buildBottleneckPrompt(snapshot),
+            system: _bottleneckSystem,
+          ),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -198,6 +204,46 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         ],
       ),
     );
+  }
+
+  // Deterministic figures only, built here in Dart. The AI insight card
+  // only narrates them — it never computes the bottleneck or the hiring
+  // number itself. See Gemini_Shared_Service_Plan.md's design principle.
+  static const _bottleneckSystem =
+      'You are a factory capacity assistant. You are given figures that '
+      'have already been computed — never invent or recalculate numbers. '
+      'In 2-3 short, plain-language sentences for a factory manager, '
+      'explain what is limiting daily output and give one concrete, '
+      'actionable next step based only on the numbers provided. No '
+      'markdown, no headings, under 80 words.';
+
+  String _buildBottleneckPrompt(CapacitySnapshot snapshot) {
+    final gap = CapacityService.computeHiringGap(snapshot);
+    final buffer = StringBuffer()
+      ..writeln(
+        'Daily production ceiling: ${formatUnits(snapshot.effectiveCapacity)}',
+      )
+      ..writeln('Machine capacity: ${formatUnits(snapshot.machineCapacity)}')
+      ..writeln('Labour capacity: ${formatUnits(snapshot.manpowerCapacity)}')
+      ..writeln('Bottleneck resource: ${snapshot.bottleneckResource}')
+      ..writeln('Current total workers: ${gap.currentWorkers}');
+    if (gap.additionalWorkersNeeded != null) {
+      buffer.writeln(
+        'Hiring ${gap.additionalWorkersNeeded} more worker(s) at the '
+        'current average output rate would remove the labour bottleneck.',
+      );
+    } else if (gap.bottleneck == 'MANPOWER') {
+      buffer.writeln(
+        'Labour is the bottleneck, but there is not enough shift data to '
+        'size a hiring recommendation.',
+      );
+    } else {
+      buffer.writeln(
+        'Machines are the bottleneck — hiring more workers will not '
+        'increase output right now.',
+      );
+    }
+    return buffer.toString();
   }
 
   Widget _capacityBar({

@@ -25,6 +25,24 @@ class CapacitySnapshot {
   });
 }
 
+/// Deterministic hiring gap for the AI insight card — Gemini narrates this,
+/// it never computes it. When labour is the bottleneck, this is how many
+/// more workers (at the current average output rate) would be needed to
+/// raise labour capacity up to the machine ceiling. Null when machines are
+/// the bottleneck (hiring wouldn't raise output) or there isn't enough
+/// shift data to size a recommendation.
+class HiringGap {
+  final String bottleneck;
+  final int currentWorkers;
+  final int? additionalWorkersNeeded;
+
+  const HiringGap({
+    required this.bottleneck,
+    required this.currentWorkers,
+    this.additionalWorkersNeeded,
+  });
+}
+
 class CapacityService {
   final MachineService _machineService = MachineService();
   final ManpowerService _manpowerService = ManpowerService();
@@ -73,6 +91,40 @@ class CapacityService {
       manpowerCapacity: manpowerCapacity,
       effectiveCapacity: effectiveCapacity,
       bottleneckResource: bottleneckResource,
+    );
+  }
+
+  static HiringGap computeHiringGap(CapacitySnapshot snapshot) {
+    final currentWorkers = snapshot.shifts.fold<int>(
+      0,
+      (sum, s) => sum + s.workerCount,
+    );
+
+    if (snapshot.bottleneckResource != 'MANPOWER' || currentWorkers == 0) {
+      return HiringGap(
+        bottleneck: snapshot.bottleneckResource,
+        currentWorkers: currentWorkers,
+      );
+    }
+
+    final totalWorkerDayOutput = snapshot.shifts.fold<double>(
+      0,
+      (sum, s) => sum + s.workerCount * s.shiftHours * s.outputPerWorkerHour,
+    );
+    final avgOutputPerWorkerDay = totalWorkerDayOutput / currentWorkers;
+    if (avgOutputPerWorkerDay <= 0) {
+      return HiringGap(
+        bottleneck: snapshot.bottleneckResource,
+        currentWorkers: currentWorkers,
+      );
+    }
+
+    final gap = snapshot.machineCapacity - snapshot.manpowerCapacity;
+    final additional = (gap / avgOutputPerWorkerDay).ceil();
+    return HiringGap(
+      bottleneck: snapshot.bottleneckResource,
+      currentWorkers: currentWorkers,
+      additionalWorkersNeeded: additional > 0 ? additional : null,
     );
   }
 
