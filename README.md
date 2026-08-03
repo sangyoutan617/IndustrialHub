@@ -108,6 +108,52 @@ To refresh them:
   users or rebuilding search as a server-side query, and the existing
   full-fetch is a reasonable bound for this app's scale.
 
+## Shared AI service (Gemini)
+
+A shared AI narration service exists so every module can add its own
+"AI insight" feature on the same foundation, rather than each module wiring
+up its own Gemini integration. See `Gemini_Shared_Service_Plan.md` for the
+original plan this was built from.
+
+- **`supabase/functions/gemini-generate`** — a Supabase Edge Function that
+  holds the Gemini API key server-side (`GEMINI_API_KEY` secret via
+  `supabase secrets set`). The key never reaches the client. Requires a
+  logged-in user's JWT (platform-level `verify_jwt = true` in
+  `supabase/config.toml`, plus an in-function check as a second layer).
+  Uses the `gemini-flash-latest` model alias rather than a pinned version
+  (`gemini-1.5-flash` was retired after this was first built) so the
+  function doesn't need a redeploy every time Google rotates the
+  flash-tier model underneath it.
+- **`lib/services/ai_service.dart`** — thin client wrapper. `AiService.generate(prompt, {system})`
+  calls the Edge Function and returns the plain-text reply, or throws a
+  clean `Exception` on failure.
+- **`lib/widgets/ai_insight_card.dart`** — the shared `AiInsightCard` widget.
+  Takes a `buildPrompt()` callback and an optional `system` prompt; renders
+  idle/loading/ready/quiet-failure states. Never blocks the screen's real
+  (deterministic) data if the AI call fails.
+  - Answers are cached in-memory, keyed by the exact prompt text, so
+    navigating away (pushing a route, switching tabs) and back reuses the
+    previous answer instead of re-calling Gemini — it only regenerates when
+    the underlying numbers actually change the prompt, or the user taps the
+    manual regenerate button.
+
+**Design principle every module's AI feature must follow:** the deterministic
+engine computes the numbers; Gemini only explains or narrates them. Never
+send raw data and ask Gemini to do the arithmetic — compute the figures in
+Dart first, then ask only for a plain-language explanation of numbers already
+given to it.
+
+**Module 1 (capacity) — bottleneck explanation + hiring recommendation.**
+`CapacityDashboardScreen` mounts an `AiInsightCard` below the production
+ceiling card. `CapacityService.computeHiringGap()` deterministically computes
+how many additional workers (at the current average output rate) would
+remove a labour bottleneck; the AI card only narrates that result plus the
+machine/labour capacity figures — it never sees raw shift/machine rows.
+
+Each other module owner builds their own AI insight feature on top of this
+same shared infra (own `buildPrompt`, own `AiInsightCard` mount point) —
+not built here, since those are separate modules' code.
+
 ## Production trend (Priority 3)
 
 - `daily_production` rows are written from `DailyProductionService.logProduction()`,
