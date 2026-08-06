@@ -8,6 +8,7 @@ import '../capacity/capacity_dashboard_screen.dart';
 import '../stock/stock_dashboard_screen.dart';
 import '../supply/material_list_screen.dart';
 import 'about_screen.dart';
+import 'dashboard_home_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -30,8 +31,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSeeding = false;
   int _bottleneckRefreshTick = 0;
 
-  static const _tabs = ['Capacity', 'Stock', 'Supply'];
+  static const _tabs = ['Home', 'Capacity', 'Stock', 'Supply'];
   static const _tabIcons = [
+    Icons.home_rounded,
     Icons.precision_manufacturing,
     Icons.inventory_2,
     Icons.local_shipping,
@@ -277,12 +279,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Column(
       children: [
-        BottleneckBanner(
-          key: ValueKey(
-            '${_selectedFactory!.factoryId}-$_bottleneckRefreshTick',
+        // The Home tab has its own, richer bottleneck engine card built
+        // in — showing this banner above it too would just duplicate the
+        // same verdict, so it's skipped only for that tab.
+        if (_tabIndex != 0)
+          BottleneckBanner(
+            key: ValueKey(
+              '${_selectedFactory!.factoryId}-$_bottleneckRefreshTick',
+            ),
+            factoryId: _selectedFactory!.factoryId,
           ),
-          factoryId: _selectedFactory!.factoryId,
-        ),
         Expanded(child: _buildTabContent()),
       ],
     );
@@ -290,12 +296,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildTabContent() {
     if (_tabIndex == 0) {
-      return CapacityDashboardScreen(
+      return DashboardHomeScreen(
         key: ValueKey(_selectedFactory!.factoryId),
         factory: _selectedFactory!,
       );
     }
     if (_tabIndex == 1) {
+      return CapacityDashboardScreen(
+        key: ValueKey(_selectedFactory!.factoryId),
+        factory: _selectedFactory!,
+      );
+    }
+    if (_tabIndex == 2) {
       return StockDashboardScreen(
         key: ValueKey(_selectedFactory!.factoryId),
         factoryId: _selectedFactory!.factoryId,
