@@ -143,9 +143,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
                     Expanded(
                       child: Text(
                         'AI-generated',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelSmall?.copyWith(
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AppColors.primaryDark,
                           fontWeight: FontWeight.w600,
                         ),

@@ -38,27 +38,28 @@ class AppCardStyle {
 
 class AppTheme {
   static ThemeData light() {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: AppColors.primary,
-      onPrimary: Colors.white,
-      primaryContainer: AppColors.primaryLight,
-      onPrimaryContainer: AppColors.primaryDark,
-      secondary: AppColors.primaryDark,
-      onSecondary: Colors.white,
-      secondaryContainer: AppColors.primaryAccent,
-      onSecondaryContainer: AppColors.primaryDark,
-      // Pinned so ColorScheme.fromSeed never auto-generates a stray
-      // blue-cyan tertiary — every screen that reads scheme.tertiary
-      // (e.g. the stock dashboard's "Overstocked" label) stays on-palette.
-      tertiary: AppColors.primaryDark,
-      onTertiary: Colors.white,
-      tertiaryContainer: AppColors.primaryLight,
-      onTertiaryContainer: AppColors.primaryDark,
-      surface: Colors.white,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: AppColors.primary,
+          onPrimary: Colors.white,
+          primaryContainer: AppColors.primaryLight,
+          onPrimaryContainer: AppColors.primaryDark,
+          secondary: AppColors.primaryDark,
+          onSecondary: Colors.white,
+          secondaryContainer: AppColors.primaryAccent,
+          onSecondaryContainer: AppColors.primaryDark,
+          // Pinned so ColorScheme.fromSeed never auto-generates a stray
+          // blue-cyan tertiary — every screen that reads scheme.tertiary
+          // (e.g. the stock dashboard's "Overstocked" label) stays on-palette.
+          tertiary: AppColors.primaryDark,
+          onTertiary: Colors.white,
+          tertiaryContainer: AppColors.primaryLight,
+          onTertiaryContainer: AppColors.primaryDark,
+          surface: Colors.white,
+        );
 
     return ThemeData(
       useMaterial3: true,

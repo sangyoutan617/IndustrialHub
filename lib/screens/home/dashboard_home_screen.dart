@@ -442,10 +442,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
             const SizedBox(height: 18),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                vertical: 12,
-                horizontal: 14,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
               decoration: BoxDecoration(
                 color: statusColor.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(10),
@@ -454,7 +451,9 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
               child: Row(
                 children: [
                   Icon(
-                    ok ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                    ok
+                        ? Icons.check_circle_outline
+                        : Icons.warning_amber_rounded,
                     color: statusColor,
                     size: 20,
                   ),
@@ -570,7 +569,12 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     }
   }
 
-  Widget _statBlock(String label, String value, Color valueColor, _Palette pal) {
+  Widget _statBlock(
+    String label,
+    String value,
+    Color valueColor,
+    _Palette pal,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -659,9 +663,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     bool isDemand = false,
   }) {
     final hasData = numericValue != null;
-    final accent = isBottleneck
-        ? pal.alert
-        : (isDemand ? pal.neutral : pal.ok);
+    final accent = isBottleneck ? pal.alert : (isDemand ? pal.neutral : pal.ok);
 
     return _card(
       pal: pal,
@@ -851,7 +853,9 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
   // Opens the full DOSM benchmark screen (Capacity module).
   void _openBenchmark() {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => BenchmarkScreen(factory: widget.factory)),
+      MaterialPageRoute(
+        builder: (_) => BenchmarkScreen(factory: widget.factory),
+      ),
     );
   }
 

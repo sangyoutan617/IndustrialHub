@@ -111,9 +111,9 @@ class _StockListScreenState extends State<StockListScreen> {
       );
       _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Product added')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Product added')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -139,9 +139,9 @@ class _StockListScreenState extends State<StockListScreen> {
       await _service.deleteStock(stock.stockId);
       _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Product removed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Product removed')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -211,7 +211,9 @@ class _StockListScreenState extends State<StockListScreen> {
               return Card(
                 child: ListTile(
                   title: Text(stock.productName),
-                  subtitle: Text('${formatUnits(stock.currentQuantity)} in stock'),
+                  subtitle: Text(
+                    '${formatUnits(stock.currentQuantity)} in stock',
+                  ),
                   onTap: () => _openMovements(stock),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline),
@@ -259,9 +261,9 @@ class _MovementHistorySheetState extends State<_MovementHistorySheet> {
         () => _future = widget.service.getMovements(widget.stock.stockId),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Movement recorded')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Movement recorded')));
     }
   }
 
@@ -313,7 +315,8 @@ class _MovementHistorySheetState extends State<_MovementHistorySheet> {
                     return const EmptyState(
                       icon: Icons.swap_vert,
                       title: 'No movements recorded yet',
-                      subtitle: 'Record a production-in or shipment-out to see it here.',
+                      subtitle:
+                          'Record a production-in or shipment-out to see it here.',
                     );
                   }
                   return RefreshIndicator(

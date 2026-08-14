@@ -152,9 +152,9 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               const SizedBox(height: 16),
               Text(
                 'National IPI (latest, DOSM)',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),
               Wrap(
@@ -174,9 +174,9 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               const SizedBox(height: 16),
               Text(
                 'Productivity benchmark (DOSM, by MSIC category)',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),
               for (final p in stats.productivity)
@@ -273,7 +273,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       sideTitles: SideTitles(showTitles: false),
                     ),
                     leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: true, reservedSize: 40),
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                      ),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
@@ -288,7 +291,9 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              name.length > 8 ? '${name.substring(0, 8)}…' : name,
+                              name.length > 8
+                                  ? '${name.substring(0, 8)}…'
+                                  : name,
                               style: const TextStyle(fontSize: 10),
                             ),
                           );
@@ -372,7 +377,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         DataCell(
                           Text(
                             stat.bottleneck.hasData
-                                ? stat.bottleneck.requiredPerDay.toStringAsFixed(0)
+                                ? stat.bottleneck.requiredPerDay
+                                      .toStringAsFixed(0)
                                 : '—',
                           ),
                         ),

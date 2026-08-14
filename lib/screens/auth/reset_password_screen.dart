@@ -148,9 +148,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
                         ),
-                        onPressed: () => setState(
-                          () => _obscureConfirm = !_obscureConfirm,
-                        ),
+                        onPressed: () =>
+                            setState(() => _obscureConfirm = !_obscureConfirm),
                       ),
                     ),
                     validator: (value) {
@@ -180,8 +179,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       onPressed: busy ? null : _cancel,
                       child: Text(
                         'Cancel and sign out',
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: Colors.grey.shade700),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey.shade700,
+                        ),
                       ),
                     ),
                   ),

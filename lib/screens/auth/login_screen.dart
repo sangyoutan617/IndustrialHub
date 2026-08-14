@@ -289,8 +289,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                       child: Text(
                         'Admin login',
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: Colors.grey.shade500),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey.shade500,
+                        ),
                       ),
                     ),
                   ),

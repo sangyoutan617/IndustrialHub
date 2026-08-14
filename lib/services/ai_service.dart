@@ -7,7 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///
 /// Callers must never send raw computed numbers expecting Gemini to do more
 /// arithmetic — pass already-computed figures and ask only for a
-/// plain-language explanation. See Gemini_Shared_Service_Plan.md.
+/// plain-language explanation. See the "Shared AI service" section of the
+/// README for the full design.
 class AiService {
   final SupabaseClient _client = Supabase.instance.client;
 

@@ -185,8 +185,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           : () => Navigator.of(context).pop(),
                       child: Text(
                         'Back to log in',
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(color: AppColors.primary),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
                   ),

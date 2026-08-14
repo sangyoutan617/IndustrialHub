@@ -161,10 +161,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Alerts',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text('Alerts', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 if (bottleneck.hasData && !bottleneck.canMeetDemand)
                   _alertTile(

@@ -21,9 +21,7 @@ class AdminHomeScreen extends StatelessWidget {
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not sign out. Please try again.'),
-        ),
+        const SnackBar(content: Text('Could not sign out. Please try again.')),
       );
     }
   }
@@ -52,7 +50,8 @@ class AdminHomeScreen extends StatelessWidget {
           _adminTile(
             icon: Icons.bar_chart_outlined,
             title: 'Cross-factory analytics',
-            subtitle: 'Achievable output, demand and bottlenecks across all factories',
+            subtitle:
+                'Achievable output, demand and bottlenecks across all factories',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const AdminAnalyticsScreen()),
             ),
@@ -69,17 +68,17 @@ class AdminHomeScreen extends StatelessWidget {
             icon: Icons.people_outline,
             title: 'Users',
             subtitle: 'All registered users, searchable',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AdminUsersScreen()),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const AdminUsersScreen())),
           ),
           _adminTile(
             icon: Icons.storage_outlined,
             title: 'Data & seed management',
             subtitle: 'Run seed and view simulated-data counts',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AdminDataScreen()),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const AdminDataScreen())),
           ),
         ],
       ),
