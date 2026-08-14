@@ -8,6 +8,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'services/session_prefs.dart';
+import 'widgets/responsive_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +39,11 @@ class MyApp extends StatelessWidget {
       title: 'Industrial Hub',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      // Caps the content width so the app doesn't stretch edge to edge on
+      // wide/landscape/desktop/web viewports. Applies to every screen and
+      // dialog at once — see ResponsiveShell.
+      builder: (context, child) =>
+          ResponsiveShell(child: child ?? const SizedBox.shrink()),
       home: const AuthGate(),
     );
   }
