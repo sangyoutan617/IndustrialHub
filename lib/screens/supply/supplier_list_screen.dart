@@ -96,7 +96,9 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       _load();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(supplier == null ? 'Supplier added' : 'Supplier updated'),
+          content: Text(
+            supplier == null ? 'Supplier added' : 'Supplier updated',
+          ),
         ),
       );
     }
@@ -113,9 +115,9 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       await _supplierService.deleteSupplier(supplier.supplierId);
       if (!mounted) return;
       _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Supplier deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Supplier deleted')));
     } on SupplyInUseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -169,9 +171,9 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
       await _supplierService.updateRating(supplier.supplierId, saved);
       if (!mounted) return;
       _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Rating updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Rating updated')));
     } catch (e) {
       debugPrint('supply: failed to update rating: $e');
       if (!mounted) return;
@@ -185,9 +187,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
 
   Future<void> _openComparison() async {
     final materialsWithSuppliers = _materials
-        .where(
-          (m) => _suppliers.any((s) => s.materialId == m.materialId),
-        )
+        .where((m) => _suppliers.any((s) => s.materialId == m.materialId))
         .toList();
     if (materialsWithSuppliers.isEmpty) return;
     final materialId = await showDialog<int>(
@@ -227,10 +227,10 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
             onPressed: _state == _LoadState.ready ? _openComparison : null,
           ),
           IconButton(
-            icon: Icon(
-              _sortByReliability ? Icons.star : Icons.sort_by_alpha,
-            ),
-            tooltip: _sortByReliability ? 'Sorted by reliability' : 'Sort by name',
+            icon: Icon(_sortByReliability ? Icons.star : Icons.sort_by_alpha),
+            tooltip: _sortByReliability
+                ? 'Sorted by reliability'
+                : 'Sort by name',
             onPressed: () =>
                 setState(() => _sortByReliability = !_sortByReliability),
           ),

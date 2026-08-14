@@ -51,10 +51,7 @@ class DailyProductionService {
     return DailyProduction.fromJson(row);
   }
 
-  Future<List<DailyProduction>> getTrend(
-    int factoryId, {
-    int days = 30,
-  }) async {
+  Future<List<DailyProduction>> getTrend(int factoryId, {int days = 30}) async {
     final since = DateTime.now().subtract(Duration(days: days - 1));
     final rows = await _client
         .from('daily_production')

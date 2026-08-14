@@ -143,9 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not sign out. Please try again.'),
-        ),
+        const SnackBar(content: Text('Could not sign out. Please try again.')),
       );
     }
   }

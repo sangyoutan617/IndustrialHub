@@ -126,7 +126,9 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            forecast == null ? 'Demand forecast added' : 'Demand forecast updated',
+            forecast == null
+                ? 'Demand forecast added'
+                : 'Demand forecast updated',
           ),
         ),
       );
@@ -145,9 +147,9 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
       await _demandService.deleteForecast(forecast.demandId);
       _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Demand forecast removed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Demand forecast removed')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -202,7 +204,8 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     final mostUrgent = withCover.isEmpty
         ? null
         : (withCover.toList()
-            ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!))).first;
+                ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!)))
+              .first;
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -234,7 +237,10 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'Stock-out predicted: ${_formatDate(mostUrgent!.stockOutDate!)}',
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ],
@@ -398,8 +404,8 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               child: LinearProgressIndicator(
                 value: cover.requiredPerDay != null && cover.requiredPerDay! > 0
                     ? (cover.stock.currentQuantity /
-                            (cover.requiredPerDay! * _overstockDaysThreshold))
-                        .clamp(0.0, 1.0)
+                              (cover.requiredPerDay! * _overstockDaysThreshold))
+                          .clamp(0.0, 1.0)
                     : 0,
                 minHeight: 6,
                 backgroundColor: AppColors.primaryLight,

@@ -159,9 +159,7 @@ class MrpService {
     final list = suppliers.toList();
     if (list.isEmpty) return null;
     list.sort((a, b) {
-      final leadCompare = effectiveLeadDays(
-        a,
-      ).compareTo(effectiveLeadDays(b));
+      final leadCompare = effectiveLeadDays(a).compareTo(effectiveLeadDays(b));
       if (leadCompare != 0) return leadCompare;
       return b.reliabilityRating.compareTo(a.reliabilityRating);
     });
@@ -293,9 +291,7 @@ class MrpService {
     required int safetyStockDays,
   }) {
     final windowEnd = startOfToday.add(
-      Duration(
-        days: effectiveLeadDays + safetyStockDays + reviewPeriodDays,
-      ),
+      Duration(days: effectiveLeadDays + safetyStockDays + reviewPeriodDays),
     );
     return inbound
         .where((delivery) => !delivery.date.isAfter(windowEnd))

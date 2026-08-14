@@ -118,9 +118,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'Downtime hours',
-                ),
+                decoration: const InputDecoration(labelText: 'Downtime hours'),
               ),
             ],
           ),
@@ -153,9 +151,9 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       );
       _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Production logged')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Production logged')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -208,10 +206,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           .toList();
       final avgCeiling = ceilingRows.isEmpty
           ? null
-          : ceilingRows.fold<double>(
-                  0,
-                  (sum, r) => sum + r.effectiveCeiling!,
-                ) /
+          : ceilingRows.fold<double>(0, (sum, r) => sum + r.effectiveCeiling!) /
                 ceilingRows.length;
       points.add(
         _TrendPoint(
@@ -234,12 +229,21 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     }
     final sortedKeys = byMonth.keys.toList()..sort();
     const monthNames = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return [
-      for (final key in sortedKeys)
-        _monthPoint(key, byMonth[key]!, monthNames),
+      for (final key in sortedKeys) _monthPoint(key, byMonth[key]!, monthNames),
     ];
   }
 
@@ -263,10 +267,10 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     );
   }
 
-  DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
+  DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
 
-  String _dateKey(DateTime date) =>
-      '${date.year}-${date.month}-${date.day}';
+  String _dateKey(DateTime date) => '${date.year}-${date.month}-${date.day}';
 
   String? get _summaryLine {
     final last30 = _raw.where(
@@ -339,10 +343,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                   value: _Granularity.rollingWeek,
                   label: Text('7-day avg'),
                 ),
-                ButtonSegment(
-                  value: _Granularity.month,
-                  label: Text('Month'),
-                ),
+                ButtonSegment(value: _Granularity.month, label: Text('Month')),
               ],
               selected: {_granularity},
               onSelectionChanged: (selection) =>
@@ -513,7 +514,10 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                       sideTitles: SideTitles(showTitles: false),
                     ),
                     leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: true, reservedSize: 40),
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                      ),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(

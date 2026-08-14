@@ -30,8 +30,9 @@ class FactoryService {
             state: state,
             msicCode: msicCode,
           ).toInsertJson(),
-          // Required by the "own or admin" RLS policy's WITH CHECK — see
-          // Priority 2 in Improvements_Spec.md.
+          // Required by the "own or admin" RLS policy's WITH CHECK — every
+          // factory is stamped with its creator so per-user ownership
+          // scoping works.
           'owner_id': _client.auth.currentUser?.id,
         })
         .select()
