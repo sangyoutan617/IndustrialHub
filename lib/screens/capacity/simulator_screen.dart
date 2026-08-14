@@ -220,9 +220,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
-        color: _justFlipped
-            ? AppColors.primaryAccent
-            : scheme.primaryContainer,
+        color: _justFlipped ? AppColors.primaryAccent : scheme.primaryContainer,
         borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(20),
@@ -242,15 +240,9 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Chip(
-                label: Text('Machine: ${formatNumber(_machineCapacity)}'),
-              ),
+              Chip(label: Text('Machine: ${formatNumber(_machineCapacity)}')),
               const SizedBox(width: 8),
-              Chip(
-                label: Text(
-                  'Manpower: ${formatNumber(_manpowerCapacity)}',
-                ),
-              ),
+              Chip(label: Text('Manpower: ${formatNumber(_manpowerCapacity)}')),
             ],
           ),
           const SizedBox(height: 8),

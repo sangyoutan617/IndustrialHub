@@ -54,11 +54,17 @@
 once from DOSM data published via data.gov.my and are not re-fetched live.
 To refresh them:
 
-1. Source: data.gov.my, Department of Statistics Malaysia (DOSM) datasets.
-   `TODO: insert the exact dataset URLs/IDs used for the MSIC code list, the
-   Industrial Production Index (IPI), and sectoral labour productivity —
-   not recorded anywhere in this repo, so pull them from whoever did the
-   original import before publishing this section.`
+1. Sources — Department of Statistics Malaysia (DOSM) open data, via
+   OpenDOSM (open.dosm.gov.my):
+   - MSIC industry classification (`msic_codes`):
+     https://open.dosm.gov.my/data-catalogue/msic
+   - Sectoral labour productivity, annual (`productivity_benchmarks`):
+     https://open.dosm.gov.my/data-catalogue/productivity_annual
+   - Industrial Production Index, 2-digit division (`ipi_benchmarks`):
+     https://open.dosm.gov.my/data-catalogue/ipi_2d
+
+   These published datasets were cleaned and reshaped to match the table
+   columns in step 3 before import — they are not loaded verbatim.
 2. Filters applied to the source data before import (from the live schema's
    shape — see `lib/models/ipi_benchmark.dart`, `msic_code.dart`,
    `productivity_benchmark.dart`):
@@ -112,8 +118,7 @@ To refresh them:
 
 A shared AI narration service exists so every module can add its own
 "AI insight" feature on the same foundation, rather than each module wiring
-up its own Gemini integration. See `Gemini_Shared_Service_Plan.md` for the
-original plan this was built from.
+up its own Gemini integration. The design is documented in full below.
 
 - **`supabase/functions/gemini-generate`** — a Supabase Edge Function that
   holds the Gemini API key server-side (`GEMINI_API_KEY` secret via

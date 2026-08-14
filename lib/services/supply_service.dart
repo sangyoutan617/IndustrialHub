@@ -89,10 +89,8 @@ class SupplyService {
     final snapshot = results[2] as CapacitySnapshot;
     final forecasts = results[3] as List<DemandForecast>;
 
-    final productionFromForecast = forecasts.fold<int>(
-      0,
-      (sum, f) => sum + f.requiredPerDay,
-    ) > 0;
+    final productionFromForecast =
+        forecasts.fold<int>(0, (sum, f) => sum + f.requiredPerDay) > 0;
     final plannedProductionPerDay = plannedProductionPerDayFor(
       snapshot,
       forecasts,

@@ -55,7 +55,9 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
       _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(shift == null ? 'Shift added' : 'Shift updated')),
+        SnackBar(
+          content: Text(shift == null ? 'Shift added' : 'Shift updated'),
+        ),
       );
     }
   }
@@ -72,9 +74,9 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
       await _service.deleteShift(shift.manpowerId);
       _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Shift removed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Shift removed')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

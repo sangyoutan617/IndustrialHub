@@ -142,9 +142,9 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
       setState(() => _factory = updated);
       _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Industry code updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Industry code updated')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -196,7 +196,10 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
         children: [
           Card(
             child: ListTile(
-              leading: const Icon(Icons.category_outlined, color: AppColors.primary),
+              leading: const Icon(
+                Icons.category_outlined,
+                color: AppColors.primary,
+              ),
               title: Text(
                 _msic?.description ?? _factory.msicCode ?? 'Unknown industry',
               ),
@@ -241,9 +244,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _statTile('Total workers', '$_totalWorkers'),
-                ),
+                Expanded(child: _statTile('Total workers', '$_totalWorkers')),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _statTile(
@@ -273,7 +274,10 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 12, color: AppColors.primaryDark.withValues(alpha: 0.75)),
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.primaryDark.withValues(alpha: 0.75),
+            ),
           ),
           const SizedBox(height: 4),
           Text(
