@@ -116,17 +116,20 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     }
   }
 
-  List<Supplier> get _suppliersForSelectedMaterial => _suppliers
-      .where((s) => s.materialId == _selectedMaterialId)
-      .toList();
+  List<Supplier> get _suppliersForSelectedMaterial =>
+      _suppliers.where((s) => s.materialId == _selectedMaterialId).toList();
 
   Supplier? get _selectedSupplier {
-    final matches = _suppliers.where((s) => s.supplierId == _selectedSupplierId);
+    final matches = _suppliers.where(
+      (s) => s.supplierId == _selectedSupplierId,
+    );
     return matches.isEmpty ? null : matches.first;
   }
 
   RawMaterial? get _selectedMaterial {
-    final matches = _materials.where((m) => m.materialId == _selectedMaterialId);
+    final matches = _materials.where(
+      (m) => m.materialId == _selectedMaterialId,
+    );
     return matches.isEmpty ? null : matches.first;
   }
 
@@ -204,7 +207,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _save() async {
@@ -348,7 +353,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
               ),
               const SizedBox(height: 24),
               FilledButton(
-                onPressed: (_isSaving || supplierOptions.isEmpty) ? null : _save,
+                onPressed: (_isSaving || supplierOptions.isEmpty)
+                    ? null
+                    : _save,
                 child: _isSaving
                     ? const SizedBox(
                         height: 20,

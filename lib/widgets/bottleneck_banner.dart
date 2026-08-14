@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/formatters.dart';
 import '../core/theme.dart';
 import '../services/bottleneck_service.dart';
 
@@ -105,16 +106,17 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                   Row(
                     children: [
                       Icon(
-                        ok ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                        ok
+                            ? Icons.check_circle_outline
+                            : Icons.warning_amber_rounded,
                         color: AppColors.primaryDark,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
                       Text(
                         'Factory health',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -133,12 +135,14 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                           'Achievable output / day',
                           style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.primaryDark.withValues(alpha: 0.75),
+                            color: AppColors.primaryDark.withValues(
+                              alpha: 0.75,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${result.achievable.toStringAsFixed(0)} units',
+                          formatUnits(result.achievable),
                           style: const TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
@@ -148,11 +152,13 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                         const SizedBox(height: 4),
                         Text(
                           ok
-                              ? 'Demand: ${result.requiredPerDay.toStringAsFixed(0)} · meeting demand'
-                              : 'Demand: ${result.requiredPerDay.toStringAsFixed(0)} · short by ${result.shortfall!.toStringAsFixed(0)}',
+                              ? 'Demand: ${formatNumber(result.requiredPerDay)} · meeting demand'
+                              : 'Demand: ${formatNumber(result.requiredPerDay)} · short by ${formatNumber(result.shortfall!)}',
                           style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.primaryDark.withValues(alpha: 0.75),
+                            color: AppColors.primaryDark.withValues(
+                              alpha: 0.75,
+                            ),
                           ),
                         ),
                       ],
@@ -170,7 +176,9 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _resourceLabel(result.limiter ?? result.bottleneckResource),
+                        _resourceLabel(
+                          result.limiter ?? result.bottleneckResource,
+                        ),
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -185,14 +193,16 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                       Expanded(
                         child: _metricCard(
                           'Machine cap.',
-                          result.machineCapacity.toStringAsFixed(0),
+                          formatNumber(result.machineCapacity),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _metricCard(
                           'Material cap.',
-                          result.materialCeiling?.toStringAsFixed(0) ?? '—',
+                          result.materialCeiling != null
+                              ? formatNumber(result.materialCeiling!)
+                              : '—',
                         ),
                       ),
                     ],

@@ -90,7 +90,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
     if (saved == true) {
       _load();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(order == null ? 'Order added' : 'Order updated')),
+        SnackBar(
+          content: Text(order == null ? 'Order added' : 'Order updated'),
+        ),
       );
     }
   }
@@ -113,9 +115,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
       await _orderService.updateStatus(order.poId, newStatus);
       if (!mounted) return;
       _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_statusMessage(newStatus))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_statusMessage(newStatus))));
     } catch (e) {
       debugPrint('supply: failed to update order status: $e');
       if (!mounted) return;
@@ -141,9 +143,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
       await _orderService.receiveDelivery(order);
       if (!mounted) return;
       _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Delivery received')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Delivery received')));
     } catch (e) {
       debugPrint('supply: failed to receive delivery: $e');
       if (!mounted) return;
@@ -181,9 +183,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
       await _orderService.deleteOrder(order.poId);
       if (!mounted) return;
       _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Order deleted')));
     } catch (e) {
       debugPrint('supply: failed to delete order: $e');
       if (!mounted) return;
@@ -241,10 +243,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             padding: const EdgeInsets.all(8),
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Wrap(
                   spacing: 8,
                   children: [

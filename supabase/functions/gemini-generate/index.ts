@@ -1,6 +1,7 @@
 // Shared AI narration endpoint used by every module's AiInsightCard.
 // Holds the Gemini key server-side; the client only ever sends numbers/text
-// and receives a plain-language string back. See Gemini_Shared_Service_Plan.md.
+// and receives a plain-language string back. See the "Shared AI service"
+// section of the README for the full design.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

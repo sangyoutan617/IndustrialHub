@@ -107,7 +107,9 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       _load();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(material == null ? 'Material added' : 'Material updated'),
+          content: Text(
+            material == null ? 'Material added' : 'Material updated',
+          ),
         ),
       );
     }
@@ -131,9 +133,9 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     if (!mounted) return;
     if (saved == true) {
       _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Purchase order created')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Purchase order created')));
     }
   }
 
@@ -149,9 +151,9 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       await _materialService.deleteMaterial(material.materialId);
       if (!mounted) return;
       _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Material removed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Material removed')));
     } on SupplyInUseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -220,7 +222,8 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     final watchCount = plans
         .where(
           (p) =>
-              !isReorder(p) && (p.risk == SupplyRisk.watch || p.belowReorderLevel),
+              !isReorder(p) &&
+              (p.risk == SupplyRisk.watch || p.belowReorderLevel),
         )
         .length;
     final noCapacityData = overview.plannedProductionPerDay <= 0;
@@ -268,7 +271,11 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _summaryStat('Materials', plans.length.toString(), scheme.primary),
+                      _summaryStat(
+                        'Materials',
+                        plans.length.toString(),
+                        scheme.primary,
+                      ),
                       _summaryStat(
                         'Reorder now',
                         reorderCount.toString(),
@@ -322,7 +329,10 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Raw materials', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Raw materials',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               FilterChip(
                 label: const Text('Needs action'),
                 selected: _needsActionOnly,
@@ -337,7 +347,8 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
               child: EmptyState(
                 icon: Icons.inventory_outlined,
                 title: 'No materials yet',
-                subtitle: 'Add your first material to start tracking supply risk.',
+                subtitle:
+                    'Add your first material to start tracking supply risk.',
               ),
             )
           else if (_sortedPlans.isEmpty)
@@ -479,7 +490,9 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   '${formatDays(plan.daysOfCover!)} of cover at planned production',
                 ),
                 if (plan.stockOutDate != null)
-                  Text('Predicted stock-out: ${formatDate(plan.stockOutDate!)}'),
+                  Text(
+                    'Predicted stock-out: ${formatDate(plan.stockOutDate!)}',
+                  ),
               ] else
                 Text(
                   '${MrpService.defaultHorizonDays}+ days of cover — no stock-out projected',
@@ -489,7 +502,10 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   'Order by ${formatDate(plan.orderByDate!)} — '
                   '${plan.bestSupplier!.supplierName}, '
                   '${plan.effectiveLeadDays} day effective lead',
-                  style: TextStyle(color: riskColor, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: riskColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 )
               else if (plan.bestSupplier == null)
                 Text(

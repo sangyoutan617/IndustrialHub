@@ -72,19 +72,19 @@ class _AuthGateState extends State<AuthGate> {
     // exactly why _enforceRememberMeWindow also checks the persisted
     // pending-recovery flag below; this listener is the fallback for a
     // warm app (e.g. a mobile deep link arriving while already running).
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
-      (state) {
-        if (!mounted) return;
-        if (state.event == AuthChangeEvent.passwordRecovery) {
-          setState(() => _isRecoveringPassword = true);
-        } else if (state.event == AuthChangeEvent.signedOut) {
-          // Otherwise a later, completely normal sign-in would still be
-          // misrouted to ResetPasswordScreen by a flag left over from an
-          // earlier recovery flow.
-          setState(() => _isRecoveringPassword = false);
-        }
-      },
-    );
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      state,
+    ) {
+      if (!mounted) return;
+      if (state.event == AuthChangeEvent.passwordRecovery) {
+        setState(() => _isRecoveringPassword = true);
+      } else if (state.event == AuthChangeEvent.signedOut) {
+        // Otherwise a later, completely normal sign-in would still be
+        // misrouted to ResetPasswordScreen by a flag left over from an
+        // earlier recovery flow.
+        setState(() => _isRecoveringPassword = false);
+      }
+    });
     _enforceRememberMeWindow();
   }
 
@@ -104,7 +104,8 @@ class _AuthGateState extends State<AuthGate> {
     // email was sent) lets that reload's session survive long enough for
     // ResetPasswordScreen to use it, instead of being signed straight out.
     final pendingRecovery = await SessionPrefs.consumePendingPasswordRecovery();
-    final pendingOAuthChoice = await SessionPrefs.consumePendingOAuthRememberMe();
+    final pendingOAuthChoice =
+        await SessionPrefs.consumePendingOAuthRememberMe();
     if (pendingRecovery) {
       if (mounted) setState(() => _isRecoveringPassword = true);
     } else if (pendingOAuthChoice != null) {

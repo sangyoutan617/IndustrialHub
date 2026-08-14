@@ -45,8 +45,8 @@ class BottleneckService {
   final SupabaseClient _client = Supabase.instance.client;
 
   /// The authoritative capacity/bottleneck verdict — computed server-side
-  /// by the compute_bottleneck() Postgres function (Priority 6 in
-  /// Improvements_Spec.md), not re-derived from raw table reads here. The
+  /// by the compute_bottleneck() Postgres function, not re-derived from raw
+  /// table reads here. The
   /// what-if simulator (simulator_screen.dart) is the one place that still
   /// does this math on the client: it's read-only and needs instant slider
   /// feedback, so local computation is the right call there. Everywhere

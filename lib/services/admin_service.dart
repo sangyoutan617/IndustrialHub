@@ -95,9 +95,7 @@ class AdminService {
       String? category;
       final msicCode = factory.msicCode;
       if (msicCode != null && msicCode.isNotEmpty) {
-        final snapshot = await _capacityService.getSnapshot(
-          factory.factoryId,
-        );
+        final snapshot = await _capacityService.getSnapshot(factory.factoryId);
         outputPerWorker = _capacityService.outputPerWorker(snapshot);
         final msic = await _capacityService.getMsicByCode(msicCode);
         category = msic?.category;
@@ -129,9 +127,7 @@ class AdminService {
     final divisions = <String>{
       for (final f in factories)
         if (f.msicCode != null && f.msicCode!.isNotEmpty)
-          f.msicCode!.length >= 2
-              ? f.msicCode!.substring(0, 2)
-              : f.msicCode!,
+          f.msicCode!.length >= 2 ? f.msicCode!.substring(0, 2) : f.msicCode!,
     };
     final ipiReadings = <DivisionIpiReading>[];
     for (final division in divisions) {
@@ -169,8 +165,7 @@ class AdminService {
       final peers =
           stats
               .where(
-                (s) =>
-                    s.msicCategory == category && s.outputPerWorker != null,
+                (s) => s.msicCategory == category && s.outputPerWorker != null,
               )
               .map((s) => s.outputPerWorker!)
               .toList()

@@ -208,7 +208,8 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
 
   // Deterministic figures only, built here in Dart. The AI insight card
   // only narrates them — it never computes the bottleneck or the hiring
-  // number itself. See Gemini_Shared_Service_Plan.md's design principle.
+  // number itself. See the "Shared AI service" section of the README for
+  // this design principle.
   static const _bottleneckSystem =
       'You are a factory capacity assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. '
@@ -272,13 +273,14 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
           height: height,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(6),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
           ),
         ),
         const SizedBox(height: 6),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+        ),
         if (isLimiter)
           const Padding(
             padding: EdgeInsets.only(top: 2),

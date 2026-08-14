@@ -130,10 +130,7 @@ void main() {
         inbound: [InboundDelivery(today.add(const Duration(days: 5)), 60)],
         today: today,
       );
-      expect(
-        withInbound.stockOutDate!.isAfter(baseline.stockOutDate!),
-        isTrue,
-      );
+      expect(withInbound.stockOutDate!.isAfter(baseline.stockOutDate!), isTrue);
     });
 
     test('an overdue-but-still-open delivery still counts toward cover '
@@ -384,9 +381,7 @@ void main() {
 
     test('an order-by date one day past the watch window is healthy', () {
       final risk = MrpService.riskFor(
-        orderByDate: today.add(
-          Duration(days: MrpService.watchWindowDays + 1),
-        ),
+        orderByDate: today.add(Duration(days: MrpService.watchWindowDays + 1)),
         stockOutDate: today.add(const Duration(days: 30)),
         today: today,
         hasSupplier: true,
@@ -489,10 +484,7 @@ void main() {
         today: today,
       );
       expect(withOrder.inboundTotal, 200);
-      expect(
-        withOrder.stockOutDate!.isAfter(baseline.stockOutDate!),
-        isTrue,
-      );
+      expect(withOrder.stockOutDate!.isAfter(baseline.stockOutDate!), isTrue);
     });
 
     test('an inbound delivery landing beyond the target cover window does '
@@ -827,10 +819,7 @@ void main() {
         suppliersForMaterial: [slow, fast, medium],
         historyForMaterial: const [],
       );
-      expect(
-        comparisons.map((c) => c.supplier.supplierId).toList(),
-        [2, 3, 1],
-      );
+      expect(comparisons.map((c) => c.supplier.supplierId).toList(), [2, 3, 1]);
     });
 
     test('partitions delivery history by supplier — each row\'s on-time '
@@ -895,7 +884,10 @@ void main() {
         suppliersForMaterial: [onlySupplier],
         historyForMaterial: const [],
       );
-      expect(withoutHistory.single.reason, contains('not enough delivery history'));
+      expect(
+        withoutHistory.single.reason,
+        contains('not enough delivery history'),
+      );
     });
   });
 
@@ -928,10 +920,7 @@ void main() {
 
     test('belowReorderLevel forces attention even when risk is healthy', () {
       expect(
-        _plan(
-          risk: SupplyRisk.healthy,
-          belowReorderLevel: true,
-        ).needsAttention,
+        _plan(risk: SupplyRisk.healthy, belowReorderLevel: true).needsAttention,
         isTrue,
       );
     });
@@ -957,10 +946,7 @@ void main() {
 
     test('pending, processing, and shipped orders are still open', () {
       expect(
-        _order(
-          orderDate: today,
-          status: PurchaseOrderStatus.pending,
-        ).isClosed,
+        _order(orderDate: today, status: PurchaseOrderStatus.pending).isClosed,
         isFalse,
       );
       expect(
@@ -971,10 +957,7 @@ void main() {
         isFalse,
       );
       expect(
-        _order(
-          orderDate: today,
-          status: PurchaseOrderStatus.shipped,
-        ).isClosed,
+        _order(orderDate: today, status: PurchaseOrderStatus.shipped).isClosed,
         isFalse,
       );
     });
