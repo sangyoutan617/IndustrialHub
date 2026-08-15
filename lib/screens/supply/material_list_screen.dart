@@ -7,6 +7,7 @@ import '../../services/material_service.dart';
 import '../../services/mrp_service.dart';
 import '../../services/supply_exceptions.dart';
 import '../../services/supply_service.dart';
+import '../../widgets/ai_insight_card.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
@@ -305,6 +306,17 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          // AI narration of the already-computed Mini-MRP figures. Only
+          // mounted when there are materials to talk about, so an empty
+          // factory spends no AI call. Gemini never runs the MRP maths —
+          // MrpService did; see _buildSupplyPrompt.
+          if (plans.isNotEmpty) ...[
+            AiInsightCard(
+              buildPrompt: () => _buildSupplyPrompt(overview),
+              system: _supplySystem,
+            ),
+            const SizedBox(height: 16),
+          ],
           Card(
             child: ListTile(
               leading: const Icon(Icons.local_shipping_outlined),
@@ -364,6 +376,111 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
         ],
       ),
     );
+  }
+
+  // Deterministic figures only — burn rates, days of cover, stock-out and
+  // order-by dates, and suggested order quantities are all computed by
+  // MrpService (SupplyService.load). The AI card just narrates them; it
+  // never runs the arithmetic. Mirrors the Module 1 / Module 2 insights.
+  static const _supplySystem =
+      'You are a factory supply-chain assistant. You are given figures that '
+      'have already been computed — never invent or recalculate numbers. In '
+      '2-3 short, plain-language sentences for a factory manager, explain the '
+      'raw-material supply risk — which material must be reordered first and '
+      'from which supplier — and give one concrete next step based only on '
+      'the numbers provided. No markdown, no headings, under 80 words.';
+
+  String _buildSupplyPrompt(SupplyOverview overview) {
+    final plans = overview.plans;
+    bool isReorder(MaterialPlan p) =>
+        p.risk == SupplyRisk.reorderNow || p.risk == SupplyRisk.stockedOut;
+    final reorderCount = plans.where(isReorder).length;
+    final watchCount = plans
+        .where(
+          (p) =>
+              !isReorder(p) &&
+              (p.risk == SupplyRisk.watch || p.belowReorderLevel),
+        )
+        .length;
+    final noSupplierCount = plans
+        .where((p) => p.risk == SupplyRisk.noSupplier)
+        .length;
+    final overdueOrders = plans.fold<int>(
+      0,
+      (sum, p) => sum + p.overdueOrderCount,
+    );
+
+    final buffer = StringBuffer()
+      ..writeln('Raw materials tracked: ${plans.length}')
+      ..writeln(
+        'Reorder now (out of stock or past order-by date): $reorderCount',
+      )
+      ..writeln(
+        'Watch (order-by date near, or below reorder level): $watchCount',
+      )
+      ..writeln('Materials with no supplier linked: $noSupplierCount')
+      ..writeln('Open purchase orders already overdue: $overdueOrders')
+      ..writeln(
+        'Planned production: ${formatUnits(overview.plannedProductionPerDay)}/day'
+        '${overview.productionFromForecast ? ' (from demand forecast)' : ' (assuming full capacity)'}',
+      );
+    if (overview.plannedProductionPerDay <= 0) {
+      buffer.writeln(
+        'No capacity data is set, so burn rates and stock-out dates cannot be '
+        'projected — treat risk as unknown, not safe.',
+      );
+    }
+
+    // Attention-needing materials, most urgent first (same ordering the
+    // list on screen uses).
+    int priority(SupplyRisk r) => switch (r) {
+      SupplyRisk.stockedOut => 0,
+      SupplyRisk.reorderNow => 1,
+      SupplyRisk.watch => 2,
+      SupplyRisk.healthy => 3,
+      SupplyRisk.noSupplier => 4,
+    };
+    final attention = plans.where((p) => p.needsAttention).toList()
+      ..sort((a, b) {
+        final c = priority(a.risk).compareTo(priority(b.risk));
+        if (c != 0) return c;
+        final ad = a.orderByDate;
+        final bd = b.orderByDate;
+        if (ad == null && bd == null) return 0;
+        if (ad == null) return 1;
+        if (bd == null) return -1;
+        return ad.compareTo(bd);
+      });
+
+    if (attention.isEmpty) {
+      buffer.writeln('No materials currently need action.');
+    }
+    for (final p in attention) {
+      final line = StringBuffer(
+        '- ${p.material.materialName} [${_riskLabel(p.risk)}]: '
+        'on hand ${formatNumber(p.onHand)}, burn ${formatNumber(p.burnRatePerDay)}/day',
+      );
+      if (p.daysOfCover != null) {
+        line.write(', ${p.daysOfCover!.toStringAsFixed(1)} days of cover');
+      }
+      if (p.stockOutDate != null) {
+        line.write(', stock-out ${formatDate(p.stockOutDate!)}');
+      }
+      if (p.orderByDate != null) {
+        line.write(', order by ${formatDate(p.orderByDate!)}');
+      }
+      if (p.bestSupplier != null && p.effectiveLeadDays != null) {
+        line.write(
+          ', best supplier ${p.bestSupplier!.supplierName} '
+          '(~${p.effectiveLeadDays} day lead)',
+        );
+      }
+      if (p.suggestedQty != null && p.suggestedQty! > 0) {
+        line.write(', suggested order ${formatNumber(p.suggestedQty!)}');
+      }
+      buffer.writeln(line.toString());
+    }
+    return buffer.toString();
   }
 
   Widget _summaryStat(String label, String value, Color color) {

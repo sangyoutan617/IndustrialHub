@@ -155,9 +155,25 @@ how many additional workers (at the current average output rate) would
 remove a labour bottleneck; the AI card only narrates that result plus the
 machine/labour capacity figures — it never sees raw shift/machine rows.
 
-Each other module owner builds their own AI insight feature on top of this
-same shared infra (own `buildPrompt`, own `AiInsightCard` mount point) —
-not built here, since those are separate modules' code.
+**Module 2 (stock) — finished-goods cover explanation.**
+`StockDashboardScreen` mounts an `AiInsightCard` below the "Days of cover"
+card. The dashboard's `_load()` computes days of cover and the predicted
+stock-out date per product; the AI card only narrates which product runs
+out first, the low/overstocked counts, and one next step. It's gated so an
+empty factory (no demand forecast) spends no AI call.
+
+**Module 3 (supply) — raw-material supply-risk explanation.**
+`MaterialListScreen` mounts an `AiInsightCard` below the summary card.
+`MrpService` (via `SupplyService.load`) computes each material's burn rate,
+days of cover, stock-out and latest safe order-by dates, recommended
+(reliability-adjusted) supplier, and suggested order quantity; the AI card
+only narrates which material to reorder first and from whom. If no capacity
+is set, the prompt tells the model to treat risk as unknown rather than
+safe, matching the on-screen caveat.
+
+All three follow the same rule — the deterministic engine computes every
+number, Gemini only explains it — and reuse the same `AiInsightCard` and
+`gemini-generate` Edge Function.
 
 ## Production trend (Priority 3)
 
