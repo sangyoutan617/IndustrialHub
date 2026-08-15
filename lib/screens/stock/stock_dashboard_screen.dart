@@ -4,6 +4,7 @@ import '../../models/demand_forecast.dart';
 import '../../models/finished_stock.dart';
 import '../../services/demand_service.dart';
 import '../../services/stock_service.dart';
+import '../../widgets/ai_insight_card.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -248,6 +249,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          // AI narration of the already-computed cover figures. Only mounted
+          // when at least one product has a demand-based days-of-cover to
+          // explain, so an empty factory doesn't spend an AI call. Gemini
+          // never computes cover or stock-out dates — see _buildStockPrompt.
+          if (withCover.isNotEmpty) ...[
+            AiInsightCard(buildPrompt: _buildStockPrompt, system: _stockSystem),
+            const SizedBox(height: 16),
+          ],
           Row(
             children: [
               Expanded(
@@ -345,6 +354,76 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         ],
       ),
     );
+  }
+
+  // Deterministic figures only — days of cover and stock-out dates are all
+  // computed in _load(). The AI card just narrates them; it never does the
+  // arithmetic. Mirrors the Module 1 (capacity) bottleneck insight.
+  static const _stockSystem =
+      'You are a factory inventory assistant. You are given figures that '
+      'have already been computed — never invent or recalculate numbers. In '
+      '2-3 short, plain-language sentences for a factory manager, explain the '
+      'finished-goods stock situation — which product runs out first and '
+      'whether any are low or overstocked — and give one concrete next step '
+      'based only on the numbers provided. No markdown, no headings, under 80 '
+      'words.';
+
+  String _buildStockPrompt() {
+    final withCover = _covers.where((c) => c.daysOfCover != null).toList()
+      ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!));
+    final lowStock = _covers
+        .where(
+          (c) =>
+              c.requiredPerDay != null &&
+              c.requiredPerDay! > 0 &&
+              c.daysOfCover! < _lowCoverDaysThreshold,
+        )
+        .length;
+    final overstock = _covers
+        .where(
+          (c) =>
+              c.requiredPerDay != null &&
+              c.requiredPerDay! > 0 &&
+              c.daysOfCover! > _overstockDaysThreshold,
+        )
+        .length;
+
+    final buffer = StringBuffer()
+      ..writeln('Finished-goods products tracked: ${_covers.length}')
+      ..writeln(
+        'Low-stock (under $_lowCoverDaysThreshold days of cover): $lowStock',
+      )
+      ..writeln(
+        'Overstocked (over $_overstockDaysThreshold days of cover): $overstock',
+      );
+
+    if (withCover.isNotEmpty) {
+      final m = withCover.first;
+      buffer.writeln(
+        'Closest to stock-out: ${m.stock.productName} — '
+        '${m.stock.currentQuantity} units in stock, demand '
+        '${m.requiredPerDay}/day, ${m.daysOfCover!.toStringAsFixed(1)} days of '
+        'cover${m.stockOutDate != null ? ', predicted stock-out ${_formatDate(m.stockOutDate!)}' : ''}.',
+      );
+    }
+    for (final c in withCover) {
+      buffer.writeln(
+        '- ${c.stock.productName}: ${c.stock.currentQuantity} units, '
+        '${c.daysOfCover!.toStringAsFixed(1)} days of cover (${c.status}).',
+      );
+    }
+
+    final noDemand = _covers
+        .where((c) => c.requiredPerDay == null || c.requiredPerDay == 0)
+        .map((c) => c.stock.productName)
+        .toList();
+    if (noDemand.isNotEmpty) {
+      buffer.writeln(
+        'Products with no demand forecast set (cover cannot be computed): '
+        '${noDemand.join(', ')}.',
+      );
+    }
+    return buffer.toString();
   }
 
   Widget _summaryStat(String label, String value, Color color) {
