@@ -94,15 +94,18 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                 children: [
                   Text(
                     'Daily production ceiling',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     formatUnits(snapshot.effectiveCapacity),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.primaryDark,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -262,10 +265,10 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
       children: [
         Text(
           formatNumber(value),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: AppColors.primaryDark,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 6),
@@ -279,7 +282,10 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         const SizedBox(height: 6),
         Text(
           label,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         if (isLimiter)
           const Padding(

@@ -36,9 +36,10 @@ class ResponsiveShell extends StatelessWidget {
         if (constraints.maxWidth <= maxContentWidth) return child;
         // Wider than the cap: centre the app and fill the sides with a
         // neutral gutter so the narrower layout reads as deliberate rather
-        // than as a rendering glitch.
+        // than as a rendering glitch. Theme-aware so it stays subtle in dark
+        // mode instead of glaring light grey.
         return ColoredBox(
-          color: const Color(0xFFEDEFEE),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxContentWidth),

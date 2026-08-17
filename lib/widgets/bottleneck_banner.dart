@@ -94,6 +94,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
         }
 
         final ok = result.canMeetDemand;
+        final scheme = Theme.of(context).colorScheme;
 
         return Padding(
           padding: const EdgeInsets.all(16),
@@ -109,7 +110,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                         ok
                             ? Icons.check_circle_outline
                             : Icons.warning_amber_rounded,
-                        color: AppColors.primaryDark,
+                        color: scheme.onSurface,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
@@ -125,7 +126,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: scheme.primaryContainer,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -135,7 +136,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                           'Achievable output / day',
                           style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.primaryDark.withValues(
+                            color: scheme.onPrimaryContainer.withValues(
                               alpha: 0.75,
                             ),
                           ),
@@ -143,10 +144,10 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                         const SizedBox(height: 4),
                         Text(
                           formatUnits(result.achievable),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.primaryDark,
+                            color: scheme.onPrimaryContainer,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -156,7 +157,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                               : 'Demand: ${formatNumber(result.requiredPerDay)} · short by ${formatNumber(result.shortfall!)}',
                           style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.primaryDark.withValues(
+                            color: scheme.onPrimaryContainer.withValues(
                               alpha: 0.75,
                             ),
                           ),
@@ -171,7 +172,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                         'Bottleneck',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -179,10 +180,10 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                         _resourceLabel(
                           result.limiter ?? result.bottleneckResource,
                         ),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.primaryDark,
+                          color: scheme.onSurface,
                         ),
                       ),
                     ],
@@ -192,6 +193,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                     children: [
                       Expanded(
                         child: _metricCard(
+                          scheme,
                           'Machine cap.',
                           formatNumber(result.machineCapacity),
                         ),
@@ -199,6 +201,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _metricCard(
+                          scheme,
                           'Material cap.',
                           result.materialCeiling != null
                               ? formatNumber(result.materialCeiling!)
@@ -229,28 +232,28 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
     }
   }
 
-  Widget _metricCard(String label, String value) {
+  Widget _metricCard(ColorScheme scheme, String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppColors.primaryDark,
+              color: scheme.onSurface,
             ),
           ),
         ],
