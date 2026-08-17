@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants.dart';
 import 'core/theme.dart';
+import 'l10n/app_localizations.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -35,18 +36,52 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  /// Switches the app's language from anywhere (e.g. the About screen's
+  /// language picker) and persists the choice. Pass null to follow the
+  /// device locale.
+  static void setLocale(BuildContext context, Locale? locale) {
+    context.findAncestorStateOfType<_MyAppState>()?._setLocale(locale);
+  }
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  Locale? _locale;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLocale();
+  }
+
+  Future<void> _loadLocale() async {
+    final code = await SessionPrefs.getLocaleCode();
+    if (code != null && mounted) setState(() => _locale = Locale(code));
+  }
+
+  void _setLocale(Locale? locale) {
+    setState(() => _locale = locale);
+    SessionPrefs.setLocaleCode(locale?.languageCode);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Industrial Hub',
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       // Follows the device's light/dark setting.
       themeMode: ThemeMode.system,
+      // Chosen language, or null to follow the device locale.
+      locale: _locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       // Caps the content width so the app doesn't stretch edge to edge on
       // wide/landscape/desktop/web viewports. Applies to every screen and
       // dialog at once — see ResponsiveShell.

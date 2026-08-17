@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/factory.dart';
 import '../../services/capacity_service.dart';
 import '../../widgets/ai_insight_card.dart';
@@ -93,7 +94,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Daily production ceiling',
+                    AppLocalizations.of(context).capacityDailyCeiling,
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,

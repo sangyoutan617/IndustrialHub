@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/auth_service.dart';
 import '../../services/session_prefs.dart';
 import '../admin/admin_login_screen.dart';
@@ -88,6 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -124,22 +126,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Innovation Platform',
+                    l10n.tagline,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 32),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
+                    decoration: InputDecoration(labelText: l10n.authEmail),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'Email is required';
+                        return l10n.authEmailRequired;
                       }
-                      if (!value.contains('@')) return 'Enter a valid email';
+                      if (!value.contains('@')) return l10n.authEmailInvalid;
                       return null;
                     },
                   ),
@@ -148,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: l10n.authPassword,
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword
@@ -162,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Password is required';
+                        return l10n.authPasswordRequired;
                       }
                       return null;
                     },
@@ -188,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? null
                             : () => setState(() => _rememberMe = !_rememberMe),
                         child: Text(
-                          'Remember me for 30 days',
+                          l10n.authRememberMe,
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ),
@@ -204,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 builder: (_) => const ForgotPasswordScreen(),
                               ),
                             ),
-                      child: const Text('Forgot password?'),
+                      child: Text(l10n.authForgotPassword),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -219,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Log in'),
+                        : Text(l10n.authLogIn),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -228,7 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
-                          'or',
+                          l10n.authOr,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
@@ -247,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.g_mobiledata, size: 24),
-                    label: const Text('Continue with Google'),
+                    label: Text(l10n.authContinueWithGoogle),
                   ),
                   const SizedBox(height: 20),
                   Center(
@@ -263,11 +265,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         text: TextSpan(
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: Colors.grey.shade700),
-                          children: const [
-                            TextSpan(text: 'No account? '),
+                          children: [
+                            TextSpan(text: l10n.authNoAccount),
                             TextSpan(
-                              text: 'Sign up',
-                              style: TextStyle(
+                              text: l10n.authSignUp,
+                              style: const TextStyle(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -288,7 +290,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                       child: Text(
-                        'Admin login',
+                        l10n.authAdminLogin,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Colors.grey.shade500,
                         ),

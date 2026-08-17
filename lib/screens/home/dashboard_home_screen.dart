@@ -424,25 +424,35 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
                               ],
                       ),
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${ringPct.clamp(0, 999).toStringAsFixed(0)}%',
-                          style: TextStyle(
-                            color: pal.textPrimary,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
+                    // Bounded FittedBox so a large OS text scale shrinks the
+                    // label to fit the ring's hole instead of overflowing the
+                    // fixed 140px chart.
+                    SizedBox(
+                      width: 84,
+                      height: 84,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${ringPct.clamp(0, 999).toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                color: pal.textPrimary,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              'of demand',
+                              style: TextStyle(
+                                color: pal.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          'of demand',
-                          style: TextStyle(
-                            color: pal.textSecondary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
