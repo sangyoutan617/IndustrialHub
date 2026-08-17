@@ -7,6 +7,7 @@ import 'core/theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'services/notification_service.dart';
 import 'services/session_prefs.dart';
 import 'widgets/responsive_shell.dart';
 
@@ -27,6 +28,10 @@ Future<void> main() async {
       authFlowType: AuthFlowType.implicit,
     ),
   );
+  // Best-effort: sets up the local-notifications channel and asks for
+  // permission over the running app. No-op on web. Not awaited so the
+  // permission dialog never blocks first paint.
+  unawaited(NotificationService.instance.init());
   runApp(const MyApp());
 }
 
