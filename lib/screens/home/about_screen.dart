@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
+import '../../main.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -7,8 +9,10 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context);
+    final currentLang = Localizations.localeOf(context).languageCode;
     return Scaffold(
-      appBar: AppBar(title: const Text('About')),
+      appBar: AppBar(title: Text(l10n.homeAbout)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -39,6 +43,38 @@ class AboutScreen extends StatelessWidget {
               'Industrial Hub Innovation Platform',
               style: textTheme.bodyMedium,
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.translate, color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        Text(l10n.language, style: textTheme.titleMedium),
+                      ],
+                    ),
+                  ),
+                  ListTile(
+                    title: Text(l10n.languageEnglish),
+                    trailing: currentLang == 'en'
+                        ? const Icon(Icons.check, color: AppColors.primary)
+                        : null,
+                    onTap: () => MyApp.setLocale(context, const Locale('en')),
+                  ),
+                  ListTile(
+                    title: Text(l10n.languageMalay),
+                    trailing: currentLang == 'ms'
+                        ? const Icon(Icons.check, color: AppColors.primary)
+                        : null,
+                    onTap: () => MyApp.setLocale(context, const Locale('ms')),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             Text(
