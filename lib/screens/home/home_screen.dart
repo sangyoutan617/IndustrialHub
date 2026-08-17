@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import '../../models/factory.dart';
 import '../../services/auth_service.dart';
 import '../../services/factory_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/report_service.dart';
 import '../../services/seed_service.dart';
+import '../../services/supply_service.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../capacity/capacity_dashboard_screen.dart';
@@ -27,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _authService = AuthService();
   final _seedService = SeedService();
   final _reportService = ReportService();
+  final _supplyService = SupplyService();
 
   _LoadState _loadState = _LoadState.loading;
   List<Factory> _factories = [];
@@ -58,8 +62,22 @@ class _HomeScreenState extends State<HomeScreen> {
         _selectedFactory = factories.isNotEmpty ? factories.first : null;
         _loadState = _LoadState.ready;
       });
+      if (_selectedFactory != null) _checkAlerts(_selectedFactory!);
     } catch (_) {
       setState(() => _loadState = _LoadState.error);
+    }
+  }
+
+  // Best-effort supply-risk notification when a factory is opened. Never
+  // blocks the UI or surfaces an error — the alert is a nice-to-have on top
+  // of the in-app risk display. Skipped on web (no local notifications).
+  Future<void> _checkAlerts(Factory factory) async {
+    if (kIsWeb) return;
+    try {
+      final overview = await _supplyService.load(factory.factoryId);
+      await NotificationService.instance.notifySupplyRisk(factory, overview);
+    } catch (_) {
+      // Ignore — best-effort only.
     }
   }
 
