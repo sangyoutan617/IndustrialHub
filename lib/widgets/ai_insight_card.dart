@@ -89,6 +89,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     switch (_state) {
       case _AiState.idle:
         return Card(
@@ -126,7 +127,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
         );
       case _AiState.ready:
         return Card(
-          color: AppColors.primaryLight,
+          color: scheme.primaryContainer,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -134,24 +135,24 @@ class _AiInsightCardState extends State<AiInsightCard> {
               children: [
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.auto_awesome,
                       size: 18,
-                      color: AppColors.primaryDark,
+                      color: scheme.onPrimaryContainer,
                     ),
                     const SizedBox(width: AppSpacing.s),
                     Expanded(
                       child: Text(
                         'AI-generated',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.primaryDark,
+                          color: scheme.onPrimaryContainer,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.refresh, size: 18),
-                      color: AppColors.primaryDark,
+                      color: scheme.onPrimaryContainer,
                       tooltip: 'Regenerate',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -160,7 +161,10 @@ class _AiInsightCardState extends State<AiInsightCard> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.s),
-                Text(_text ?? ''),
+                Text(
+                  _text ?? '',
+                  style: TextStyle(color: scheme.onPrimaryContainer),
+                ),
               ],
             ),
           ),
@@ -174,7 +178,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
             'AI insight unavailable',
             style: Theme.of(
               context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         );
     }

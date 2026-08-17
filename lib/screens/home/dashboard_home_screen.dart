@@ -4,7 +4,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/formatters.dart';
-import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../models/msic_code.dart';
 import '../../models/productivity_benchmark.dart';
@@ -42,15 +41,18 @@ class _Palette {
 
   factory _Palette.of(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return _Palette(
-      bg: Colors.white,
-      card: Colors.white,
-      cardBorder: Colors.grey.shade200,
-      textPrimary: AppColors.primaryDark,
-      textSecondary: Colors.grey.shade600,
+      // Light mode keeps the original white-on-white bordered-card look;
+      // dark mode uses theme surfaces so nothing stays glaring white.
+      bg: isDark ? scheme.surface : Colors.white,
+      card: isDark ? scheme.surfaceContainerHigh : Colors.white,
+      cardBorder: scheme.outlineVariant,
+      textPrimary: scheme.onSurface,
+      textSecondary: scheme.onSurfaceVariant,
       alert: scheme.error,
-      ok: AppColors.primary,
-      neutral: AppColors.primaryDark,
+      ok: scheme.primary,
+      neutral: scheme.onSurface,
     );
   }
 }

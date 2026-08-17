@@ -44,6 +44,9 @@ class MyApp extends StatelessWidget {
       title: 'Industrial Hub',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      // Follows the device's light/dark setting.
+      themeMode: ThemeMode.system,
       // Caps the content width so the app doesn't stretch edge to edge on
       // wide/landscape/desktop/web viewports. Applies to every screen and
       // dialog at once — see ResponsiveShell.
