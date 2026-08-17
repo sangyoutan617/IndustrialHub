@@ -356,13 +356,13 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primaryLight,
+                color: Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 _summaryLine!,
-                style: const TextStyle(
-                  color: AppColors.primaryDark,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -433,7 +433,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -442,8 +442,8 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                   '${worst.logDate.day.toString().padLeft(2, '0')} — '
                   '${worst.downtimeHours.toStringAsFixed(1)}h '
                   '(${totalDowntime.toStringAsFixed(1)}h total)',
-                  style: const TextStyle(
-                    color: AppColors.primaryDark,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -469,7 +469,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                               : 2.0,
                           decoration: BoxDecoration(
                             color: row == worst && worst.downtimeHours > 0
-                                ? AppColors.primaryDark
+                                ? Theme.of(context).colorScheme.onSurface
                                 : AppColors.primaryAccent,
                             borderRadius: BorderRadius.circular(2),
                           ),
@@ -496,7 +496,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
               children: [
                 _legendDot('Actual output', AppColors.primary),
                 const SizedBox(width: 16),
-                _legendDot('Ceiling', AppColors.primaryDark),
+                _legendDot('Ceiling', Theme.of(context).colorScheme.onSurface),
               ],
             ),
             const SizedBox(height: 16),
@@ -562,7 +562,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                             FlSpot(i.toDouble(), points[i].ceiling!),
                       ],
                       isCurved: true,
-                      color: AppColors.primaryDark,
+                      color: Theme.of(context).colorScheme.onSurface,
                       barWidth: 2,
                       dashArray: [6, 4],
                       dotData: const FlDotData(show: false),

@@ -166,7 +166,10 @@ class _AdminDataScreenState extends State<AdminDataScreen> {
                 ],
               ),
             ),
-            _pill('${count.simulated} simulated', AppColors.primaryDark),
+            _pill(
+              '${count.simulated} simulated',
+              Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 8),
             _pill('${count.real} real', AppColors.primary),
           ],
@@ -179,7 +182,7 @@ class _AdminDataScreenState extends State<AdminDataScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primaryLight,
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
