@@ -124,13 +124,13 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Recommended',
                       style: TextStyle(
-                        color: AppColors.primaryDark,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -155,8 +155,8 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
               const SizedBox(height: 8),
               Text(
                 c.reason,
-                style: const TextStyle(
-                  color: AppColors.primaryDark,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -173,7 +173,12 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
