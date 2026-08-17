@@ -10,6 +10,7 @@ import '../../models/msic_code.dart';
 import '../../models/productivity_benchmark.dart';
 import '../../services/bottleneck_service.dart';
 import '../../services/capacity_service.dart';
+import '../../widgets/ai_insight_card.dart';
 import '../capacity/benchmark_screen.dart';
 import '../capacity/machine_list_screen.dart';
 import '../capacity/manpower_list_screen.dart';
@@ -214,11 +215,54 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
         const SizedBox(height: 16),
         RepaintBoundary(child: _buildCeilingGrid(result, pal)),
         const SizedBox(height: 16),
+        if (result.hasData) ...[
+          // Factory-wide AI narration tying material/machine/manpower into a
+          // single verdict. Narrates the already-computed bottleneck result;
+          // never recalculates it. See _buildFactoryPrompt.
+          AiInsightCard(
+            buildPrompt: () => _buildFactoryPrompt(result),
+            system: _factorySystem,
+          ),
+          const SizedBox(height: 16),
+        ],
         RepaintBoundary(child: _buildOpenDataCard(data, pal)),
         const SizedBox(height: 16),
         RepaintBoundary(child: _buildActionCenter(result, pal)),
       ],
     );
+  }
+
+  // ---------------- Factory-wide AI summary ----------------
+
+  // Deterministic figures only — the whole bottleneck verdict is computed by
+  // compute_bottleneck() (BottleneckService). The AI card just narrates which
+  // of material/machine/manpower is the single binding constraint.
+  static const _factorySystem =
+      'You are a factory operations assistant. You are given figures that '
+      'have already been computed — never invent or recalculate numbers. In '
+      '2-3 short, plain-language sentences for a factory manager, say whether '
+      'the factory can meet demand and which single resource — raw material, '
+      'machines, or manpower — is the binding constraint, then give one '
+      'concrete next step based only on the numbers provided. No markdown, no '
+      'headings, under 80 words.';
+
+  String _buildFactoryPrompt(BottleneckResult r) {
+    final buffer = StringBuffer()
+      ..writeln('Achievable output: ${formatUnits(r.achievable)}/day')
+      ..writeln('Demand required: ${formatUnits(r.requiredPerDay)}/day')
+      ..writeln('Can meet demand: ${r.canMeetDemand ? 'yes' : 'no'}')
+      ..writeln('Machine capacity: ${formatUnits(r.machineCapacity)}/day')
+      ..writeln('Manpower capacity: ${formatUnits(r.manpowerCapacity)}/day')
+      ..writeln(
+        'Raw-material ceiling: ${r.materialCeiling != null ? '${formatUnits(r.materialCeiling!)}/day' : 'not set'}',
+      );
+    if (r.limiter != null) {
+      buffer.writeln('Binding constraint: ${_limiterLabel(r.limiter)}');
+    }
+    if (r.shortfall != null) {
+      buffer.writeln('Shortfall vs demand: ${formatUnits(r.shortfall!)}/day');
+    }
+    return buffer.toString();
   }
 
   // ---------------- Header ----------------

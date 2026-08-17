@@ -4,6 +4,7 @@ import '../../services/auth_service.dart';
 import '../../services/factory_service.dart';
 import '../../services/seed_service.dart';
 import '../../widgets/bottleneck_banner.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../capacity/capacity_dashboard_screen.dart';
 import '../stock/stock_dashboard_screen.dart';
 import '../supply/material_list_screen.dart';
@@ -148,6 +149,89 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _renameFactory(Factory factory) async {
+    final controller = TextEditingController(text: factory.factoryName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename factory'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Factory name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty || name == factory.factoryName) return;
+    try {
+      final updated = await _factoryService.renameFactory(
+        factory.factoryId,
+        name,
+      );
+      setState(() {
+        _factories = [
+          for (final f in _factories)
+            f.factoryId == updated.factoryId ? updated : f,
+        ];
+        if (_selectedFactory?.factoryId == updated.factoryId) {
+          _selectedFactory = updated;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not rename factory. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteFactory(Factory factory) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete factory?',
+      message:
+          'This permanently removes "${factory.factoryName}". Remove its '
+          'machines, stock and material data first if the delete is refused.',
+    );
+    if (!confirmed) return;
+    try {
+      await _factoryService.deleteFactory(factory.factoryId);
+      final factories = await _factoryService.getFactories();
+      setState(() {
+        _factories = factories;
+        if (_selectedFactory?.factoryId == factory.factoryId) {
+          _selectedFactory = factories.isNotEmpty ? factories.first : null;
+        }
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Factory deleted')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not delete factory — remove its machines, stock and '
+            'materials first.',
+          ),
+        ),
+      );
+    }
+  }
+
   void _pickFactory() {
     if (_factories.isEmpty) {
       _createFactory();
@@ -162,9 +246,27 @@ class _HomeScreenState extends State<HomeScreen> {
             for (final factory in _factories)
               ListTile(
                 title: Text(factory.factoryName),
-                trailing: factory.factoryId == _selectedFactory?.factoryId
-                    ? const Icon(Icons.check)
-                    : null,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (factory.factoryId == _selectedFactory?.factoryId)
+                      const Icon(Icons.check),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        Navigator.pop(context);
+                        if (value == 'rename') {
+                          _renameFactory(factory);
+                        } else if (value == 'delete') {
+                          _deleteFactory(factory);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'rename', child: Text('Rename')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                    ),
+                  ],
+                ),
                 onTap: () {
                   setState(() => _selectedFactory = factory);
                   Navigator.pop(context);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/demand_forecast.dart';
 import '../../models/finished_stock.dart';
@@ -226,7 +227,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                   const SizedBox(height: 4),
                   Text(
                     mostUrgent != null
-                        ? '${mostUrgent.daysOfCover!.toStringAsFixed(1)} days'
+                        ? formatDays(mostUrgent.daysOfCover!)
                         : '—',
                     style: const TextStyle(
                       fontSize: 28,
@@ -237,7 +238,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                   if (mostUrgent?.stockOutDate != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Stock-out predicted: ${_formatDate(mostUrgent!.stockOutDate!)}',
+                      'Stock-out predicted: ${formatDate(mostUrgent!.stockOutDate!)}',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade600,
@@ -403,7 +404,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         'Closest to stock-out: ${m.stock.productName} — '
         '${m.stock.currentQuantity} units in stock, demand '
         '${m.requiredPerDay}/day, ${m.daysOfCover!.toStringAsFixed(1)} days of '
-        'cover${m.stockOutDate != null ? ', predicted stock-out ${_formatDate(m.stockOutDate!)}' : ''}.',
+        'cover${m.stockOutDate != null ? ', predicted stock-out ${formatDate(m.stockOutDate!)}' : ''}.',
       );
     }
     for (final c in withCover) {
@@ -500,7 +501,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               ),
               if (cover.stockOutDate != null)
                 Text(
-                  'Predicted stock-out: ${_formatDate(cover.stockOutDate!)}',
+                  'Predicted stock-out: ${formatDate(cover.stockOutDate!)}',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
             ] else
@@ -548,9 +549,5 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }
