@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import '../../models/factory.dart';
 import '../../services/auth_service.dart';
 import '../../services/factory_service.dart';
+import '../../services/report_service.dart';
 import '../../services/seed_service.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/confirm_dialog.dart';
@@ -24,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _factoryService = FactoryService();
   final _authService = AuthService();
   final _seedService = SeedService();
+  final _reportService = ReportService();
 
   _LoadState _loadState = _LoadState.loading;
   List<Factory> _factories = [];
@@ -145,6 +148,26 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not sign out. Please try again.')),
+      );
+    }
+  }
+
+  Future<void> _shareReport() async {
+    final factory = _selectedFactory;
+    if (factory == null) return;
+    try {
+      final bytes = await _reportService.buildFactoryReportPdf(factory);
+      final safeName = factory.factoryName.replaceAll(
+        RegExp(r'[^A-Za-z0-9]+'),
+        '_',
+      );
+      await Printing.sharePdf(bytes: bytes, filename: '${safeName}_report.pdf');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not generate report. Please try again.'),
+        ),
       );
     }
   }
@@ -304,6 +327,14 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.factory_outlined),
             tooltip: 'Switch factory',
             onPressed: _loadState == _LoadState.ready ? _pickFactory : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.ios_share),
+            tooltip: 'Share report',
+            onPressed:
+                (_loadState == _LoadState.ready && _selectedFactory != null)
+                ? _shareReport
+                : null,
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
