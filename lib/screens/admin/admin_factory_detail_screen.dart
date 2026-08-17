@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../models/raw_material.dart';
 import '../../services/bottleneck_service.dart';
@@ -222,7 +221,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   }) {
     return Card(
       child: ListTile(
-        leading: Icon(icon, color: AppColors.primaryDark),
+        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
         title: Text(title),
         subtitle: Text(subtitle),
         trailing: trailing,

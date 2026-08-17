@@ -240,13 +240,13 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primaryLight,
+                color: scheme.primaryContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, color: AppColors.primaryDark),
+                  Icon(Icons.info_outline, color: scheme.onPrimaryContainer),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -254,8 +254,8 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                       'the Capacity tab, otherwise stock-out predictions '
                       'below can\'t be calculated and every material will '
                       'read as safe.',
-                      style: const TextStyle(
-                        color: AppColors.primaryDark,
+                      style: TextStyle(
+                        color: scheme.onPrimaryContainer,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -509,7 +509,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       case SupplyRisk.noSupplier:
         return scheme.outline;
       case SupplyRisk.healthy:
-        return AppColors.primaryDark;
+        return scheme.primary;
     }
   }
 
@@ -704,7 +704,7 @@ class _ProjectionSheet extends StatelessWidget {
                       barWidth: 3,
                       belowBarData: BarAreaData(
                         show: true,
-                        color: AppColors.primaryLight,
+                        color: AppColors.primary.withValues(alpha: 0.15),
                       ),
                     ),
                   ],

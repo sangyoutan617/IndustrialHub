@@ -8,6 +8,11 @@ import 'package:flutter/material.dart';
 /// the same four values under the shared-widget spec's names; new code
 /// should prefer those, but both point at one literal each, so there is
 /// never a risk of the two sets drifting apart.
+///
+/// These are brand accents. For text and surfaces that must flip between
+/// light and dark mode, read `Theme.of(context).colorScheme` roles instead
+/// of these literals — a fixed dark-green heading is invisible on a dark
+/// background.
 class AppColors {
   static const primary = Color(0xFF16794F);
   static const primaryDark = Color(0xFF0E4030);
@@ -37,34 +42,62 @@ class AppCardStyle {
 }
 
 class AppTheme {
-  static ThemeData light() {
-    final colorScheme =
-        ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          brightness: Brightness.light,
-        ).copyWith(
-          primary: AppColors.primary,
-          onPrimary: Colors.white,
-          primaryContainer: AppColors.primaryLight,
-          onPrimaryContainer: AppColors.primaryDark,
-          secondary: AppColors.primaryDark,
-          onSecondary: Colors.white,
-          secondaryContainer: AppColors.primaryAccent,
-          onSecondaryContainer: AppColors.primaryDark,
-          // Pinned so ColorScheme.fromSeed never auto-generates a stray
-          // blue-cyan tertiary — every screen that reads scheme.tertiary
-          // (e.g. the stock dashboard's "Overstocked" label) stays on-palette.
-          tertiary: AppColors.primaryDark,
-          onTertiary: Colors.white,
-          tertiaryContainer: AppColors.primaryLight,
-          onTertiaryContainer: AppColors.primaryDark,
-          surface: Colors.white,
-        );
+  static ThemeData light() => _build(Brightness.light);
+  static ThemeData dark() => _build(Brightness.dark);
+
+  static ThemeData _build(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    final seeded = ColorScheme.fromSeed(
+      seedColor: AppColors.primary,
+      brightness: brightness,
+    );
+
+    // The green stays the brand accent in both modes, but in dark mode the
+    // usable "primary" is the lighter accent green so it reads on a dark
+    // surface; the deep green becomes a container fill instead.
+    final colorScheme = isDark
+        ? seeded.copyWith(
+            primary: AppColors.primaryAccent,
+            onPrimary: AppColors.primaryDark,
+            primaryContainer: AppColors.primaryDark,
+            onPrimaryContainer: AppColors.primaryLight,
+            secondary: AppColors.primaryAccent,
+            onSecondary: AppColors.primaryDark,
+            secondaryContainer: AppColors.primaryDark,
+            onSecondaryContainer: AppColors.primaryLight,
+            tertiary: AppColors.primaryAccent,
+          )
+        : seeded.copyWith(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            primaryContainer: AppColors.primaryLight,
+            onPrimaryContainer: AppColors.primaryDark,
+            secondary: AppColors.primaryDark,
+            onSecondary: Colors.white,
+            secondaryContainer: AppColors.primaryAccent,
+            onSecondaryContainer: AppColors.primaryDark,
+            // Pinned so ColorScheme.fromSeed never auto-generates a stray
+            // blue-cyan tertiary — every screen that reads scheme.tertiary
+            // (e.g. the stock dashboard's "Overstocked" label) stays
+            // on-palette.
+            tertiary: AppColors.primaryDark,
+            onTertiary: Colors.white,
+            tertiaryContainer: AppColors.primaryLight,
+            onTertiaryContainer: AppColors.primaryDark,
+            surface: Colors.white,
+          );
+
+    final cardColor = isDark ? colorScheme.surfaceContainerHigh : Colors.white;
+    final fieldFill = isDark
+        ? colorScheme.surfaceContainerHighest
+        : Colors.white;
 
     return ThemeData(
       useMaterial3: true,
+      brightness: brightness,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: colorScheme.surface,
+      // The app bar keeps the brand green in both modes.
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         backgroundColor: AppColors.primary,
@@ -73,12 +106,12 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardThemeData(
-        color: Colors.white,
+        color: cardColor,
         elevation: AppCardStyle.elevation,
         margin: AppCardStyle.margin,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppCardStyle.borderRadius),
-          side: BorderSide(color: Colors.grey.shade200),
+          side: BorderSide(color: colorScheme.outlineVariant),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -93,8 +126,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primaryDark,
-          side: const BorderSide(color: AppColors.primary),
+          foregroundColor: colorScheme.primary,
+          side: BorderSide(color: colorScheme.primary),
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -102,58 +135,62 @@ class AppTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+        style: TextButton.styleFrom(foregroundColor: colorScheme.primary),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
-        indicatorColor: AppColors.primaryLight,
+        backgroundColor: colorScheme.surface,
+        indicatorColor: colorScheme.primaryContainer,
         elevation: 0,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return TextStyle(
             fontSize: 12,
-            color: selected ? AppColors.primaryDark : Colors.grey.shade600,
+            color: selected
+                ? colorScheme.onSurface
+                : colorScheme.onSurfaceVariant,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? AppColors.primaryDark : Colors.grey.shade600,
+            color: selected
+                ? colorScheme.onSurface
+                : colorScheme.onSurfaceVariant,
           );
         }),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.primary,
-        linearTrackColor: AppColors.primaryLight,
-        circularTrackColor: AppColors.primaryLight,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: colorScheme.primary,
+        linearTrackColor: colorScheme.primaryContainer,
+        circularTrackColor: colorScheme.primaryContainer,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.primaryLight,
-        labelStyle: const TextStyle(color: AppColors.primaryDark),
+        backgroundColor: colorScheme.primaryContainer,
+        labelStyle: TextStyle(color: colorScheme.onPrimaryContainer),
         side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      dividerTheme: DividerThemeData(color: Colors.grey.shade200),
+      dividerTheme: DividerThemeData(color: colorScheme.outlineVariant),
       inputDecorationTheme: InputDecorationTheme(
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: BorderSide(color: colorScheme.outline),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: BorderSide(color: colorScheme.outline),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
         ),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: fieldFill,
       ),
     );
   }
