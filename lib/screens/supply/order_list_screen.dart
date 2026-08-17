@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
-import '../../core/theme.dart';
 import '../../models/purchase_order.dart';
 import '../../services/material_service.dart';
 import '../../services/order_service.dart';
@@ -384,13 +383,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final isCancelled = status == PurchaseOrderStatus.cancelled;
     final color = isCancelled
         ? Theme.of(context).colorScheme.error
-        : AppColors.primaryDark;
+        : Theme.of(context).colorScheme.onPrimaryContainer;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: isCancelled
             ? color.withValues(alpha: 0.12)
-            : AppColors.primaryLight,
+            : Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(

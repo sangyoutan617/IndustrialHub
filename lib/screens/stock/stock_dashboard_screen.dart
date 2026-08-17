@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/demand_forecast.dart';
 import '../../models/finished_stock.dart';
@@ -221,26 +222,29 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                 children: [
                   Text(
                     'Days of cover',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     mostUrgent != null
-                        ? '${mostUrgent.daysOfCover!.toStringAsFixed(1)} days'
+                        ? formatDays(mostUrgent.daysOfCover!)
                         : '—',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.primaryDark,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   if (mostUrgent?.stockOutDate != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Stock-out predicted: ${_formatDate(mostUrgent!.stockOutDate!)}',
+                      'Stock-out predicted: ${formatDate(mostUrgent!.stockOutDate!)}',
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey.shade600,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -277,7 +281,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                 child: _summaryStat(
                   'Overstocked',
                   overstockCount.toString(),
-                  AppColors.primaryDark,
+                  Theme.of(context).colorScheme.tertiary,
                 ),
               ),
             ],
@@ -403,7 +407,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         'Closest to stock-out: ${m.stock.productName} — '
         '${m.stock.currentQuantity} units in stock, demand '
         '${m.requiredPerDay}/day, ${m.daysOfCover!.toStringAsFixed(1)} days of '
-        'cover${m.stockOutDate != null ? ', predicted stock-out ${_formatDate(m.stockOutDate!)}' : ''}.',
+        'cover${m.stockOutDate != null ? ', predicted stock-out ${formatDate(m.stockOutDate!)}' : ''}.',
       );
     }
     for (final c in withCover) {
@@ -487,7 +491,9 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                           .clamp(0.0, 1.0)
                     : 0,
                 minHeight: 6,
-                backgroundColor: AppColors.primaryLight,
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest,
                 valueColor: AlwaysStoppedAnimation(cover.statusColor(scheme)),
               ),
             ),
@@ -496,17 +502,26 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               Text(
                 'Demand ${cover.requiredPerDay}/day · '
                 '${cover.daysOfCover!.toStringAsFixed(1)} days of cover',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               if (cover.stockOutDate != null)
                 Text(
-                  'Predicted stock-out: ${_formatDate(cover.stockOutDate!)}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  'Predicted stock-out: ${formatDate(cover.stockOutDate!)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
             ] else
               Text(
                 'No demand set',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
           ],
         ),
@@ -535,12 +550,12 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: AppColors.primaryDark),
+            Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(
-                color: AppColors.primaryDark,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -548,9 +563,5 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }

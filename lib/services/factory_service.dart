@@ -49,4 +49,22 @@ class FactoryService {
         .single();
     return Factory.fromJson(row);
   }
+
+  Future<Factory> renameFactory(int factoryId, String newName) async {
+    final row = await _client
+        .from('factories')
+        .update({'factory_name': newName})
+        .eq('factory_id', factoryId)
+        .select()
+        .single();
+    return Factory.fromJson(row);
+  }
+
+  /// Deletes a factory. Throws if the database still has rows that reference
+  /// it (machines, materials, stock, etc.) and the foreign keys don't
+  /// cascade — the caller surfaces that as a "remove its data first" message
+  /// rather than silently failing.
+  Future<void> deleteFactory(int factoryId) async {
+    await _client.from('factories').delete().eq('factory_id', factoryId);
+  }
 }

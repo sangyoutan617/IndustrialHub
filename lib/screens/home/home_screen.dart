@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import '../../models/factory.dart';
 import '../../services/auth_service.dart';
 import '../../services/factory_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/report_service.dart';
 import '../../services/seed_service.dart';
+import '../../services/supply_service.dart';
 import '../../widgets/bottleneck_banner.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../capacity/capacity_dashboard_screen.dart';
 import '../stock/stock_dashboard_screen.dart';
 import '../supply/material_list_screen.dart';
@@ -23,6 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final _factoryService = FactoryService();
   final _authService = AuthService();
   final _seedService = SeedService();
+  final _reportService = ReportService();
+  final _supplyService = SupplyService();
 
   _LoadState _loadState = _LoadState.loading;
   List<Factory> _factories = [];
@@ -54,8 +62,22 @@ class _HomeScreenState extends State<HomeScreen> {
         _selectedFactory = factories.isNotEmpty ? factories.first : null;
         _loadState = _LoadState.ready;
       });
+      if (_selectedFactory != null) _checkAlerts(_selectedFactory!);
     } catch (_) {
       setState(() => _loadState = _LoadState.error);
+    }
+  }
+
+  // Best-effort supply-risk notification when a factory is opened. Never
+  // blocks the UI or surfaces an error — the alert is a nice-to-have on top
+  // of the in-app risk display. Skipped on web (no local notifications).
+  Future<void> _checkAlerts(Factory factory) async {
+    if (kIsWeb) return;
+    try {
+      final overview = await _supplyService.load(factory.factoryId);
+      await NotificationService.instance.notifySupplyRisk(factory, overview);
+    } catch (_) {
+      // Ignore — best-effort only.
     }
   }
 
@@ -148,6 +170,109 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _shareReport() async {
+    final factory = _selectedFactory;
+    if (factory == null) return;
+    try {
+      final bytes = await _reportService.buildFactoryReportPdf(factory);
+      final safeName = factory.factoryName.replaceAll(
+        RegExp(r'[^A-Za-z0-9]+'),
+        '_',
+      );
+      await Printing.sharePdf(bytes: bytes, filename: '${safeName}_report.pdf');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not generate report. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _renameFactory(Factory factory) async {
+    final controller = TextEditingController(text: factory.factoryName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename factory'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Factory name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty || name == factory.factoryName) return;
+    try {
+      final updated = await _factoryService.renameFactory(
+        factory.factoryId,
+        name,
+      );
+      setState(() {
+        _factories = [
+          for (final f in _factories)
+            f.factoryId == updated.factoryId ? updated : f,
+        ];
+        if (_selectedFactory?.factoryId == updated.factoryId) {
+          _selectedFactory = updated;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not rename factory. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteFactory(Factory factory) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete factory?',
+      message:
+          'This permanently removes "${factory.factoryName}". Remove its '
+          'machines, stock and material data first if the delete is refused.',
+    );
+    if (!confirmed) return;
+    try {
+      await _factoryService.deleteFactory(factory.factoryId);
+      final factories = await _factoryService.getFactories();
+      setState(() {
+        _factories = factories;
+        if (_selectedFactory?.factoryId == factory.factoryId) {
+          _selectedFactory = factories.isNotEmpty ? factories.first : null;
+        }
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Factory deleted')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not delete factory — remove its machines, stock and '
+            'materials first.',
+          ),
+        ),
+      );
+    }
+  }
+
   void _pickFactory() {
     if (_factories.isEmpty) {
       _createFactory();
@@ -162,9 +287,27 @@ class _HomeScreenState extends State<HomeScreen> {
             for (final factory in _factories)
               ListTile(
                 title: Text(factory.factoryName),
-                trailing: factory.factoryId == _selectedFactory?.factoryId
-                    ? const Icon(Icons.check)
-                    : null,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (factory.factoryId == _selectedFactory?.factoryId)
+                      const Icon(Icons.check),
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        Navigator.pop(context);
+                        if (value == 'rename') {
+                          _renameFactory(factory);
+                        } else if (value == 'delete') {
+                          _deleteFactory(factory);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'rename', child: Text('Rename')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                    ),
+                  ],
+                ),
                 onTap: () {
                   setState(() => _selectedFactory = factory);
                   Navigator.pop(context);
@@ -202,6 +345,14 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.factory_outlined),
             tooltip: 'Switch factory',
             onPressed: _loadState == _LoadState.ready ? _pickFactory : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.ios_share),
+            tooltip: 'Share report',
+            onPressed:
+                (_loadState == _LoadState.ready && _selectedFactory != null)
+                ? _shareReport
+                : null,
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),

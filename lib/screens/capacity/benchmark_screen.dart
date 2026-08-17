@@ -230,15 +230,18 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
           children: [
             Text(
               'Your factory',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               '${formatUnits(_effectiveCapacity)}/day',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
-                color: AppColors.primaryDark,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 12),
@@ -266,7 +269,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.primaryLight,
+        color: Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -276,16 +279,18 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
             label,
             style: TextStyle(
               fontSize: 12,
-              color: AppColors.primaryDark.withValues(alpha: 0.75),
+              color: Theme.of(
+                context,
+              ).colorScheme.onPrimaryContainer.withValues(alpha: 0.75),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: AppColors.primaryDark,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
             ),
           ),
         ],
@@ -382,7 +387,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                         barWidth: 3,
                         belowBarData: BarAreaData(
                           show: true,
-                          color: AppColors.primaryLight,
+                          color: AppColors.primary.withValues(alpha: 0.15),
                         ),
                       ),
                     ],

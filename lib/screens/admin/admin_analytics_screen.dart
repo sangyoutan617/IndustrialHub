@@ -48,7 +48,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
       case 'MACHINE':
         return AppColors.primary;
       case 'MANPOWER':
-        return AppColors.primaryDark;
+        return AppColors.primaryAccent;
       case 'RAW MATERIAL':
         return Colors.amber.shade700;
       default:
@@ -194,7 +194,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 'price the two cannot be merged into one ratio, so "below benchmark" compares each factory against '
                 'the peer median within its own MSIC category instead.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade600,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -209,7 +209,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.primaryLight,
+        color: Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -219,16 +219,18 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             label,
             style: TextStyle(
               fontSize: 11,
-              color: AppColors.primaryDark.withValues(alpha: 0.75),
+              color: Theme.of(
+                context,
+              ).colorScheme.onPrimaryContainer.withValues(alpha: 0.75),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: AppColors.primaryDark,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
             ),
           ),
         ],
@@ -253,7 +255,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               spacing: 12,
               children: [
                 _legendDot('Machine', AppColors.primary),
-                _legendDot('Manpower', AppColors.primaryDark),
+                _legendDot('Manpower', AppColors.primaryAccent),
                 _legendDot('Raw material', Colors.amber.shade700),
                 _legendDot('No data', Colors.grey.shade400),
               ],
