@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../l10n/app_localizations.dart';
 import '../services/ai_service.dart';
 
 enum _AiState { idle, loading, ready, unavailable }
@@ -90,6 +91,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     switch (_state) {
       case _AiState.idle:
         return Card(
@@ -99,28 +101,28 @@ class _AiInsightCardState extends State<AiInsightCard> {
               children: [
                 const Icon(Icons.auto_awesome, color: AppColors.primary),
                 const SizedBox(width: AppSpacing.m),
-                const Expanded(child: Text('Get an AI-generated explanation')),
+                Expanded(child: Text(l10n.aiGetExplanation)),
                 FilledButton(
                   onPressed: _loadCachedOrGenerate,
-                  child: const Text('Generate insight'),
+                  child: Text(l10n.aiGenerateInsight),
                 ),
               ],
             ),
           ),
         );
       case _AiState.loading:
-        return const Card(
+        return Card(
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                SizedBox(
+                const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                SizedBox(width: AppSpacing.m),
-                Text('Generating insight…'),
+                const SizedBox(width: AppSpacing.m),
+                Text(l10n.aiGenerating),
               ],
             ),
           ),
@@ -143,7 +145,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
                     const SizedBox(width: AppSpacing.s),
                     Expanded(
                       child: Text(
-                        'AI-generated',
+                        l10n.aiGenerated,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: scheme.onPrimaryContainer,
                           fontWeight: FontWeight.w600,
@@ -175,7 +177,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Text(
-            'AI insight unavailable',
+            l10n.aiUnavailable,
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),

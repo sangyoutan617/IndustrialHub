@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/demand_forecast.dart';
 import '../../models/finished_stock.dart';
 import '../../services/demand_service.dart';
@@ -221,7 +222,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Days of cover',
+                    AppLocalizations.of(context).stockDaysOfCover,
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,

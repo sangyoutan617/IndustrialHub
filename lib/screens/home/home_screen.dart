@@ -8,6 +8,7 @@ import '../../services/notification_service.dart';
 import '../../services/report_service.dart';
 import '../../services/seed_service.dart';
 import '../../services/supply_service.dart';
+import '../../l10n/app_localizations.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../capacity/capacity_dashboard_screen.dart';
@@ -39,7 +40,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSeeding = false;
   int _bottleneckRefreshTick = 0;
 
-  static const _tabs = ['Home', 'Capacity', 'Stock', 'Supply'];
   static const _tabIcons = [
     Icons.home_rounded,
     Icons.precision_manufacturing,
@@ -337,18 +337,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final tabLabels = [
+      l10n.tabHome,
+      l10n.tabCapacity,
+      l10n.tabStock,
+      l10n.tabSupply,
+    ];
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectedFactory?.factoryName ?? 'Industrial Hub'),
+        title: Text(_selectedFactory?.factoryName ?? l10n.appTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.factory_outlined),
-            tooltip: 'Switch factory',
+            tooltip: l10n.homeSwitchFactory,
             onPressed: _loadState == _LoadState.ready ? _pickFactory : null,
           ),
           IconButton(
             icon: const Icon(Icons.ios_share),
-            tooltip: 'Share report',
+            tooltip: l10n.homeShareReport,
             onPressed:
                 (_loadState == _LoadState.ready && _selectedFactory != null)
                 ? _shareReport
@@ -356,14 +363,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
-            tooltip: 'About',
+            tooltip: l10n.homeAbout,
             onPressed: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const AboutScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
+            tooltip: l10n.homeSignOut,
             onPressed: _signOut,
           ),
         ],
@@ -376,8 +383,11 @@ class _HomeScreenState extends State<HomeScreen> {
           _bottleneckRefreshTick++;
         }),
         destinations: [
-          for (var i = 0; i < _tabs.length; i++)
-            NavigationDestination(icon: Icon(_tabIcons[i]), label: _tabs[i]),
+          for (var i = 0; i < tabLabels.length; i++)
+            NavigationDestination(
+              icon: Icon(_tabIcons[i]),
+              label: tabLabels[i],
+            ),
         ],
       ),
     );

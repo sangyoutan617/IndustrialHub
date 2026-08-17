@@ -9,7 +9,25 @@ class SessionPrefs {
   static const _rememberUntilKey = 'remember_until_millis';
   static const _oauthPendingRememberKey = 'oauth_pending_remember_me';
   static const _pendingPasswordRecoveryKey = 'pending_password_recovery';
+  static const _localeKey = 'locale_code';
   static const _rememberDuration = Duration(days: 30);
+
+  /// The user's chosen UI language code ('en'/'ms'), or null to follow the
+  /// device locale. Persisted across sign-out (it's a device preference, not
+  /// session state) so it's deliberately not cleared in [clear].
+  static Future<String?> getLocaleCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_localeKey);
+  }
+
+  static Future<void> setLocaleCode(String? code) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (code == null) {
+      await prefs.remove(_localeKey);
+    } else {
+      await prefs.setString(_localeKey, code);
+    }
+  }
 
   static Future<void> setRememberMe(bool remember) async {
     final prefs = await SharedPreferences.getInstance();
