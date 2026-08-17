@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/raw_material.dart';
 import '../../services/material_service.dart';
 import '../../services/mrp_service.dart';
@@ -273,17 +274,17 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _summaryStat(
-                        'Materials',
+                        AppLocalizations.of(context).supplyMaterials,
                         plans.length.toString(),
                         scheme.primary,
                       ),
                       _summaryStat(
-                        'Reorder now',
+                        AppLocalizations.of(context).supplyReorderNow,
                         reorderCount.toString(),
                         scheme.error,
                       ),
                       _summaryStat(
-                        'Watch',
+                        AppLocalizations.of(context).supplyWatch,
                         watchCount.toString(),
                         Colors.orange.shade800,
                       ),
@@ -342,7 +343,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Raw materials',
+                AppLocalizations.of(context).supplyRawMaterials,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               FilterChip(
