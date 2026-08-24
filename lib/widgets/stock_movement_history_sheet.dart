@@ -186,6 +186,10 @@ class _StockMovementHistorySheetState
         return 'Production in';
       case StockMovementType.shipmentOut:
         return 'Shipment out';
+      case StockMovementType.damaged:
+        return 'Damaged';
+      case StockMovementType.returned:
+        return 'Returned';
       default:
         return 'Adjustment';
     }
@@ -195,7 +199,11 @@ class _StockMovementHistorySheetState
     switch (m.movementType) {
       case StockMovementType.productionIn:
         return m.quantity.abs();
+      case StockMovementType.returned:
+        return m.quantity.abs();
       case StockMovementType.shipmentOut:
+        return -m.quantity.abs();
+      case StockMovementType.damaged:
         return -m.quantity.abs();
       default:
         return m.quantity;
