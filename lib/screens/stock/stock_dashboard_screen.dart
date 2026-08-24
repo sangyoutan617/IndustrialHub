@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/demand_forecast.dart';
 import '../../services/demand_service.dart';
+import '../../services/stock_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
@@ -39,10 +40,12 @@ enum _LoadState { loading, error, ready }
 
 class _StockDashboardScreenState extends State<StockDashboardScreen> {
   final _demandService = DemandService();
+  final _stockService = StockService();
 
   _LoadState _state = _LoadState.loading;
   List<ProductCover> _covers = [];
   List<DemandForecast> _forecasts = [];
+  int _pendingMovements = 0;
 
   @override
   void initState() {
@@ -56,16 +59,44 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     if (oldWidget.factoryId != widget.factoryId) _load();
   }
 
-  Future<void> _load() async {
+  // [showErrors] is only true for an explicit user retry (the pending-sync
+  // pill's "Retry" button) — a silent background load never interrupts the
+  // user, and a conflict it finds stays pending rather than being dropped
+  // with nobody having seen why.
+  Future<void> _load({bool showErrors = false}) async {
     setState(() => _state = _LoadState.loading);
     try {
+      final syncFailures = await _stockService.syncPendingMovements(
+        dropConflicts: showErrors,
+      );
       final overview = await loadStockOverview(widget.factoryId);
+      final pending = await _stockService.pendingMovementCount();
       if (!mounted) return;
       setState(() {
         _covers = overview.covers;
         _forecasts = overview.forecasts;
+        _pendingMovements = pending;
         _state = _LoadState.ready;
       });
+      if (showErrors && syncFailures.isNotEmpty) {
+        ScaffoldMessenger.of(context).showMaterialBanner(
+          MaterialBanner(
+            backgroundColor: AppColors.dangerLight,
+            content: Text(
+              syncFailures.first,
+              style: const TextStyle(color: AppColors.danger),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.close, color: AppColors.danger),
+                onPressed: () => ScaffoldMessenger.of(
+                  context,
+                ).hideCurrentMaterialBanner(),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _state = _LoadState.error);
@@ -215,6 +246,10 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             widget.bottleneckBanner!,
             const SizedBox(height: AppSpacing.l),
           ],
+          if (_pendingMovements > 0) ...[
+            _buildPendingSyncBanner(),
+            const SizedBox(height: AppSpacing.l),
+          ],
           _buildCoverSummaryCard(mostUrgent),
           const SizedBox(height: AppSpacing.l),
           if (aiInsight != null) ...[aiInsight, const SizedBox(height: AppSpacing.l)],
@@ -259,6 +294,10 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                     widget.bottleneckBanner!,
                     const SizedBox(height: AppSpacing.l),
                   ],
+                  if (_pendingMovements > 0) ...[
+                    _buildPendingSyncBanner(),
+                    const SizedBox(height: AppSpacing.l),
+                  ],
                   _buildCoverSummaryCard(mostUrgent),
                   const SizedBox(height: AppSpacing.l),
                   _buildSummaryStatsRow(),
@@ -291,6 +330,60 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Movements recorded while offline (queued in local SQLite) that haven't
+  // reached Supabase yet — see StockOfflineQueueService. A slim status pill
+  // rather than InfoBanner, since this is a live "syncing" state, not a
+  // one-off warning notice.
+  Widget _buildPendingSyncBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.m,
+        vertical: AppSpacing.s,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.warningLight,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.warning,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s),
+          Expanded(
+            child: Text(
+              '$_pendingMovements pending sync',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.warning,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _load(showErrors: true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.warning,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'Retry',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -643,68 +736,107 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
 
   Widget _buildCoverCard(ProductCover cover) {
     final theme = Theme.of(context);
+    // Zero stock gets a stronger treatment than the "Low stock" chip alone —
+    // the whole card goes solid red, not just a tinted background.
+    final isOutOfStock = cover.stock.currentQuantity == 0;
+    final primaryTextColor = isOutOfStock ? Colors.white : theme.colorScheme.onSurface;
+    final secondaryTextColor = isOutOfStock
+        ? Colors.white.withValues(alpha: 0.85)
+        : theme.colorScheme.onSurfaceVariant;
+
     return Card(
+      color: isOutOfStock ? AppColors.danger : null,
       child: InkWell(
         onTap: () => _openDetail(cover),
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    cover.stock.productName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+          padding: const EdgeInsets.all(AppSpacing.l),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      cover.stock.productName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: primaryTextColor,
+                      ),
+                    ),
+                  ),
+                  if (isOutOfStock)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: const Text(
+                        'OUT OF STOCK',
+                        style: TextStyle(
+                          color: AppColors.danger,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    )
+                  else
+                    StatusChip(label: cover.status, status: cover.appStatus),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.s),
+              Text(
+                '${cover.stock.currentQuantity} units in stock',
+                style: TextStyle(color: primaryTextColor),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: cover.requiredPerDay != null && cover.requiredPerDay! > 0
+                      ? (cover.stock.currentQuantity /
+                                (cover.requiredPerDay! * overstockDaysThreshold))
+                            .clamp(0.0, 1.0)
+                      : 0,
+                  minHeight: 6,
+                  backgroundColor: isOutOfStock
+                      ? Colors.white.withValues(alpha: 0.3)
+                      : theme.colorScheme.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation(
+                    isOutOfStock ? Colors.white : cover.appStatus.color,
                   ),
                 ),
-                StatusChip(label: cover.status, status: cover.appStatus),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.s),
-            Text('${cover.stock.currentQuantity} units in stock'),
-            const SizedBox(height: AppSpacing.xs),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: cover.requiredPerDay != null && cover.requiredPerDay! > 0
-                    ? (cover.stock.currentQuantity /
-                              (cover.requiredPerDay! * overstockDaysThreshold))
-                          .clamp(0.0, 1.0)
-                    : 0,
-                minHeight: 6,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation(cover.appStatus.color),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            if (cover.daysOfCover != null) ...[
-              Text(
-                'Demand ${cover.requiredPerDay}/day · '
-                '${cover.daysOfCover!.toStringAsFixed(1)} days of cover',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (cover.stockOutDate != null)
+              const SizedBox(height: AppSpacing.xs),
+              if (cover.daysOfCover != null) ...[
                 Text(
-                  'Predicted stock-out: ${formatDate(cover.stockOutDate!)}',
+                  'Demand ${cover.requiredPerDay}/day · '
+                  '${cover.daysOfCover!.toStringAsFixed(1)} days of cover',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: secondaryTextColor,
                   ),
                 ),
-            ] else
-              Text(
-                'No demand set',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                if (cover.stockOutDate != null)
+                  Text(
+                    'Predicted stock-out: ${formatDate(cover.stockOutDate!)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: secondaryTextColor,
+                    ),
+                  ),
+              ] else
+                Text(
+                  'No demand set',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: secondaryTextColor,
+                  ),
                 ),
-              ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
