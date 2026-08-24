@@ -1,8 +1,10 @@
 class StockMovementType {
   static const productionIn = 'production_in';
   static const shipmentOut = 'shipment_out';
+  static const damaged = 'damaged';
+  static const returned = 'returned';
   static const adjustment = 'adjustment';
-  static const all = [productionIn, shipmentOut, adjustment];
+  static const all = [productionIn, shipmentOut, damaged, returned, adjustment];
 }
 
 class StockMovement {
