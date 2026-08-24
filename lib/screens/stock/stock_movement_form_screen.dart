@@ -72,7 +72,7 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
-      await _service.recordMovement(
+      await _service.recordMovementQueued(
         stockId: widget.stockId,
         movementType: _movementType,
         quantity: int.parse(_quantityController.text),
