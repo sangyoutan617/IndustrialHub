@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/stock_movement.dart';
 import '../../services/stock_service.dart';
 
@@ -97,7 +98,7 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.l),
             children: [
               DropdownButtonFormField<String>(
                 initialValue: _movementType,
@@ -112,7 +113,7 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                 onChanged: (value) =>
                     setState(() => _movementType = value ?? _movementType),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _quantityController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -133,7 +134,7 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Date'),
@@ -143,12 +144,12 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                 trailing: const Icon(Icons.calendar_today_outlined),
                 onTap: _pickDate,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _noteController,
                 decoration: const InputDecoration(labelText: 'Note (optional)'),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
               FilledButton(
                 onPressed: _isSaving ? null : _save,
                 child: _isSaving

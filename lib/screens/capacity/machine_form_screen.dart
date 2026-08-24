@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/machine.dart';
 import '../../services/machine_service.dart';
+import '../../widgets/kpi_card.dart';
 
 class MachineFormScreen extends StatefulWidget {
   final int factoryId;
@@ -98,7 +100,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
-              const SizedBox(height: 16),
+              const SectionHeader(title: 'Machine details'),
               TextFormField(
                 controller: _ratedController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -109,7 +111,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 ),
                 validator: (v) => _requiredNumber(v, min: 0),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _hoursController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -120,7 +122,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 ),
                 validator: (v) => _requiredNumber(v, min: 0, max: 24),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _uptimeController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -129,7 +131,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 decoration: const InputDecoration(labelText: 'Uptime %'),
                 validator: (v) => _requiredNumber(v, min: 0, max: 100),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               DropdownButtonFormField<String>(
                 initialValue: _status,
                 decoration: const InputDecoration(labelText: 'Status'),
@@ -143,7 +145,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 onChanged: (value) =>
                     setState(() => _status = value ?? 'Active'),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
               FilledButton(
                 onPressed: _isSaving ? null : _save,
                 child: _isSaving

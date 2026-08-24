@@ -6,6 +6,7 @@ import '../../services/mrp_service.dart';
 import '../../services/order_service.dart';
 import '../../services/supply_service.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 
 /// Values used to pre-populate a new order — e.g. from the material
@@ -278,6 +279,10 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              const SectionHeader(
+                title: 'What to order',
+                padding: EdgeInsets.only(bottom: 4),
+              ),
               DropdownButtonFormField<int>(
                 initialValue: _selectedMaterialId,
                 decoration: const InputDecoration(labelText: 'Material'),
@@ -336,7 +341,10 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SectionHeader(
+                title: 'Dates',
+                padding: EdgeInsets.only(top: 20, bottom: 4),
+              ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Order date'),

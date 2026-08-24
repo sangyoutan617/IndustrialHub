@@ -8,6 +8,7 @@ import '../../services/supplier_service.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
 import '../supply/order_form_screen.dart';
 
 /// Read-only admin drill-in for a single factory. Alerts here are computed
@@ -162,26 +163,28 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
               children: [
                 Text('Alerts', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
-                if (bottleneck.hasData && !bottleneck.canMeetDemand)
-                  _alertTile(
-                    icon: Icons.warning_amber_rounded,
+                if (bottleneck.hasData && !bottleneck.canMeetDemand) ...[
+                  InfoBanner(
+                    status: AppStatus.danger,
                     title:
                         'Output shortfall: short by ${bottleneck.shortfall!.toStringAsFixed(0)} units/day',
-                    subtitle:
+                    message:
                         'Limiting resource: ${_resourceLabel(bottleneck.limiter ?? bottleneck.bottleneckResource)}',
                   ),
-                for (final material in _lowStockMaterials)
-                  _alertTile(
-                    icon: Icons.inventory_2_outlined,
+                  const SizedBox(height: 8),
+                ],
+                for (final material in _lowStockMaterials) ...[
+                  InfoBanner(
+                    status: AppStatus.danger,
                     title:
                         '${material.materialName}: ${material.currentStock.toStringAsFixed(0)} ${material.unit} in stock',
-                    subtitle:
+                    message:
                         'Reorder level: ${material.reorderLevel.toStringAsFixed(0)} ${material.unit}',
-                    trailing: TextButton(
-                      onPressed: () => _raisePurchaseOrder(material),
-                      child: const Text('Raise PO'),
-                    ),
+                    actionLabel: 'Raise PO',
+                    onAction: () => _raisePurchaseOrder(material),
                   ),
+                  const SizedBox(height: 8),
+                ],
                 if ((!bottleneck.hasData || bottleneck.canMeetDemand) &&
                     _lowStockMaterials.isEmpty)
                   Padding(
@@ -213,19 +216,4 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
     }
   }
 
-  Widget _alertTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    Widget? trailing,
-  }) {
-    return Card(
-      child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: trailing,
-      ),
-    );
-  }
 }

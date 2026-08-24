@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
-import '../../core/theme.dart';
 import '../../models/profile.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/empty_state.dart';
@@ -40,11 +39,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     setState(() => _state = _LoadState.loading);
     try {
       final profiles = await _profileService.getProfiles();
+      if (!mounted) return;
       setState(() {
         _profiles = profiles;
         _state = _LoadState.ready;
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() => _state = _LoadState.error);
     }
   }
@@ -127,13 +128,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final profile = filtered[index];
+                      final scheme = Theme.of(context).colorScheme;
                       return Card(
                         child: ListTile(
-                          leading: const CircleAvatar(
-                            backgroundColor: AppColors.primaryLight,
+                          leading: CircleAvatar(
+                            backgroundColor: scheme.primaryContainer,
                             child: Icon(
                               Icons.person_outline,
-                              color: AppColors.primary,
+                              color: scheme.onPrimaryContainer,
                             ),
                           ),
                           title: Text(

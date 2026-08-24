@@ -207,6 +207,38 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
 
   Widget _buildReady(_HomeData data, _Palette pal) {
     final result = data.bottleneck;
+    // Factory-wide AI narration tying material/machine/manpower into a
+    // single verdict. Narrates the already-computed bottleneck result;
+    // never recalculates it. See _buildFactoryPrompt. Built once here and
+    // handed to whichever layout (portrait/landscape) is active below, so
+    // rotating never recreates — and re-fetches — the AI card.
+    final aiInsight = result.hasData
+        ? AiInsightCard(
+            buildPrompt: () => _buildFactoryPrompt(result),
+            system: _factorySystem,
+          )
+        : null;
+
+    // Portrait: single scanning column, top to bottom. Landscape: the same
+    // sections split into two columns so the extra width is used instead of
+    // just stretching the portrait layout — same section builders either
+    // way, only the arrangement differs, so rotating never re-fetches data.
+    return OrientationBuilder(
+      builder: (context, orientation) {
+        if (orientation == Orientation.landscape) {
+          return _buildLandscapeReady(result, data, pal, aiInsight);
+        }
+        return _buildPortraitReady(result, data, pal, aiInsight);
+      },
+    );
+  }
+
+  Widget _buildPortraitReady(
+    BottleneckResult result,
+    _HomeData data,
+    _Palette pal,
+    Widget? aiInsight,
+  ) {
     // Flat ListView; per-card RepaintBoundary limits repaint on scroll.
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -217,20 +249,56 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
         const SizedBox(height: 16),
         RepaintBoundary(child: _buildCeilingGrid(result, pal)),
         const SizedBox(height: 16),
-        if (result.hasData) ...[
-          // Factory-wide AI narration tying material/machine/manpower into a
-          // single verdict. Narrates the already-computed bottleneck result;
-          // never recalculates it. See _buildFactoryPrompt.
-          AiInsightCard(
-            buildPrompt: () => _buildFactoryPrompt(result),
-            system: _factorySystem,
-          ),
-          const SizedBox(height: 16),
-        ],
+        if (aiInsight != null) ...[aiInsight, const SizedBox(height: 16)],
         RepaintBoundary(child: _buildOpenDataCard(data, pal)),
         const SizedBox(height: 16),
         RepaintBoundary(child: _buildActionCenter(result, pal)),
       ],
+    );
+  }
+
+  Widget _buildLandscapeReady(
+    BottleneckResult result,
+    _HomeData data,
+    _Palette pal,
+    Widget? aiInsight,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left: factory status story — header, bottleneck diagnosis, AI.
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RepaintBoundary(child: _buildHeader(result, pal)),
+                const SizedBox(height: 16),
+                RepaintBoundary(child: _buildHeroCard(result, pal)),
+                if (aiInsight != null) ...[
+                  const SizedBox(height: 16),
+                  aiInsight,
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Right: supporting breakdown — ceiling grid, benchmark, actions.
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RepaintBoundary(child: _buildCeilingGrid(result, pal)),
+                const SizedBox(height: 16),
+                RepaintBoundary(child: _buildOpenDataCard(data, pal)),
+                const SizedBox(height: 16),
+                RepaintBoundary(child: _buildActionCenter(result, pal)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -669,43 +737,50 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
         ? 'Machines'
         : 'Manpower';
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: _ceilingCard(
-            pal: pal,
-            icon: Icons.local_shipping, // matches Supply tab
-            label: 'MATERIALS',
-            moduleCaption: 'Raw material ceiling',
-            numericValue: result.materialCeiling,
-            isBottleneck: isMaterialLimiter,
+    // IntrinsicHeight gives the Row a bounded height to stretch children
+    // to — without it, a Row(crossAxisAlignment: stretch) inside a
+    // ListView (which hands its children an unbounded height) throws
+    // "BoxConstraints forces an infinite height" as soon as this section
+    // actually renders with data.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _ceilingCard(
+              pal: pal,
+              icon: Icons.local_shipping, // matches Supply tab
+              label: 'MATERIALS',
+              moduleCaption: 'Raw material ceiling',
+              numericValue: result.materialCeiling,
+              isBottleneck: isMaterialLimiter,
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _ceilingCard(
-            pal: pal,
-            icon: Icons.precision_manufacturing, // matches Capacity tab
-            label: 'CAPACITY',
-            moduleCaption: capacitySubLabel,
-            numericValue: capacityCeiling,
-            isBottleneck: isCapacityLimiter,
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ceilingCard(
+              pal: pal,
+              icon: Icons.precision_manufacturing, // matches Capacity tab
+              label: 'CAPACITY',
+              moduleCaption: capacitySubLabel,
+              numericValue: capacityCeiling,
+              isBottleneck: isCapacityLimiter,
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _ceilingCard(
-            pal: pal,
-            icon: Icons.inventory_2, // matches Stock tab
-            label: 'DEMAND',
-            moduleCaption: 'Required / day',
-            numericValue: result.requiredPerDay,
-            isBottleneck: false,
-            isDemand: true,
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ceilingCard(
+              pal: pal,
+              icon: Icons.inventory_2, // matches Stock tab
+              label: 'DEMAND',
+              moduleCaption: 'Required / day',
+              numericValue: result.requiredPerDay,
+              isBottleneck: false,
+              isDemand: true,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

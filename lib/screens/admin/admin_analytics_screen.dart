@@ -5,7 +5,9 @@ import '../../models/factory.dart';
 import '../../services/admin_service.dart';
 import '../../services/bottleneck_service.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
 import 'admin_factory_detail_screen.dart';
 
 enum _LoadState { loading, error, ready }
@@ -42,19 +44,23 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     }
   }
 
-  Color _bottleneckColor(FactoryStat stat) {
-    if (!stat.bottleneck.hasData) return Colors.grey.shade400;
+  // Consistent bottleneck-type -> status mapping, used for both the bar
+  // chart bars/legend and the factories table's Bottleneck column.
+  AppStatus _bottleneckStatus(FactoryStat stat) {
+    if (!stat.bottleneck.hasData) return AppStatus.neutral;
     switch (stat.bottleneck.limiter ?? stat.bottleneck.bottleneckResource) {
       case 'MACHINE':
-        return AppColors.primary;
+        return AppStatus.info;
       case 'MANPOWER':
-        return AppColors.primaryAccent;
+        return AppStatus.warning;
       case 'RAW MATERIAL':
-        return Colors.amber.shade700;
+        return AppStatus.danger;
       default:
-        return Colors.grey.shade400;
+        return AppStatus.success;
     }
   }
+
+  Color _bottleneckColor(FactoryStat stat) => _bottleneckStatus(stat).color;
 
   String _bottleneckLabel(BottleneckResult result) {
     if (!result.hasData) return 'No data';
@@ -100,12 +106,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.l),
         children: [
           _buildBenchmarkCard(stats),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.l),
           _buildChartCard(stats),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.l),
           _buildTableCard(stats),
         ],
       ),
@@ -115,7 +121,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   Widget _buildBenchmarkCard(CrossFactoryStats stats) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -127,23 +133,33 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _statTile(
-                    'Aggregate achievable/day',
-                    stats.totalAchievable.toStringAsFixed(0),
+                  child: KpiCard(
+                    icon: Icons.speed_outlined,
+                    label: 'Aggregate achievable/day',
+                    value: stats.totalAchievable.toStringAsFixed(0),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.m),
                 Expanded(
-                  child: _statTile(
-                    'Aggregate demand/day',
-                    stats.totalDemand.toStringAsFixed(0),
+                  child: KpiCard(
+                    icon: Icons.trending_up,
+                    label: 'Aggregate demand/day',
+                    value: stats.totalDemand.toStringAsFixed(0),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.m),
                 Expanded(
-                  child: _statTile(
-                    'Below demand',
-                    '${stats.factoriesBelowDemand} of ${stats.factories.length}',
+                  child: KpiCard(
+                    icon: Icons.warning_amber_rounded,
+                    label: 'Below demand',
+                    value: '${stats.factoriesBelowDemand}',
+                    unit: 'of ${stats.factories.length}',
+                    status: stats.factoriesBelowDemand > 0
+                        ? AppStatus.danger
+                        : AppStatus.success,
+                    statusLabel: stats.factoriesBelowDemand > 0
+                        ? 'At risk'
+                        : 'On track',
                   ),
                 ),
               ],
@@ -205,44 +221,11 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     );
   }
 
-  Widget _statTile(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(
-                context,
-              ).colorScheme.onPrimaryContainer.withValues(alpha: 0.75),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildChartCard(CrossFactoryStats stats) {
     final bars = stats.factories;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -253,11 +236,13 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             const SizedBox(height: 4),
             Wrap(
               spacing: 12,
+              runSpacing: 4,
               children: [
-                _legendDot('Machine', AppColors.primary),
-                _legendDot('Manpower', AppColors.primaryAccent),
-                _legendDot('Raw material', Colors.amber.shade700),
-                _legendDot('No data', Colors.grey.shade400),
+                _legendDot('Machine', AppStatus.info.color),
+                _legendDot('Manpower', AppStatus.warning.color),
+                _legendDot('Raw material', AppStatus.danger.color),
+                _legendDot('No bottleneck', AppStatus.success.color),
+                _legendDot('No data', AppStatus.neutral.color),
               ],
             ),
             const SizedBox(height: 16),
@@ -296,7 +281,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                               name.length > 8
                                   ? '${name.substring(0, 8)}…'
                                   : name,
-                              style: const TextStyle(fontSize: 10),
+                              style: Theme.of(context).textTheme.labelSmall,
                             ),
                           );
                         },
@@ -336,7 +321,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11)),
+        Text(label, style: Theme.of(context).textTheme.labelSmall),
       ],
     );
   }
@@ -344,7 +329,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   Widget _buildTableCard(CrossFactoryStats stats) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -392,20 +377,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                           ),
                         ),
                         DataCell(
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                margin: const EdgeInsets.only(right: 6),
-                                decoration: BoxDecoration(
-                                  color: _bottleneckColor(stat),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              Text(_bottleneckLabel(stat.bottleneck)),
-                            ],
+                          StatusChip(
+                            label: _bottleneckLabel(stat.bottleneck),
+                            status: _bottleneckStatus(stat),
+                            dense: true,
                           ),
                         ),
                       ],

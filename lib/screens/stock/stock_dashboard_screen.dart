@@ -1,55 +1,34 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/demand_forecast.dart';
-import '../../models/finished_stock.dart';
 import '../../services/demand_service.dart';
-import '../../services/stock_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
 import 'demand_form_screen.dart';
+import 'stock_cover_loader.dart';
 import 'stock_list_screen.dart';
-
-const int _lowCoverDaysThreshold = 7;
-const int _overstockDaysThreshold = 60;
-
-class _ProductCover {
-  final FinishedStock stock;
-  final int? requiredPerDay;
-  final double? daysOfCover;
-  final DateTime? stockOutDate;
-
-  _ProductCover({
-    required this.stock,
-    this.requiredPerDay,
-    this.daysOfCover,
-    this.stockOutDate,
-  });
-
-  String get status {
-    if (requiredPerDay == null || requiredPerDay == 0) return 'No demand set';
-    if (daysOfCover! < _lowCoverDaysThreshold) {
-      return 'Low stock — reorder soon';
-    }
-    if (daysOfCover! > _overstockDaysThreshold) return 'Overstocked';
-    return 'Healthy';
-  }
-
-  Color statusColor(ColorScheme scheme) {
-    if (requiredPerDay == null || requiredPerDay == 0) return scheme.outline;
-    if (daysOfCover! < _lowCoverDaysThreshold) return scheme.error;
-    if (daysOfCover! > _overstockDaysThreshold) return scheme.tertiary;
-    return scheme.primary;
-  }
-}
+import 'stock_product_detail_screen.dart';
 
 class StockDashboardScreen extends StatefulWidget {
   final int factoryId;
 
-  const StockDashboardScreen({super.key, required this.factoryId});
+  /// Optional factory-health banner rendered as the first item in this
+  /// screen's own scrollable list — deliberately not a fixed/pinned sibling
+  /// above it, so it scrolls away with the rest of the content instead of
+  /// permanently occupying screen space.
+  final Widget? bottleneckBanner;
+
+  const StockDashboardScreen({
+    super.key,
+    required this.factoryId,
+    this.bottleneckBanner,
+  });
 
   @override
   State<StockDashboardScreen> createState() => _StockDashboardScreenState();
@@ -58,11 +37,10 @@ class StockDashboardScreen extends StatefulWidget {
 enum _LoadState { loading, error, ready }
 
 class _StockDashboardScreenState extends State<StockDashboardScreen> {
-  final _stockService = StockService();
   final _demandService = DemandService();
 
   _LoadState _state = _LoadState.loading;
-  List<_ProductCover> _covers = [];
+  List<ProductCover> _covers = [];
   List<DemandForecast> _forecasts = [];
 
   @override
@@ -80,38 +58,15 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final stockList = await _stockService.getStockList(widget.factoryId);
-      final forecasts = await _demandService.getForecasts(widget.factoryId);
-
-      final requiredByName = <String, int>{};
-      for (final forecast in forecasts) {
-        final key = forecast.productName.trim().toLowerCase();
-        requiredByName[key] =
-            (requiredByName[key] ?? 0) + forecast.requiredPerDay;
-      }
-
-      final covers = stockList.map((stock) {
-        final required = requiredByName[stock.productName.trim().toLowerCase()];
-        final daysOfCover = (required != null && required > 0)
-            ? stock.currentQuantity / required
-            : null;
-        final stockOutDate = daysOfCover != null
-            ? DateTime.now().add(Duration(days: daysOfCover.floor()))
-            : null;
-        return _ProductCover(
-          stock: stock,
-          requiredPerDay: required,
-          daysOfCover: daysOfCover,
-          stockOutDate: stockOutDate,
-        );
-      }).toList();
-
+      final overview = await loadStockOverview(widget.factoryId);
+      if (!mounted) return;
       setState(() {
-        _covers = covers;
-        _forecasts = forecasts;
+        _covers = overview.covers;
+        _forecasts = overview.forecasts;
         _state = _LoadState.ready;
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() => _state = _LoadState.error);
     }
   }
@@ -172,6 +127,18 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     _load();
   }
 
+  Future<void> _openDetail(ProductCover cover) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => StockProductDetailScreen(
+          factoryId: widget.factoryId,
+          stockId: cover.stock.stockId,
+        ),
+      ),
+    );
+    if (changed == true) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     switch (_state) {
@@ -185,179 +152,320 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   }
 
   Widget _buildReady() {
-    final scheme = Theme.of(context).colorScheme;
-    final lowStockCount = _covers
-        .where(
-          (c) =>
-              c.requiredPerDay != null &&
-              c.requiredPerDay! > 0 &&
-              c.daysOfCover! < _lowCoverDaysThreshold,
-        )
-        .length;
-    final overstockCount = _covers
-        .where(
-          (c) =>
-              c.requiredPerDay != null &&
-              c.requiredPerDay! > 0 &&
-              c.daysOfCover! > _overstockDaysThreshold,
-        )
-        .length;
-
     final withCover = _covers.where((c) => c.daysOfCover != null).toList();
     final mostUrgent = withCover.isEmpty
         ? null
         : (withCover.toList()
                 ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!)))
               .first;
+    final criticalItems = withCover.where((c) => c.needsAttention).toList()
+      ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!));
 
+    // AI card is built once so rotating between portrait/landscape never
+    // recreates — and re-fetches — it.
+    final aiInsight = withCover.isNotEmpty
+        ? AiInsightCard(buildPrompt: _buildStockPrompt, system: _stockSystem)
+        : null;
+
+    return OrientationBuilder(
+      builder: (context, orientation) {
+        if (orientation == Orientation.landscape) {
+          return _buildLandscape(
+            mostUrgent: mostUrgent,
+            criticalItems: criticalItems,
+            aiInsight: aiInsight,
+          );
+        }
+        return _buildPortrait(
+          mostUrgent: mostUrgent,
+          criticalItems: criticalItems,
+          aiInsight: aiInsight,
+        );
+      },
+    );
+  }
+
+  Widget _buildPortrait({
+    required ProductCover? mostUrgent,
+    required List<ProductCover> criticalItems,
+    required Widget? aiInsight,
+  }) {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
+          if (widget.bottleneckBanner != null) ...[
+            widget.bottleneckBanner!,
+            const SizedBox(height: AppSpacing.l),
+          ],
+          _buildCoverSummaryCard(mostUrgent),
+          const SizedBox(height: AppSpacing.l),
+          if (aiInsight != null) ...[aiInsight, const SizedBox(height: AppSpacing.l)],
+          _buildSummaryStatsRow(),
+          const SizedBox(height: AppSpacing.l),
+          if (criticalItems.isNotEmpty) ...[
+            _buildCriticalSection(criticalItems),
+            const SizedBox(height: AppSpacing.l),
+          ],
+          _buildCoverListSection(),
+          const SizedBox(height: AppSpacing.xl),
+          _buildDemandSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscape({
+    required ProductCover? mostUrgent,
+    required List<ProductCover> criticalItems,
+    required Widget? aiInsight,
+  }) {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left: overview story — cover, stats, critical, AI.
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    AppLocalizations.of(context).stockDaysOfCover,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    mostUrgent != null
-                        ? formatDays(mostUrgent.daysOfCover!)
-                        : '—',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  if (mostUrgent?.stockOutDate != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Stock-out predicted: ${formatDate(mostUrgent!.stockOutDate!)}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                  if (widget.bottleneckBanner != null) ...[
+                    widget.bottleneckBanner!,
+                    const SizedBox(height: AppSpacing.l),
+                  ],
+                  _buildCoverSummaryCard(mostUrgent),
+                  const SizedBox(height: AppSpacing.l),
+                  _buildSummaryStatsRow(),
+                  if (criticalItems.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.l),
+                    _buildCriticalSection(criticalItems),
+                  ],
+                  if (aiInsight != null) ...[
+                    const SizedBox(height: AppSpacing.l),
+                    aiInsight,
                   ],
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          // AI narration of the already-computed cover figures. Only mounted
-          // when at least one product has a demand-based days-of-cover to
-          // explain, so an empty factory doesn't spend an AI call. Gemini
-          // never computes cover or stock-out dates — see _buildStockPrompt.
-          if (withCover.isNotEmpty) ...[
-            AiInsightCard(buildPrompt: _buildStockPrompt, system: _stockSystem),
-            const SizedBox(height: 16),
+            const SizedBox(width: AppSpacing.l),
+            // Right: full products list + demand forecast.
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCoverListSection(),
+                  const SizedBox(height: AppSpacing.xl),
+                  _buildDemandSection(),
+                ],
+              ),
+            ),
           ],
-          Row(
-            children: [
-              Expanded(
-                child: _summaryStat(
-                  'Products',
-                  _covers.length.toString(),
-                  scheme.primary,
-                ),
-              ),
-              Expanded(
-                child: _summaryStat(
-                  'Low stock',
-                  lowStockCount.toString(),
-                  scheme.error,
-                ),
-              ),
-              Expanded(
-                child: _summaryStat(
-                  'Overstocked',
-                  overstockCount.toString(),
-                  Theme.of(context).colorScheme.tertiary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (_covers.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: EmptyState(
-                icon: Icons.inventory_2_outlined,
-                message: 'No products yet. Add one from Finished Stock above.',
-              ),
-            )
-          else ...[
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoverSummaryCard(ProductCover? mostUrgent) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              'Days of cover',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            for (final cover in _covers) _buildCoverCard(cover, scheme),
-            const SizedBox(height: 8),
-            _dashedButton(
-              icon: Icons.add,
-              label: 'Log stock movement',
-              onTap: _openStockList,
-            ),
-          ],
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Demand forecast',
-                style: Theme.of(context).textTheme.titleMedium,
+              AppLocalizations.of(context).stockDaysOfCover,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
-              TextButton.icon(
-                onPressed: () => _openDemandForm(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add demand'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              mostUrgent != null ? formatDays(mostUrgent.daysOfCover!) : '—',
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
+              ),
+            ),
+            if (mostUrgent?.stockOutDate != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Stock-out predicted: ${formatDate(mostUrgent!.stockOutDate!)}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryStatsRow() {
+    final scheme = Theme.of(context).colorScheme;
+    final lowStockCount = _covers.where((c) => c.needsAttention).length;
+    final overstockCount = _covers
+        .where(
+          (c) =>
+              c.requiredPerDay != null &&
+              c.requiredPerDay! > 0 &&
+              c.daysOfCover! > overstockDaysThreshold,
+        )
+        .length;
+    return Row(
+      children: [
+        Expanded(
+          child: _summaryStat('Products', _covers.length.toString(), scheme.primary),
+        ),
+        Expanded(
+          child: _summaryStat(
+            'Low stock',
+            lowStockCount.toString(),
+            AppStatus.danger.color,
           ),
-          if (_forecasts.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: EmptyState(
-                icon: Icons.trending_up,
-                message: 'No demand forecasts set yet.',
-              ),
-            )
-          else
-            for (final forecast in _forecasts)
-              Card(
-                child: ListTile(
-                  title: Text(forecast.productName),
-                  subtitle: Text(
-                    '${forecast.requiredPerDay} units/day required',
+        ),
+        Expanded(
+          child: _summaryStat(
+            'Overstocked',
+            overstockCount.toString(),
+            AppStatus.info.color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Top-N urgent products, highlighted above the full list — same pattern
+  // as the Supply module's "Attention required" section, so a manager sees
+  // what needs a decision first instead of scanning every product.
+  Widget _buildCriticalSection(List<ProductCover> criticalItems) {
+    return Card(
+      color: AppStatus.danger.background,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: AppStatus.danger.color, size: 20),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  'Critical products',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppStatus.danger.color,
                   ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.s),
+            for (final cover in criticalItems.take(3)) ...[
+              InkWell(
+                onTap: () => _openDetail(cover),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => _openDemandForm(forecast: forecast),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _deleteDemand(forecast),
+                      Expanded(child: Text(cover.stock.productName)),
+                      Text(
+                        formatDays(cover.daysOfCover!),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppStatus.danger.color,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-        ],
+            ],
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildCoverListSection() {
+    if (_covers.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: EmptyState(
+          icon: Icons.inventory_2_outlined,
+          message: 'No products yet. Add one from Finished Stock above.',
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Days of cover'),
+        for (final cover in _covers) ...[
+          _buildCoverCard(cover),
+          const SizedBox(height: AppSpacing.s),
+        ],
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _openStockList,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Log stock movement'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDemandSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Demand forecast',
+          trailing: TextButton.icon(
+            onPressed: () => _openDemandForm(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add demand'),
+          ),
+        ),
+        if (_forecasts.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: EmptyState(
+              icon: Icons.trending_up,
+              message: 'No demand forecasts set yet.',
+            ),
+          )
+        else
+          for (final forecast in _forecasts)
+            Card(
+              child: ListTile(
+                title: Text(forecast.productName),
+                subtitle: Text('${forecast.requiredPerDay} units/day required'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () => _openDemandForm(forecast: forecast),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _deleteDemand(forecast),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+      ],
     );
   }
 
@@ -381,7 +489,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           (c) =>
               c.requiredPerDay != null &&
               c.requiredPerDay! > 0 &&
-              c.daysOfCover! < _lowCoverDaysThreshold,
+              c.daysOfCover! < lowCoverDaysThreshold,
         )
         .length;
     final overstock = _covers
@@ -389,17 +497,17 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           (c) =>
               c.requiredPerDay != null &&
               c.requiredPerDay! > 0 &&
-              c.daysOfCover! > _overstockDaysThreshold,
+              c.daysOfCover! > overstockDaysThreshold,
         )
         .length;
 
     final buffer = StringBuffer()
       ..writeln('Finished-goods products tracked: ${_covers.length}')
       ..writeln(
-        'Low-stock (under $_lowCoverDaysThreshold days of cover): $lowStock',
+        'Low-stock (under $lowCoverDaysThreshold days of cover): $lowStock',
       )
       ..writeln(
-        'Overstocked (over $_overstockDaysThreshold days of cover): $overstock',
+        'Overstocked (over $overstockDaysThreshold days of cover): $overstock',
       );
 
     if (withCover.isNotEmpty) {
@@ -447,120 +555,70 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     );
   }
 
-  Widget _buildCoverCard(_ProductCover cover, ColorScheme scheme) {
+  Widget _buildCoverCard(ProductCover cover) {
+    final theme = Theme.of(context);
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      child: InkWell(
+        onTap: () => _openDetail(cover),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  cover.stock.productName,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cover.statusColor(scheme).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                Expanded(
                   child: Text(
-                    cover.status,
-                    style: TextStyle(
-                      color: cover.statusColor(scheme),
-                      fontSize: 12,
-                    ),
+                    cover.stock.productName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
+                StatusChip(label: cover.status, status: cover.appStatus),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.s),
             Text('${cover.stock.currentQuantity} units in stock'),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.xs),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: cover.requiredPerDay != null && cover.requiredPerDay! > 0
                     ? (cover.stock.currentQuantity /
-                              (cover.requiredPerDay! * _overstockDaysThreshold))
+                              (cover.requiredPerDay! * overstockDaysThreshold))
                           .clamp(0.0, 1.0)
                     : 0,
                 minHeight: 6,
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation(cover.statusColor(scheme)),
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation(cover.appStatus.color),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.xs),
             if (cover.daysOfCover != null) ...[
               Text(
                 'Demand ${cover.requiredPerDay}/day · '
                 '${cover.daysOfCover!.toStringAsFixed(1)} days of cover',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               if (cover.stockOutDate != null)
                 Text(
                   'Predicted stock-out: ${formatDate(cover.stockOutDate!)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
             ] else
               Text(
                 'No demand set',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _dashedButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.5),
-            style: BorderStyle.solid,
-          ),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
         ),
       ),
     );

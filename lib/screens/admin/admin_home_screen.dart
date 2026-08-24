@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_factories_screen.dart';
@@ -48,6 +47,7 @@ class AdminHomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _adminTile(
+            context,
             icon: Icons.bar_chart_outlined,
             title: 'Cross-factory analytics',
             subtitle:
@@ -57,6 +57,7 @@ class AdminHomeScreen extends StatelessWidget {
             ),
           ),
           _adminTile(
+            context,
             icon: Icons.factory_outlined,
             title: 'All factories',
             subtitle: 'Every factory, read-only detail and live alerts',
@@ -65,6 +66,7 @@ class AdminHomeScreen extends StatelessWidget {
             ),
           ),
           _adminTile(
+            context,
             icon: Icons.people_outline,
             title: 'Users',
             subtitle: 'All registered users, searchable',
@@ -73,6 +75,7 @@ class AdminHomeScreen extends StatelessWidget {
             ).push(MaterialPageRoute(builder: (_) => const AdminUsersScreen())),
           ),
           _adminTile(
+            context,
             icon: Icons.storage_outlined,
             title: 'Data & seed management',
             subtitle: 'Run seed and view simulated-data counts',
@@ -85,15 +88,24 @@ class AdminHomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _adminTile({
+  Widget _adminTile(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String subtitle,
     VoidCallback? onTap,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
       child: ListTile(
-        leading: Icon(icon, color: AppColors.primary),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: scheme.onPrimaryContainer),
+        ),
         title: Text(title),
         subtitle: Text(subtitle),
         enabled: onTap != null,

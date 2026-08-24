@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
@@ -40,12 +41,20 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
   List<PurchaseOrder> _orders = [];
   Map<int, String> _materialNames = {};
   bool _sortByReliability = false;
+  final _searchController = TextEditingController();
+  String _query = '';
   int _loadToken = 0;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -69,7 +78,18 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
   }
 
   List<Supplier> get _sortedSuppliers {
-    final list = List<Supplier>.from(_suppliers);
+    var list = List<Supplier>.from(_suppliers);
+    if (_query.isNotEmpty) {
+      final q = _query.toLowerCase();
+      list = list
+          .where(
+            (s) =>
+                s.supplierName.toLowerCase().contains(q) ||
+                (_materialNames[s.materialId]?.toLowerCase().contains(q) ??
+                    false),
+          )
+          .toList();
+    }
     if (_sortByReliability) {
       list.sort((a, b) => b.reliabilityRating.compareTo(a.reliabilityRating));
     } else {
@@ -271,42 +291,88 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
             ),
           );
         }
-        return RefreshIndicator(
-          onRefresh: _load,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(8),
-            itemCount: _sortedSuppliers.length,
-            itemBuilder: (context, index) {
-              final supplier = _sortedSuppliers[index];
-              final materialName =
-                  _materialNames[supplier.materialId] ?? 'Unknown material';
-              final effectiveLead = MrpService.effectiveLeadDays(supplier);
-              final openCount = _openOrderCount(supplier.supplierId);
-              return Card(
-                child: ListTile(
-                  title: Text(supplier.supplierName),
-                  subtitle: Text(
-                    'Supplies $materialName · quoted ${supplier.leadTimeDays}d '
-                    '→ effective ${effectiveLead}d lead · '
-                    '$openCount open PO${openCount == 1 ? '' : 's'}'
-                    '${supplier.location != null ? ' · ${supplier.location}' : ''}',
-                  ),
-                  leading: _StarRow(rating: supplier.reliabilityRating),
-                  onTap: () => _openForm(supplier: supplier),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'rate') _quickRate(supplier);
-                      if (value == 'delete') _delete(supplier);
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'rate', child: Text('Rate')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete')),
-                    ],
-                  ),
+        final filtered = _sortedSuppliers;
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  labelText: 'Search suppliers or materials',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
                 ),
-              );
-            },
-          ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: filtered.isEmpty
+                    ? ListView(
+                        children: const [
+                          SizedBox(height: 80),
+                          EmptyState(
+                            icon: Icons.search_off,
+                            title: 'No suppliers match that search',
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(8),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final supplier = filtered[index];
+                          final materialName =
+                              _materialNames[supplier.materialId] ??
+                              'Unknown material';
+                          final effectiveLead = MrpService.effectiveLeadDays(
+                            supplier,
+                          );
+                          final openCount = _openOrderCount(supplier.supplierId);
+                          return Card(
+                            child: ListTile(
+                              title: Text(supplier.supplierName),
+                              subtitle: Text(
+                                'Supplies $materialName · quoted ${supplier.leadTimeDays}d '
+                                '→ effective ${effectiveLead}d lead · '
+                                '$openCount open PO${openCount == 1 ? '' : 's'}'
+                                '${supplier.location != null ? ' · ${supplier.location}' : ''}',
+                              ),
+                              leading: _StarRow(rating: supplier.reliabilityRating),
+                              onTap: () => _openForm(supplier: supplier),
+                              trailing: PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  if (value == 'rate') _quickRate(supplier);
+                                  if (value == 'delete') _delete(supplier);
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'rate',
+                                    child: Text('Rate'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
         );
     }
   }
@@ -330,7 +396,11 @@ class _StarRow extends StatelessWidget {
                   ? Icons.star
                   : (rating >= i - 0.5 ? Icons.star_half : Icons.star_border),
               size: 14,
-              color: Colors.amber.shade700,
+              // Intentional exception to the AppStatus vocabulary: star
+              // ratings read as gold worldwide, not as a "warning" signal.
+              // AppColors.warning is close enough in hue to stay themed
+              // without introducing a new ad hoc literal.
+              color: AppColors.warning,
             ),
         ],
       ),

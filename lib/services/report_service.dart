@@ -17,8 +17,9 @@ class ReportService {
   final BottleneckService _bottleneckService = BottleneckService();
   final SupplyService _supplyService = SupplyService();
 
-  static const _green = PdfColor.fromInt(0xFF16794F);
-  static const _darkGreen = PdfColor.fromInt(0xFF0E4030);
+  // Matches the app's teal brand (lib/core/theme.dart AppColors).
+  static const _green = PdfColor.fromInt(0xFF0F766E);
+  static const _darkGreen = PdfColor.fromInt(0xFF115E59);
   static const _grey = PdfColor.fromInt(0xFF6B7280);
 
   Future<Uint8List> buildFactoryReportPdf(Factory factory) async {

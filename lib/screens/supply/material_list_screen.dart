@@ -1,27 +1,37 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
-import '../../services/material_service.dart';
 import '../../services/mrp_service.dart';
-import '../../services/supply_exceptions.dart';
 import '../../services/supply_service.dart';
 import '../../widgets/ai_insight_card.dart';
-import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
+import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
+import 'material_detail_screen.dart';
 import 'material_form_screen.dart';
-import 'order_form_screen.dart';
 import 'order_list_screen.dart';
 import 'supplier_list_screen.dart';
+import 'supply_risk_ui.dart';
 
 class MaterialListScreen extends StatefulWidget {
   final int factoryId;
 
-  const MaterialListScreen({super.key, required this.factoryId});
+  /// Optional factory-health banner rendered as the first item in this
+  /// screen's own scrollable list — deliberately not a fixed/pinned sibling
+  /// above it, so it scrolls away with the rest of the content instead of
+  /// permanently occupying screen space.
+  final Widget? bottleneckBanner;
+
+  const MaterialListScreen({
+    super.key,
+    required this.factoryId,
+    this.bottleneckBanner,
+  });
 
   @override
   State<MaterialListScreen> createState() => _MaterialListScreenState();
@@ -30,12 +40,13 @@ class MaterialListScreen extends StatefulWidget {
 enum _LoadState { loading, error, ready }
 
 class _MaterialListScreenState extends State<MaterialListScreen> {
-  final _materialService = MaterialService();
   final _supplyService = SupplyService();
 
   _LoadState _state = _LoadState.loading;
   SupplyOverview? _overview;
   bool _needsActionOnly = false;
+  final _searchController = TextEditingController();
+  String _query = '';
 
   // Bumped on every _load() call; a response is only applied if it's still
   // the most recent one requested. Without this, switching factories or
@@ -55,6 +66,12 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     if (oldWidget.factoryId != widget.factoryId) _load();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
@@ -72,17 +89,12 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     }
   }
 
-  List<MaterialPlan> get _sortedPlans {
+  // Most urgent first — shared by the full list and the "Attention
+  // required" highlight section so the two can never disagree on ordering.
+  List<MaterialPlan> get _riskSortedPlans {
     final plans = List<MaterialPlan>.from(_overview?.plans ?? const []);
-    int priority(SupplyRisk risk) => switch (risk) {
-      SupplyRisk.stockedOut => 0,
-      SupplyRisk.reorderNow => 1,
-      SupplyRisk.watch => 2,
-      SupplyRisk.healthy => 3,
-      SupplyRisk.noSupplier => 4,
-    };
     plans.sort((a, b) {
-      final p = priority(a.risk).compareTo(priority(b.risk));
+      final p = supplyRiskPriority(a.risk).compareTo(supplyRiskPriority(b.risk));
       if (p != 0) return p;
       final aDate = a.orderByDate;
       final bDate = b.orderByDate;
@@ -91,10 +103,21 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       if (bDate == null) return -1;
       return aDate.compareTo(bDate);
     });
-    if (_needsActionOnly) {
-      return plans.where((p) => p.needsAttention).toList();
-    }
     return plans;
+  }
+
+  List<MaterialPlan> get _sortedPlans {
+    var result = _riskSortedPlans;
+    if (_needsActionOnly) {
+      result = result.where((p) => p.needsAttention).toList();
+    }
+    if (_query.isNotEmpty) {
+      final q = _query.toLowerCase();
+      result = result
+          .where((p) => p.material.materialName.toLowerCase().contains(q))
+          .toList();
+    }
+    return result;
   }
 
   Future<void> _openForm({RawMaterial? material}) async {
@@ -117,70 +140,18 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     }
   }
 
-  Future<void> _openReorderForm(MaterialPlan plan) async {
-    final supplier = plan.bestSupplier;
-    if (supplier == null) return;
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => OrderFormScreen(
-          factoryId: widget.factoryId,
-          prefill: OrderFormPrefill(
-            materialId: plan.material.materialId,
-            supplierId: supplier.supplierId,
-            quantity: plan.suggestedQty,
-          ),
-        ),
-      ),
-    );
-    if (!mounted) return;
-    if (saved == true) {
-      _load();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Purchase order created')));
-    }
-  }
-
-  Future<void> _delete(RawMaterial material) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Remove material?',
-      message:
-          'This removes "${material.materialName}" permanently. This cannot be undone.',
-    );
-    if (!confirmed) return;
-    try {
-      await _materialService.deleteMaterial(material.materialId);
-      if (!mounted) return;
-      _load();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Material removed')));
-    } on SupplyInUseException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    } catch (e) {
-      debugPrint('supply: failed to delete material: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not delete material. Please try again.'),
-        ),
-      );
-    }
-  }
-
   Future<void> _navigateAndRefresh(Widget screen) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     if (!mounted) return;
     _load();
   }
 
-  void _showProjection(MaterialPlan plan) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => _ProjectionSheet(plan: plan),
+  void _openDetail(MaterialPlan plan) {
+    _navigateAndRefresh(
+      MaterialDetailScreen(
+        factoryId: widget.factoryId,
+        materialId: plan.material.materialId,
+      ),
     );
   }
 
@@ -210,171 +181,444 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   }
 
   Widget _buildReady() {
-    final scheme = Theme.of(context).colorScheme;
     final overview = _overview!;
     final plans = overview.plans;
-    // Partitioned so reorderCount + watchCount always equals the number of
-    // plans the "Needs action" filter below would show — a material that's
-    // below its reorder level but not yet risk::watch/reorderNow used to be
-    // invisible in both headline numbers while still showing up once the
-    // filter chip was tapped.
-    bool isReorder(MaterialPlan p) =>
+
+    // Partitioned so criticalCount + attentionCount always equals the
+    // number of plans the "Needs action" filter below would show — a
+    // material that's below its reorder level but not yet
+    // watch/reorderNow used to be invisible in both headline numbers
+    // while still showing up once the filter chip was tapped.
+    bool isCritical(MaterialPlan p) =>
         p.risk == SupplyRisk.reorderNow || p.risk == SupplyRisk.stockedOut;
-    final reorderCount = plans.where(isReorder).length;
-    final watchCount = plans
+    final criticalCount = plans.where(isCritical).length;
+    final attentionCount = plans
         .where(
           (p) =>
-              !isReorder(p) &&
+              !isCritical(p) &&
               (p.risk == SupplyRisk.watch || p.belowReorderLevel),
         )
         .length;
+    final healthyCount = plans.length - criticalCount - attentionCount;
     final noCapacityData = overview.plannedProductionPerDay <= 0;
 
+    final attentionItems = _riskSortedPlans
+        .where((p) => p.needsAttention)
+        .take(3)
+        .toList();
+
+    // Purchase-order status counts — computed from overview.orders, which
+    // SupplyService.load already fetched for this same screen load, so this
+    // costs zero extra queries.
+    final poCounts = <String, int>{};
+    for (final o in overview.orders) {
+      poCounts[o.status] = (poCounts[o.status] ?? 0) + 1;
+    }
+
+    // Built once and handed to whichever layout (portrait/landscape) is
+    // active below, so rotating never recreates — and re-fetches — the AI
+    // card.
+    final aiInsight = plans.isNotEmpty
+        ? AiInsightCard(
+            buildPrompt: () => _buildSupplyPrompt(overview),
+            system: _supplySystem,
+          )
+        : null;
+
+    return OrientationBuilder(
+      builder: (context, orientation) {
+        if (orientation == Orientation.landscape) {
+          return _buildLandscape(
+            overview: overview,
+            plans: plans,
+            criticalCount: criticalCount,
+            attentionCount: attentionCount,
+            healthyCount: healthyCount,
+            noCapacityData: noCapacityData,
+            attentionItems: attentionItems,
+            poCounts: poCounts,
+            aiInsight: aiInsight,
+          );
+        }
+        return _buildPortrait(
+          overview: overview,
+          plans: plans,
+          criticalCount: criticalCount,
+          attentionCount: attentionCount,
+          healthyCount: healthyCount,
+          noCapacityData: noCapacityData,
+          attentionItems: attentionItems,
+          poCounts: poCounts,
+          aiInsight: aiInsight,
+        );
+      },
+    );
+  }
+
+  Widget _buildPortrait({
+    required SupplyOverview overview,
+    required List<MaterialPlan> plans,
+    required int criticalCount,
+    required int attentionCount,
+    required int healthyCount,
+    required bool noCapacityData,
+    required List<MaterialPlan> attentionItems,
+    required Map<String, int> poCounts,
+    required Widget? aiInsight,
+  }) {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          if (noCapacityData)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.info_outline, color: scheme.onPrimaryContainer),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'No capacity set up yet — add machines or shifts on '
-                      'the Capacity tab, otherwise stock-out predictions '
-                      'below can\'t be calculated and every material will '
-                      'read as safe.',
-                      style: TextStyle(
-                        color: scheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          if (widget.bottleneckBanner != null) ...[
+            widget.bottleneckBanner!,
+            const SizedBox(height: AppSpacing.l),
+          ],
+          if (noCapacityData) ...[
+            const InfoBanner(
+              status: AppStatus.warning,
+              message:
+                  'No capacity set up yet — add machines or shifts on '
+                  'the Capacity tab, otherwise stock-out predictions '
+                  'below can\'t be calculated and every material will '
+                  'read as safe.',
             ),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
+            const SizedBox(height: AppSpacing.l),
+          ],
+          _buildHealthCard(overview, criticalCount, attentionCount, healthyCount),
+          const SizedBox(height: AppSpacing.l),
+          if (attentionItems.isNotEmpty) ...[
+            _buildAttentionSection(attentionItems),
+            const SizedBox(height: AppSpacing.l),
+          ],
+          if (aiInsight != null) ...[aiInsight, const SizedBox(height: AppSpacing.l)],
+          _buildMaterialsSection(plans),
+          const SizedBox(height: AppSpacing.l),
+          _buildPurchaseOrdersSection(poCounts),
+          const SizedBox(height: AppSpacing.s),
+          _buildSuppliersRow(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscape({
+    required SupplyOverview overview,
+    required List<MaterialPlan> plans,
+    required int criticalCount,
+    required int attentionCount,
+    required int healthyCount,
+    required bool noCapacityData,
+    required List<MaterialPlan> attentionItems,
+    required Map<String, int> poCounts,
+    required Widget? aiInsight,
+  }) {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left: overview story — health, attention, AI.
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _summaryStat(
-                        AppLocalizations.of(context).supplyMaterials,
-                        plans.length.toString(),
-                        scheme.primary,
-                      ),
-                      _summaryStat(
-                        AppLocalizations.of(context).supplyReorderNow,
-                        reorderCount.toString(),
-                        scheme.error,
-                      ),
-                      _summaryStat(
-                        AppLocalizations.of(context).supplyWatch,
-                        watchCount.toString(),
-                        Colors.orange.shade800,
-                      ),
-                    ],
+                  if (widget.bottleneckBanner != null) ...[
+                    widget.bottleneckBanner!,
+                    const SizedBox(height: AppSpacing.l),
+                  ],
+                  if (noCapacityData) ...[
+                    const InfoBanner(
+                      status: AppStatus.warning,
+                      message:
+                          'No capacity set up yet — add machines or shifts '
+                          'on the Capacity tab, otherwise stock-out '
+                          'predictions can\'t be calculated and every '
+                          'material will read as safe.',
+                    ),
+                    const SizedBox(height: AppSpacing.l),
+                  ],
+                  _buildHealthCard(
+                    overview,
+                    criticalCount,
+                    attentionCount,
+                    healthyCount,
                   ),
-                  const Divider(height: 24),
-                  Text(
-                    'Planned production: '
-                    '${formatUnits(overview.plannedProductionPerDay)}/day',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    overview.productionFromForecast
-                        ? 'from demand forecast'
-                        : 'assuming full capacity — set a demand forecast to refine this',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  if (attentionItems.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.l),
+                    _buildAttentionSection(attentionItems),
+                  ],
+                  if (aiInsight != null) ...[
+                    const SizedBox(height: AppSpacing.l),
+                    aiInsight,
+                  ],
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          // AI narration of the already-computed Mini-MRP figures. Only
-          // mounted when there are materials to talk about, so an empty
-          // factory spends no AI call. Gemini never runs the MRP maths —
-          // MrpService did; see _buildSupplyPrompt.
-          if (plans.isNotEmpty) ...[
-            AiInsightCard(
-              buildPrompt: () => _buildSupplyPrompt(overview),
-              system: _supplySystem,
+            const SizedBox(width: AppSpacing.l),
+            // Right: materials list + purchase orders / suppliers.
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildMaterialsSection(plans),
+                  const SizedBox(height: AppSpacing.l),
+                  _buildPurchaseOrdersSection(poCounts),
+                  const SizedBox(height: AppSpacing.s),
+                  _buildSuppliersRow(),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
           ],
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.local_shipping_outlined),
-              title: const Text('Suppliers'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _navigateAndRefresh(
-                SupplierListScreen(factoryId: widget.factoryId),
-              ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHealthCard(
+    SupplyOverview overview,
+    int criticalCount,
+    int attentionCount,
+    int healthyCount,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Supply health', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.m),
+            Row(
+              children: [
+                Expanded(
+                  child: _summaryStat(
+                    'Critical',
+                    criticalCount.toString(),
+                    AppStatus.danger.color,
+                  ),
+                ),
+                Expanded(
+                  child: _summaryStat(
+                    'Needs attention',
+                    attentionCount.toString(),
+                    AppStatus.warning.color,
+                  ),
+                ),
+                Expanded(
+                  child: _summaryStat(
+                    'Healthy',
+                    healthyCount.toString(),
+                    AppStatus.success.color,
+                  ),
+                ),
+              ],
             ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: const Text('Purchase orders'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _navigateAndRefresh(
-                OrderListScreen(factoryId: widget.factoryId),
-              ),
+            const Divider(height: 24),
+            Text(
+              'Planned production: '
+              '${formatUnits(overview.plannedProductionPerDay)}/day',
+              style: TextStyle(fontWeight: FontWeight.w600, color: scheme.onSurface),
             ),
+            Text(
+              overview.productionFromForecast
+                  ? 'from demand forecast'
+                  : 'assuming full capacity — set a demand forecast to refine this',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttentionSection(List<MaterialPlan> attentionItems) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Attention required',
+          trailing: TextButton(
+            onPressed: () => setState(() => _needsActionOnly = true),
+            child: const Text('View all risks'),
           ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        ),
+        for (final plan in attentionItems) _buildAttentionCard(plan),
+      ],
+    );
+  }
+
+  Widget _buildAttentionCard(MaterialPlan plan) {
+    final riskStatus = supplyRiskStatus(plan.risk);
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.s),
+      color: riskStatus.background,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: () => _openDetail(plan),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.m),
+          child: Row(
             children: [
-              Text(
-                AppLocalizations.of(context).supplyRawMaterials,
-                style: Theme.of(context).textTheme.titleMedium,
+              Icon(riskStatus.icon, color: riskStatus.color),
+              const SizedBox(width: AppSpacing.m),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      plan.material.materialName,
+                      style: TextStyle(fontWeight: FontWeight.w700, color: riskStatus.color),
+                    ),
+                    Text(
+                      plan.daysOfCover != null
+                          ? '${formatDays(plan.daysOfCover!)} of cover'
+                          : supplyRiskLabel(plan.risk),
+                      style: TextStyle(color: riskStatus.color),
+                    ),
+                  ],
+                ),
               ),
-              FilterChip(
-                label: const Text('Needs action'),
-                selected: _needsActionOnly,
-                onSelected: (v) => setState(() => _needsActionOnly = v),
-              ),
+              Icon(Icons.chevron_right, color: riskStatus.color),
             ],
           ),
-          const SizedBox(height: 8),
-          if (plans.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: EmptyState(
-                icon: Icons.inventory_outlined,
-                title: 'No materials yet',
-                subtitle:
-                    'Add your first material to start tracking supply risk.',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialsSection(List<MaterialPlan> plans) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              AppLocalizations.of(context).supplyRawMaterials,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            FilterChip(
+              label: const Text('Needs action'),
+              selected: _needsActionOnly,
+              onSelected: (v) => setState(() => _needsActionOnly = v),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s),
+        if (plans.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.s),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                labelText: 'Search materials',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
               ),
-            )
-          else if (_sortedPlans.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: EmptyState(
-                icon: Icons.check_circle_outline,
-                title: 'Nothing needs action right now',
-              ),
-            )
-          else
-            for (final plan in _sortedPlans) _buildMaterialCard(plan, scheme),
-        ],
+              onChanged: (value) => setState(() => _query = value),
+            ),
+          ),
+        if (plans.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: EmptyState(
+              icon: Icons.inventory_outlined,
+              title: 'No materials yet',
+              subtitle:
+                  'Add your first material to start tracking supply risk.',
+            ),
+          )
+        else if (_sortedPlans.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: _query.isNotEmpty
+                ? const EmptyState(
+                    icon: Icons.search_off,
+                    title: 'No materials match that search',
+                  )
+                : const EmptyState(
+                    icon: Icons.check_circle_outline,
+                    title: 'Nothing needs action right now',
+                  ),
+          )
+        else
+          for (final plan in _sortedPlans) _buildMaterialCard(plan),
+      ],
+    );
+  }
+
+  Widget _buildPurchaseOrdersSection(Map<String, int> poCounts) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Purchase orders'),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.l),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (poCounts.isEmpty)
+                  Text(
+                    'No purchase orders yet.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  )
+                else
+                  Wrap(
+                    spacing: AppSpacing.l,
+                    runSpacing: AppSpacing.s,
+                    children: [
+                      for (final status in PurchaseOrderStatus.all)
+                        if (poCounts[status] != null)
+                          _summaryStat(
+                            status,
+                            poCounts[status].toString(),
+                            Theme.of(context).colorScheme.onSurface,
+                          ),
+                    ],
+                  ),
+                const SizedBox(height: AppSpacing.s),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => _navigateAndRefresh(
+                      OrderListScreen(factoryId: widget.factoryId),
+                    ),
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: const Text('View purchase orders'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuppliersRow() {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.local_shipping_outlined),
+        title: const Text('Suppliers'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => _navigateAndRefresh(
+          SupplierListScreen(factoryId: widget.factoryId),
+        ),
       ),
     );
   }
@@ -432,33 +676,14 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       );
     }
 
-    // Attention-needing materials, most urgent first (same ordering the
-    // list on screen uses).
-    int priority(SupplyRisk r) => switch (r) {
-      SupplyRisk.stockedOut => 0,
-      SupplyRisk.reorderNow => 1,
-      SupplyRisk.watch => 2,
-      SupplyRisk.healthy => 3,
-      SupplyRisk.noSupplier => 4,
-    };
-    final attention = plans.where((p) => p.needsAttention).toList()
-      ..sort((a, b) {
-        final c = priority(a.risk).compareTo(priority(b.risk));
-        if (c != 0) return c;
-        final ad = a.orderByDate;
-        final bd = b.orderByDate;
-        if (ad == null && bd == null) return 0;
-        if (ad == null) return 1;
-        if (bd == null) return -1;
-        return ad.compareTo(bd);
-      });
+    final attention = _riskSortedPlans.where((p) => p.needsAttention).toList();
 
     if (attention.isEmpty) {
       buffer.writeln('No materials currently need action.');
     }
     for (final p in attention) {
       final line = StringBuffer(
-        '- ${p.material.materialName} [${_riskLabel(p.risk)}]: '
+        '- ${p.material.materialName} [${supplyRiskLabel(p.risk)}]: '
         'on hand ${formatNumber(p.onHand)}, burn ${formatNumber(p.burnRatePerDay)}/day',
       );
       if (p.daysOfCover != null) {
@@ -495,232 +720,56 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
             color: color,
           ),
         ),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(label, style: Theme.of(context).textTheme.bodySmall, textAlign: TextAlign.center),
       ],
     );
   }
 
-  Color _riskColor(SupplyRisk risk, ColorScheme scheme) {
-    switch (risk) {
-      case SupplyRisk.stockedOut:
-      case SupplyRisk.reorderNow:
-        return scheme.error;
-      case SupplyRisk.watch:
-        return Colors.orange.shade800;
-      case SupplyRisk.noSupplier:
-        return scheme.outline;
-      case SupplyRisk.healthy:
-        return scheme.primary;
-    }
-  }
-
-  String _riskLabel(SupplyRisk risk) {
-    switch (risk) {
-      case SupplyRisk.stockedOut:
-        return 'Stocked out';
-      case SupplyRisk.reorderNow:
-        return 'Reorder now';
-      case SupplyRisk.watch:
-        return 'Watch';
-      case SupplyRisk.noSupplier:
-        return 'No supplier';
-      case SupplyRisk.healthy:
-        return 'Healthy';
-    }
-  }
-
-  Widget _buildMaterialCard(MaterialPlan plan, ColorScheme scheme) {
+  // Compact, scannable row: name / stock / days of cover / status. Deeper
+  // detail (overdue batches, reorder-level breach, recommended supplier,
+  // suggested quantity, edit/delete) lives on MaterialDetailScreen now
+  // instead of being crammed into this list row.
+  Widget _buildMaterialCard(MaterialPlan plan) {
     final material = plan.material;
-    final riskColor = _riskColor(plan.risk, scheme);
+    final riskStatus = supplyRiskStatus(plan.risk);
+    final theme = Theme.of(context);
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: AppSpacing.s),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => _showProjection(plan),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: () => _openDetail(plan),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      material.materialName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: riskColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _riskLabel(plan.risk),
-                      style: TextStyle(
-                        color: riskColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => _openForm(material: material),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _delete(material),
-                  ),
-                ],
-              ),
-              Text(
-                '${formatNumber(material.currentStock)} ${material.unit} in stock'
-                '${plan.inboundTotal > 0 ? ' · ${formatNumber(plan.inboundTotal)} ${material.unit} inbound' : ''}',
-              ),
-              if (plan.overdueOrderCount > 0)
-                Text(
-                  '${plan.overdueOrderCount} '
-                  '${plan.overdueOrderCount == 1 ? 'batch' : 'batches'} overdue '
-                  '(${formatNumber(plan.overdueInboundTotal)} ${material.unit}) '
-                  '— cover below assumes it still arrives',
-                  style: TextStyle(color: scheme.error),
-                ),
-              if (plan.belowReorderLevel)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    'Below reorder level (${formatNumber(material.reorderLevel)} ${material.unit})',
-                    style: TextStyle(
-                      color: scheme.error,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 8),
-              if (plan.daysOfCover != null) ...[
-                Text(
-                  '${formatDays(plan.daysOfCover!)} of cover at planned production',
-                ),
-                if (plan.stockOutDate != null)
-                  Text(
-                    'Predicted stock-out: ${formatDate(plan.stockOutDate!)}',
-                  ),
-              ] else
-                Text(
-                  '${MrpService.defaultHorizonDays}+ days of cover — no stock-out projected',
-                ),
-              if (plan.orderByDate != null && plan.bestSupplier != null)
-                Text(
-                  'Order by ${formatDate(plan.orderByDate!)} — '
-                  '${plan.bestSupplier!.supplierName}, '
-                  '${plan.effectiveLeadDays} day effective lead',
-                  style: TextStyle(
-                    color: riskColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                )
-              else if (plan.bestSupplier == null)
-                Text(
-                  'No supplier assigned',
-                  style: TextStyle(color: scheme.outline),
-                ),
-              if ((plan.risk == SupplyRisk.reorderNow ||
-                      plan.risk == SupplyRisk.stockedOut ||
-                      plan.risk == SupplyRisk.watch) &&
-                  plan.bestSupplier != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: FilledButton.tonal(
-                    onPressed: () => _openReorderForm(plan),
-                    child: Text(
-                      'Reorder ${plan.suggestedQty != null ? formatNumber(plan.suggestedQty!) : ''} ${material.unit}',
-                    ),
-                  ),
-                ),
-            ],
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.l,
+            vertical: AppSpacing.m,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProjectionSheet extends StatelessWidget {
-  final MaterialPlan plan;
-
-  const _ProjectionSheet({required this.plan});
-
-  @override
-  Widget build(BuildContext context) {
-    final days = plan.dailyBalances.length > 30
-        ? plan.dailyBalances.sublist(0, 30)
-        : plan.dailyBalances;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${plan.material.materialName} — 30-day projection',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: LineChart(
-                LineChartData(
-                  titlesData: const FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      material.materialName,
+                      style: theme.textTheme.titleSmall,
                     ),
-                    topTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                  ),
-                  gridData: const FlGridData(show: false),
-                  borderData: FlBorderData(show: false),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: [
-                        for (var i = 0; i < days.length; i++)
-                          FlSpot(i.toDouble(), days[i]),
-                      ],
-                      isCurved: true,
-                      dotData: const FlDotData(show: false),
-                      color: AppColors.primary,
-                      barWidth: 3,
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: AppColors.primary.withValues(alpha: 0.15),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${formatNumber(material.currentStock)} ${material.unit}'
+                      '${plan.daysOfCover != null ? '  ·  ${formatDays(plan.daysOfCover!)} of cover' : ''}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              plan.stockOutDate != null
-                  ? 'Balance is projected to cross zero on '
-                        '${formatDate(plan.stockOutDate!)}.'
-                  : 'Balance stays positive for the shown window.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+              const SizedBox(width: AppSpacing.s),
+              StatusChip(label: supplyRiskLabel(plan.risk), status: riskStatus, dense: true),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, color: theme.colorScheme.outline),
+            ],
+          ),
         ),
       ),
     );

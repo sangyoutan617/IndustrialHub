@@ -11,6 +11,9 @@ import '../../services/supply_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/confirm_dialog.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
+import '../../widgets/loading_indicator.dart';
 import '../capacity/capacity_dashboard_screen.dart';
 import '../stock/stock_dashboard_screen.dart';
 import '../supply/material_list_screen.dart';
@@ -40,6 +43,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSeeding = false;
   int _bottleneckRefreshTick = 0;
 
+  // Tabs are built lazily (on first visit) and then kept alive via
+  // IndexedStack, so switching tabs never re-fetches a module's data, but a
+  // module you've never opened never loads at startup either.
+  final Set<int> _visitedTabs = {0};
+
   static const _tabIcons = [
     Icons.home_rounded,
     Icons.precision_manufacturing,
@@ -57,6 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _loadState = _LoadState.loading);
     try {
       final factories = await _factoryService.getFactories();
+      // The auth gate can dispose this screen (e.g. a "remember me" sign-out
+      // completing) while getFactories() is still in flight.
+      if (!mounted) return;
       setState(() {
         _factories = factories;
         _selectedFactory = factories.isNotEmpty ? factories.first : null;
@@ -64,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       if (_selectedFactory != null) _checkAlerts(_selectedFactory!);
     } catch (_) {
+      if (!mounted) return;
       setState(() => _loadState = _LoadState.error);
     }
   }
@@ -83,30 +95,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _createFactory() async {
     final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New factory'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Factory name'),
+    String? name;
+    try {
+      name = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: const Icon(Icons.add_business_outlined),
+          title: const Text('New factory'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Factory name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Create'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      controller.dispose();
+    }
     if (name == null || name.isEmpty) return;
     try {
       final factory = await _factoryService.createFactory(name);
+      if (!mounted) return;
       setState(() {
         _factories = [..._factories, factory];
         _selectedFactory = factory;
@@ -192,33 +211,40 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _renameFactory(Factory factory) async {
     final controller = TextEditingController(text: factory.factoryName);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename factory'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Factory name'),
+    String? name;
+    try {
+      name = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          icon: const Icon(Icons.edit_outlined),
+          title: const Text('Rename factory'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Factory name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      controller.dispose();
+    }
     if (name == null || name.isEmpty || name == factory.factoryName) return;
     try {
       final updated = await _factoryService.renameFactory(
         factory.factoryId,
         name,
       );
+      if (!mounted) return;
       setState(() {
         _factories = [
           for (final f in _factories)
@@ -284,14 +310,38 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Factories',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ),
             for (final factory in _factories)
               ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: factory.factoryId ==
+                          _selectedFactory?.factoryId
+                      ? Theme.of(context).colorScheme.primaryContainer
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foregroundColor: factory.factoryId ==
+                          _selectedFactory?.factoryId
+                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                  child: const Icon(Icons.factory_outlined, size: 18),
+                ),
                 title: Text(factory.factoryName),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (factory.factoryId == _selectedFactory?.factoryId)
-                      const Icon(Icons.check),
+                      Icon(
+                        Icons.check_circle,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     PopupMenuButton<String>(
                       onSelected: (value) {
                         Navigator.pop(context);
@@ -313,6 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.pop(context);
                 },
               ),
+            const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.add),
               title: const Text('New factory'),
@@ -329,6 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _loadDemoData();
               },
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -380,6 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _tabIndex,
         onDestinationSelected: (index) => setState(() {
           _tabIndex = index;
+          _visitedTabs.add(index);
           _bottleneckRefreshTick++;
         }),
         destinations: [
@@ -395,86 +448,87 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBody() {
     if (_loadState == _LoadState.loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingIndicator();
     }
     if (_loadState == _LoadState.error) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Could not load factory data.'),
-            const SizedBox(height: 8),
-            FilledButton(onPressed: _loadFactories, child: const Text('Retry')),
-          ],
-        ),
+      return ErrorState(
+        message: 'Could not load factory data.',
+        onRetry: _loadFactories,
       );
     }
     if (_selectedFactory == null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('No factory set up yet.'),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: _isSeeding ? null : _createFactory,
-              child: const Text('Create factory'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _isSeeding ? null : _loadDemoData,
-              child: _isSeeding
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Load demo data'),
-            ),
-          ],
-        ),
+      return EmptyState(
+        icon: Icons.factory_outlined,
+        title: 'No factory set up yet',
+        subtitle: 'Create a factory to start tracking capacity, stock and supply.',
+        actionLabel: 'Create factory',
+        onAction: _isSeeding ? null : _createFactory,
+        secondaryActionLabel: 'Load demo data',
+        onSecondaryAction: _isSeeding ? null : _loadDemoData,
+        secondaryActionLoading: _isSeeding,
       );
     }
 
-    return Column(
-      children: [
-        // The Home tab has its own, richer bottleneck engine card built
-        // in — showing this banner above it too would just duplicate the
-        // same verdict, so it's skipped only for that tab.
-        if (_tabIndex != 0)
-          BottleneckBanner(
-            key: ValueKey(
-              '${_selectedFactory!.factoryId}-$_bottleneckRefreshTick',
-            ),
-            factoryId: _selectedFactory!.factoryId,
-          ),
-        Expanded(child: _buildTabContent()),
-      ],
+    // The banner is handed to each tab to render as the first item in its
+    // own scrollable list (see _buildTabContent) rather than pinned here as
+    // a fixed sibling — it should scroll away with the rest of the content,
+    // not permanently occupy screen space above it.
+    return _buildTabContent();
+  }
+
+  // IndexedStack keeps every visited tab's widget (and its State — loaded
+  // data, scroll position, in-progress filters) alive underneath the visible
+  // one, so switching tabs is instant and never re-fetches. A tab that
+  // hasn't been opened yet renders nothing instead of eagerly loading its
+  // data at startup. Keys include the factory id so switching factories
+  // still forces each tab to load fresh, correctly-scoped data.
+  // Re-keyed by _bottleneckRefreshTick so the (cheap, single-RPC) banner
+  // still refreshes on every tab visit, even though the surrounding tab's
+  // own (heavier) data stays cached across switches via IndexedStack above.
+  // padding: zero because it's embedded as the first item of a list that
+  // already applies its own padding — see CapacityDashboardScreen /
+  // StockDashboardScreen / MaterialListScreen's bottleneckBanner param.
+  Widget _bottleneckBanner(int factoryId) {
+    return BottleneckBanner(
+      key: ValueKey('banner-$factoryId-$_bottleneckRefreshTick'),
+      factoryId: factoryId,
+      padding: EdgeInsets.zero,
     );
   }
 
   Widget _buildTabContent() {
-    if (_tabIndex == 0) {
-      return DashboardHomeScreen(
-        key: ValueKey(_selectedFactory!.factoryId),
-        factory: _selectedFactory!,
-      );
-    }
-    if (_tabIndex == 1) {
-      return CapacityDashboardScreen(
-        key: ValueKey(_selectedFactory!.factoryId),
-        factory: _selectedFactory!,
-      );
-    }
-    if (_tabIndex == 2) {
-      return StockDashboardScreen(
-        key: ValueKey(_selectedFactory!.factoryId),
-        factoryId: _selectedFactory!.factoryId,
-      );
-    }
-    return MaterialListScreen(
-      key: ValueKey(_selectedFactory!.factoryId),
-      factoryId: _selectedFactory!.factoryId,
+    final factory = _selectedFactory!;
+    return IndexedStack(
+      index: _tabIndex,
+      children: [
+        _visitedTabs.contains(0)
+            ? DashboardHomeScreen(
+                key: ValueKey('home-${factory.factoryId}'),
+                factory: factory,
+              )
+            : const SizedBox.shrink(),
+        _visitedTabs.contains(1)
+            ? CapacityDashboardScreen(
+                key: ValueKey('capacity-${factory.factoryId}'),
+                factory: factory,
+                bottleneckBanner: _bottleneckBanner(factory.factoryId),
+              )
+            : const SizedBox.shrink(),
+        _visitedTabs.contains(2)
+            ? StockDashboardScreen(
+                key: ValueKey('stock-${factory.factoryId}'),
+                factoryId: factory.factoryId,
+                bottleneckBanner: _bottleneckBanner(factory.factoryId),
+              )
+            : const SizedBox.shrink(),
+        _visitedTabs.contains(3)
+            ? MaterialListScreen(
+                key: ValueKey('supply-${factory.factoryId}'),
+                factoryId: factory.factoryId,
+                bottleneckBanner: _bottleneckBanner(factory.factoryId),
+              )
+            : const SizedBox.shrink(),
+      ],
     );
   }
 }

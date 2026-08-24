@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/raw_material.dart';
 import '../../services/material_service.dart';
+import '../../widgets/kpi_card.dart';
 
 class MaterialFormScreen extends StatefulWidget {
   final int factoryId;
@@ -103,6 +104,10 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              const SectionHeader(
+                title: 'Material details',
+                padding: EdgeInsets.only(bottom: 4),
+              ),
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Material name'),
@@ -126,7 +131,10 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                   helperText: 'e.g. kg, litres, rolls',
                 ),
               ),
-              const SizedBox(height: 16),
+              const SectionHeader(
+                title: 'Consumption & reorder settings',
+                padding: EdgeInsets.only(top: 20, bottom: 4),
+              ),
               TextFormField(
                 controller: _consumptionController,
                 keyboardType: const TextInputType.numberWithOptions(
