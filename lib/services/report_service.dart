@@ -5,14 +5,16 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../core/formatters.dart';
 import '../models/factory.dart';
+import '../screens/stock/stock_cover_loader.dart';
 import 'bottleneck_service.dart';
 import 'mrp_service.dart';
 import 'supply_service.dart';
 
 /// Builds a one-page PDF summary of a factory — the bottleneck verdict,
-/// capacity breakdown, and supply risk — from figures the deterministic
-/// engines already computed. Nothing here recalculates: it reads
-/// [BottleneckService] and [SupplyService] and lays their numbers out.
+/// capacity breakdown, finished-goods stock, and supply risk — from figures
+/// the deterministic engines already computed. Nothing here recalculates: it
+/// reads [BottleneckService], [loadStockOverview] and [SupplyService] and
+/// lays their numbers out.
 class ReportService {
   final BottleneckService _bottleneckService = BottleneckService();
   final SupplyService _supplyService = SupplyService();
@@ -26,6 +28,7 @@ class ReportService {
     final bottleneck = await _bottleneckService.computeForFactory(
       factory.factoryId,
     );
+    final stock = await loadStockOverview(factory.factoryId);
     final supply = await _supplyService.load(factory.factoryId);
 
     final doc = pw.Document();
@@ -41,6 +44,8 @@ class ReportService {
             _factoryHealth(bottleneck),
             pw.SizedBox(height: 18),
             _capacityBreakdown(bottleneck),
+            pw.SizedBox(height: 18),
+            _stockOverview(stock),
             pw.SizedBox(height: 18),
             _supplyRisk(supply),
             pw.Spacer(),
@@ -66,7 +71,7 @@ class ReportService {
         ),
         pw.SizedBox(height: 2),
         pw.Text(
-          'Capacity & supply report · generated ${formatDate(DateTime.now())}',
+          'Capacity, stock & supply report · generated ${formatDate(DateTime.now())}',
           style: const pw.TextStyle(fontSize: 11, color: _grey),
         ),
         pw.Divider(color: _green, thickness: 1.5),
@@ -106,6 +111,29 @@ class ReportService {
             ? '${formatUnits(r.materialCeiling!)}/day'
             : 'not set',
       ),
+    ]);
+  }
+
+  pw.Widget _stockOverview(StockOverview stock) {
+    final withCover = stock.covers.where((c) => c.daysOfCover != null).toList()
+      ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!));
+    final lowStock = withCover
+        .where((c) => c.daysOfCover! < lowCoverDaysThreshold)
+        .length;
+    final overstocked = withCover
+        .where((c) => c.daysOfCover! > overstockDaysThreshold)
+        .length;
+
+    return _section('Finished-goods stock', [
+      _row('Products tracked', stock.covers.length.toString()),
+      _row('Low stock (reorder soon)', lowStock.toString()),
+      _row('Overstocked', overstocked.toString()),
+      if (withCover.isNotEmpty)
+        _row(
+          'Closest to stock-out',
+          '${withCover.first.stock.productName}'
+              '${withCover.first.stockOutDate != null ? ' — predicted ${formatDate(withCover.first.stockOutDate!)}' : ''}',
+        ),
     ]);
   }
 

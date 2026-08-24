@@ -48,6 +48,19 @@ class StockService {
         .toList();
   }
 
+  // One query for every movement across every product — powers the
+  // StockTrendScreen heatmap.
+  Future<List<StockMovement>> getMovementsForFactory(int factoryId) async {
+    final rows = await _client
+        .from('stock_movements')
+        .select('*, finished_stock!inner(factory_id)')
+        .eq('finished_stock.factory_id', factoryId)
+        .order('movement_date', ascending: false);
+    return (rows as List)
+        .map((row) => StockMovement.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<void> recordMovement({
     required int stockId,
     required String movementType,
@@ -65,8 +78,10 @@ class StockService {
 
     final delta = switch (movementType) {
       StockMovementType.productionIn => quantity.abs(),
+      StockMovementType.returned => quantity.abs(),
       StockMovementType.shipmentOut => -quantity.abs(),
-      _ => quantity,
+      StockMovementType.damaged => -quantity.abs(),
+      _ => quantity, // adjustment: signed as entered
     };
     final newQuantity = currentQuantity + delta;
     if (newQuantity < 0) {

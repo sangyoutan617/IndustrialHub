@@ -31,6 +31,8 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
   static const _typeLabels = {
     StockMovementType.productionIn: 'Production in',
     StockMovementType.shipmentOut: 'Shipment out',
+    StockMovementType.damaged: 'Damaged',
+    StockMovementType.returned: 'Returned',
     StockMovementType.adjustment: 'Adjustment',
   };
 
@@ -47,6 +49,10 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
         return 'Adds this many units to stock';
       case StockMovementType.shipmentOut:
         return 'Removes this many units from stock';
+      case StockMovementType.damaged:
+        return 'Removes this many units from stock (damaged or scrapped)';
+      case StockMovementType.returned:
+        return 'Adds this many units back to stock (customer or site return)';
       default:
         return 'Positive to add, negative to subtract (e.g. a stock count correction)';
     }
