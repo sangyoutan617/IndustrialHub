@@ -144,6 +144,36 @@ class MrpService {
 
   const MrpService._();
 
+  /// Raw material a production run consumes: `unitsProduced ×
+  /// consumption_per_unit` per material. Pure — no DB. In the single-product
+  /// capacity model every material is consumed in proportion to uniform
+  /// output, so this is the bill of materials for one run. Materials with a
+  /// zero rate are omitted. Feeds the auto-decrement when production is logged
+  /// (see [DailyProductionService]) and sizes a manual usage entry.
+  static Map<int, double> computeProductionConsumption(
+    Iterable<RawMaterial> materials,
+    int unitsProduced,
+  ) {
+    final result = <int, double>{};
+    for (final m in materials) {
+      final used = m.consumptionPerUnit * unitsProduced;
+      if (used > 0) result[m.materialId] = used;
+    }
+    return result;
+  }
+
+  /// Materials whose current stock can't cover producing [unitsProduced]
+  /// units — a real "you couldn't have made this many" signal surfaced as a
+  /// warning when logging production. Pure — no DB.
+  static List<RawMaterial> insufficientMaterials(
+    Iterable<RawMaterial> materials,
+    int unitsProduced,
+  ) {
+    return materials
+        .where((m) => m.consumptionPerUnit * unitsProduced > m.currentStock)
+        .toList();
+  }
+
   /// A 5★ supplier is trusted to hit its quoted lead time. Padding scales
   /// linearly up to +50% for a 0★ supplier, so an unreliable supplier's
   /// deliveries are planned for later than they're quoted.
