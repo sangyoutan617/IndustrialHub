@@ -6,6 +6,7 @@ import '../../services/manpower_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
+import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import 'manpower_form_screen.dart';
 
@@ -132,21 +133,13 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
           child: ListView(
             padding: const EdgeInsets.all(8),
             children: [
-              Card(
-                color: Theme.of(context).colorScheme.secondaryContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.groups),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Total labour capacity: ${formatUnits(totalCapacity)}/day',
-                      ),
-                    ],
-                  ),
-                ),
+              KpiCard(
+                icon: Icons.groups,
+                label: 'Total labour capacity',
+                value: formatUnits(totalCapacity),
+                unit: '/day',
               ),
+              const SizedBox(height: 8),
               for (final shift in _shifts)
                 Card(
                   child: ListTile(

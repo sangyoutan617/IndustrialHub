@@ -1,11 +1,11 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
 import '../../models/daily_production.dart';
 import '../../models/factory.dart';
 import '../../services/daily_production_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
 
 enum _Granularity { day, rollingWeek, month }
 
@@ -60,11 +60,13 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         widget.factory.factoryId,
         days: _fetchDays,
       );
+      if (!mounted) return;
       setState(() {
         _raw = rows;
         _state = _LoadState.ready;
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() => _state = _LoadState.error);
     }
   }
@@ -80,6 +82,19 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     final downtimeController = TextEditingController(text: '0');
     var logDate = DateTime.now();
 
+    try {
+      await _runLogDialog(outputController, downtimeController, logDate);
+    } finally {
+      outputController.dispose();
+      downtimeController.dispose();
+    }
+  }
+
+  Future<void> _runLogDialog(
+    TextEditingController outputController,
+    TextEditingController downtimeController,
+    DateTime logDate,
+  ) async {
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -352,21 +367,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           ),
           const SizedBox(height: 16),
           if (_summaryLine != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                _summaryLine!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+            InfoBanner(message: _summaryLine!, status: AppStatus.warning),
           const SizedBox(height: 16),
           if (points.isEmpty)
             const Padding(
@@ -429,24 +430,14 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
             ),
             const SizedBox(height: 12),
             if (worst.downtimeHours > 0)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  'Worst day: ${worst.logDate.year}-'
-                  '${worst.logDate.month.toString().padLeft(2, '0')}-'
-                  '${worst.logDate.day.toString().padLeft(2, '0')} — '
-                  '${worst.downtimeHours.toStringAsFixed(1)}h '
-                  '(${totalDowntime.toStringAsFixed(1)}h total)',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              InfoBanner(
+                message:
+                    'Worst day: ${worst.logDate.year}-'
+                    '${worst.logDate.month.toString().padLeft(2, '0')}-'
+                    '${worst.logDate.day.toString().padLeft(2, '0')} — '
+                    '${worst.downtimeHours.toStringAsFixed(1)}h '
+                    '(${totalDowntime.toStringAsFixed(1)}h total)',
+                status: AppStatus.warning,
               )
             else
               const Text('No downtime logged in this window.'),
@@ -470,7 +461,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                           decoration: BoxDecoration(
                             color: row == worst && worst.downtimeHours > 0
                                 ? Theme.of(context).colorScheme.onSurface
-                                : AppColors.primaryAccent,
+                                : Theme.of(context).colorScheme.primary,
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -494,7 +485,10 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           children: [
             Row(
               children: [
-                _legendDot('Actual output', AppColors.primary),
+                _legendDot(
+                  'Actual output',
+                  Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 16),
                 _legendDot('Ceiling', Theme.of(context).colorScheme.onSurface),
               ],
@@ -551,7 +545,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                             FlSpot(i.toDouble(), points[i].actual!),
                       ],
                       isCurved: true,
-                      color: AppColors.primary,
+                      color: Theme.of(context).colorScheme.primary,
                       barWidth: 3,
                       dotData: const FlDotData(show: false),
                     ),

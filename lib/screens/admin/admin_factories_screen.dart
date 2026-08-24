@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../services/factory_service.dart';
 import '../../widgets/empty_state.dart';
@@ -91,9 +90,9 @@ class _AdminFactoriesScreenState extends State<AdminFactoriesScreen> {
           ].join(', ');
           return Card(
             child: ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.factory_outlined,
-                color: AppColors.primary,
+                color: Theme.of(context).colorScheme.primary,
               ),
               title: Text(factory.factoryName),
               subtitle: Text(

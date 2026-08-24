@@ -21,10 +21,16 @@ class NotificationService {
     if (kIsWeb || _initialised) return;
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const darwin = DarwinInitializationSettings();
+    const windows = WindowsInitializationSettings(
+      appName: 'IndustrialHub',
+      appUserModelId: 'com.industrialhub.app',
+      guid: 'b6e7e6b0-6b6b-4f2e-9b0e-6e6f6b6b6b6b',
+    );
     const settings = InitializationSettings(
       android: android,
       iOS: darwin,
       macOS: darwin,
+      windows: windows,
     );
     await _plugin.initialize(settings: settings);
     _initialised = true;

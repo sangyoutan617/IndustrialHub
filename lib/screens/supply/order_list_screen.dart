@@ -4,11 +4,12 @@ import '../../models/purchase_order.dart';
 import '../../services/material_service.dart';
 import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
-import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
 import 'order_form_screen.dart';
+import 'purchase_order_detail_screen.dart';
 
 class OrderListScreen extends StatefulWidget {
   final int factoryId;
@@ -96,104 +97,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
     }
   }
 
-  String _statusMessage(String newStatus) {
-    switch (newStatus) {
-      case PurchaseOrderStatus.processing:
-        return 'Order marked as processing';
-      case PurchaseOrderStatus.shipped:
-        return 'Order marked as shipped';
-      case PurchaseOrderStatus.cancelled:
-        return 'Order cancelled';
-      default:
-        return 'Order updated';
-    }
-  }
-
-  Future<void> _advanceStatus(PurchaseOrder order, String newStatus) async {
-    try {
-      await _orderService.updateStatus(order.poId, newStatus);
-      if (!mounted) return;
-      _load();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_statusMessage(newStatus))));
-    } catch (e) {
-      debugPrint('supply: failed to update order status: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not update order. Please try again.'),
+  Future<void> _openDetail(PurchaseOrder order) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PurchaseOrderDetailScreen(
+          factoryId: widget.factoryId,
+          order: order,
+          materialName: _materialNames[order.materialId] ?? 'Unknown material',
+          supplierName: _supplierNames[order.supplierId] ?? 'Unknown supplier',
         ),
-      );
-    }
-  }
-
-  Future<void> _receiveDelivery(PurchaseOrder order) async {
-    final materialName = _materialNames[order.materialId] ?? 'this material';
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Receive delivery?',
-      message:
-          'This adds ${formatUnits(order.quantity)} to $materialName\'s stock and marks the order Delivered.',
-      confirmLabel: 'Receive',
+      ),
     );
-    if (!confirmed) return;
-    try {
-      await _orderService.receiveDelivery(order);
-      if (!mounted) return;
-      _load();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Delivery received')));
-    } catch (e) {
-      debugPrint('supply: failed to receive delivery: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not receive delivery. Please try again.'),
-        ),
-      );
-    }
-  }
-
-  Future<void> _cancel(PurchaseOrder order) async {
-    final materialName = _materialNames[order.materialId] ?? 'this material';
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Cancel order?',
-      message:
-          'This marks the $materialName order Cancelled. Stock is not affected.',
-      confirmLabel: 'Cancel order',
-    );
-    if (!confirmed) return;
-    await _advanceStatus(order, PurchaseOrderStatus.cancelled);
-  }
-
-  Future<void> _deletePermanently(PurchaseOrder order) async {
-    final materialName = _materialNames[order.materialId] ?? 'this material';
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Delete order permanently?',
-      message:
-          'This removes the cancelled $materialName order from history for good.',
-    );
-    if (!confirmed) return;
-    try {
-      await _orderService.deleteOrder(order.poId);
-      if (!mounted) return;
-      _load();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Order deleted')));
-    } catch (e) {
-      debugPrint('supply: failed to delete order: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not delete order. Please try again.'),
-        ),
-      );
-    }
+    if (!mounted || changed != true) return;
+    _load();
   }
 
   @override
@@ -291,115 +207,80 @@ class _OrderListScreenState extends State<OrderListScreen> {
     return ' · overdue by ${-days} day${-days == 1 ? '' : 's'}';
   }
 
+  // Compact, scannable row: PO number / material / supplier+quantity / date
+  // / status. Status-transition actions (start processing, mark shipped,
+  // receive delivery, cancel, delete) moved to PurchaseOrderDetailScreen —
+  // tap through to view and act on one order instead of packing every
+  // possible action into this row.
   Widget _buildOrderCard(PurchaseOrder order) {
     final materialName = _materialNames[order.materialId] ?? 'Unknown material';
     final supplierName = _supplierNames[order.supplierId] ?? 'Unknown supplier';
     final isOpen = _openStatuses.contains(order.status);
+    final theme = Theme.of(context);
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    materialName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _openDetail(order),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      formatPoNumber(order.poId),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      materialName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text('$supplierName · ${formatUnits(order.quantity)}'),
+                    Text(
+                      'Ordered ${formatDate(order.orderDate)}'
+                      '${order.expectedDelivery != null ? ' · expected ${formatDate(order.expectedDelivery!)}' : ''}'
+                      '${isOpen ? _relativeDeliveryText(order) : ''}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
                 ),
-                _statusChip(order.status),
-              ],
-            ),
-            Text('$supplierName · ${formatUnits(order.quantity)}'),
-            Text(
-              'Ordered ${formatDate(order.orderDate)}'
-              '${order.expectedDelivery != null ? ' · expected ${formatDate(order.expectedDelivery!)}' : ''}'
-              '${isOpen ? _relativeDeliveryText(order) : ''}',
-            ),
-            const SizedBox(height: 8),
-            Row(children: _actionsFor(order)),
-          ],
+              ),
+              const SizedBox(width: 8),
+              _statusChip(order.status),
+              Icon(Icons.chevron_right, color: theme.colorScheme.outline),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  List<Widget> _actionsFor(PurchaseOrder order) {
-    switch (order.status) {
+  // Maps order status onto the shared AppStatus vocabulary (see
+  // lib/widgets/status.dart): Pending/Processing read as "queued" (info),
+  // Shipped is "in transit, awaiting receipt" (warning — needs attention),
+  // Delivered is the successful terminal state, and Cancelled is a closed
+  // state rather than a failure, so it reads neutral instead of danger.
+  AppStatus _statusFor(String status) {
+    switch (status) {
       case PurchaseOrderStatus.pending:
-        return [
-          TextButton(
-            onPressed: () => _openForm(order: order),
-            child: const Text('Edit'),
-          ),
-          TextButton(
-            onPressed: () =>
-                _advanceStatus(order, PurchaseOrderStatus.processing),
-            child: const Text('Start processing'),
-          ),
-          TextButton(
-            onPressed: () => _cancel(order),
-            child: const Text('Cancel'),
-          ),
-        ];
       case PurchaseOrderStatus.processing:
-        return [
-          TextButton(
-            onPressed: () => _advanceStatus(order, PurchaseOrderStatus.shipped),
-            child: const Text('Mark shipped'),
-          ),
-          TextButton(
-            onPressed: () => _cancel(order),
-            child: const Text('Cancel'),
-          ),
-        ];
+        return AppStatus.info;
       case PurchaseOrderStatus.shipped:
-        return [
-          FilledButton(
-            onPressed: () => _receiveDelivery(order),
-            child: const Text('Receive delivery'),
-          ),
-          TextButton(
-            onPressed: () => _cancel(order),
-            child: const Text('Cancel'),
-          ),
-        ];
+        return AppStatus.warning;
+      case PurchaseOrderStatus.delivered:
+        return AppStatus.success;
       case PurchaseOrderStatus.cancelled:
-        return [
-          TextButton(
-            onPressed: () => _deletePermanently(order),
-            child: const Text('Delete permanently'),
-          ),
-        ];
+        return AppStatus.neutral;
       default:
-        return const [];
+        return AppStatus.neutral;
     }
   }
 
   Widget _statusChip(String status) {
-    final isCancelled = status == PurchaseOrderStatus.cancelled;
-    final color = isCancelled
-        ? Theme.of(context).colorScheme.error
-        : Theme.of(context).colorScheme.onPrimaryContainer;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: isCancelled
-            ? color.withValues(alpha: 0.12)
-            : Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
+    return StatusChip(label: status, status: _statusFor(status));
   }
 }

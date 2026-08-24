@@ -2,11 +2,22 @@ import 'package:flutter/material.dart';
 import '../core/formatters.dart';
 import '../core/theme.dart';
 import '../services/bottleneck_service.dart';
+import 'status.dart';
 
 class BottleneckBanner extends StatefulWidget {
   final int factoryId;
 
-  const BottleneckBanner({super.key, required this.factoryId});
+  /// Outer margin around the card. Defaults to a 16px margin on every side,
+  /// matching this widget's original standalone usage — pass
+  /// [EdgeInsets.zero] when embedding it as the first item of a list that
+  /// already applies its own padding, to avoid doubling up.
+  final EdgeInsetsGeometry padding;
+
+  const BottleneckBanner({
+    super.key,
+    required this.factoryId,
+    this.padding = const EdgeInsets.all(16),
+  });
 
   @override
   State<BottleneckBanner> createState() => _BottleneckBannerState();
@@ -40,9 +51,9 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.all(16),
-            child: Card(
+          return Padding(
+            padding: widget.padding,
+            child: const Card(
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Center(child: CircularProgressIndicator()),
@@ -53,7 +64,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
 
         if (snapshot.hasError) {
           return Padding(
-            padding: const EdgeInsets.all(16),
+            padding: widget.padding,
             child: Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -73,13 +84,16 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
         final result = snapshot.data!;
         if (!result.hasData) {
           return Padding(
-            padding: const EdgeInsets.all(16),
+            padding: widget.padding,
             child: Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, color: AppColors.primary),
+                    Icon(
+                      Icons.info_outline,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Text(
@@ -97,7 +111,7 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
         final scheme = Theme.of(context).colorScheme;
 
         return Padding(
-          padding: const EdgeInsets.all(16),
+          padding: widget.padding,
           child: Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -106,28 +120,25 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        ok
-                            ? Icons.check_circle_outline
-                            : Icons.warning_amber_rounded,
-                        color: scheme.onSurface,
-                        size: 20,
+                      Expanded(
+                        child: Text(
+                          'Factory health',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Factory health',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                      StatusChip(
+                        label: ok ? 'Meeting demand' : 'Bottleneck',
+                        status: ok ? AppStatus.success : AppStatus.warning,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.m),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(AppSpacing.l),
                     decoration: BoxDecoration(
                       color: scheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/demand_forecast.dart';
 import '../../services/demand_service.dart';
 
@@ -136,7 +137,7 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.l),
             children: [
               TextFormField(
                 controller: _nameController,
@@ -148,7 +149,7 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _requiredController,
                 keyboardType: TextInputType.number,
@@ -165,7 +166,7 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.s),
               Align(
                 alignment: Alignment.centerLeft,
                 child: OutlinedButton.icon(
@@ -182,13 +183,15 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
               ),
               if (_suggestError != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
                   child: Text(
                     _suggestError!,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Period start (optional)'),
@@ -203,7 +206,7 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                 trailing: const Icon(Icons.calendar_today_outlined),
                 onTap: () => _pickDate(isStart: false),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
               FilledButton(
                 onPressed: _isSaving ? null : _save,
                 child: _isSaving

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
 import '../../services/material_service.dart';
@@ -7,6 +8,7 @@ import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
 
 class SupplierFormScreen extends StatefulWidget {
   final int factoryId;
@@ -229,7 +231,12 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                     IconButton(
                       icon: Icon(
                         _rating >= i ? Icons.star : Icons.star_border,
-                        color: Colors.amber.shade700,
+                        // Intentional exception to the AppStatus vocabulary:
+                        // star ratings read as gold worldwide, not as a
+                        // "warning" signal. AppColors.warning is close
+                        // enough in hue to stay themed without introducing
+                        // a new ad hoc literal.
+                        color: AppColors.warning,
                       ),
                       onPressed: () => setState(() => _rating = i.toDouble()),
                     ),
@@ -251,29 +258,14 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
               ),
               if (_suggestedRating != null) ...[
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Based on delivery history: suggested '
-                          '${_suggestedRating!.toStringAsFixed(1)}★',
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            setState(() => _rating = _suggestedRating!),
-                        child: const Text('Apply'),
-                      ),
-                    ],
-                  ),
+                InfoBanner(
+                  status: AppStatus.info,
+                  message:
+                      'Based on delivery history: suggested '
+                      '${_suggestedRating!.toStringAsFixed(1)}★',
+                  actionLabel: 'Apply',
+                  onAction: () =>
+                      setState(() => _rating = _suggestedRating!),
                 ),
               ],
               const SizedBox(height: 24),

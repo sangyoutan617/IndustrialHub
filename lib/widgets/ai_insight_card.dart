@@ -99,7 +99,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                const Icon(Icons.auto_awesome, color: AppColors.primary),
+                Icon(Icons.auto_awesome, color: scheme.primary),
                 const SizedBox(width: AppSpacing.m),
                 Expanded(child: Text(l10n.aiGetExplanation)),
                 FilledButton(

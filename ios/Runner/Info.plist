@@ -49,6 +49,24 @@
 		</dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
+		<!-- Lets iOS route the password-reset / email-confirmation / Google
+		     OAuth redirect link (io.supabase.industrialhub://login-callback/)
+		     back into this app instead of failing to open anywhere. Mirrors
+		     the intent-filter already declared in
+		     android/app/src/main/AndroidManifest.xml — see
+		     AuthService.sendPasswordReset / signInWithGoogle for where this
+		     scheme is used as redirectTo. -->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>io.supabase.industrialhub</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>io.supabase.industrialhub</string>
+				</array>
+			</dict>
+		</array>
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>

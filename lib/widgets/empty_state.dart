@@ -15,6 +15,13 @@ class EmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
+  /// Optional second, less-prominent action (e.g. "Load demo data" next to
+  /// a primary "Create factory"). Rendered as an OutlinedButton below the
+  /// primary action; [secondaryActionLoading] swaps its label for a spinner.
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
+  final bool secondaryActionLoading;
+
   const EmptyState({
     super.key,
     this.icon = Icons.inbox_outlined,
@@ -23,6 +30,9 @@ class EmptyState extends StatelessWidget {
     this.subtitle,
     this.actionLabel,
     this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
+    this.secondaryActionLoading = false,
   }) : assert(
          title != null || message != null,
          'EmptyState needs either a title or a message',
@@ -35,7 +45,10 @@ class EmptyState extends StatelessWidget {
     this.onAction,
   }) : icon = Icons.error_outline,
        title = null,
-       subtitle = null;
+       subtitle = null,
+       secondaryActionLabel = null,
+       onSecondaryAction = null,
+       secondaryActionLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -48,15 +61,20 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: theme.colorScheme.outline),
-            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 32, color: theme.colorScheme.outline),
+            ),
+            const SizedBox(height: 16),
             Text(
               heading,
               textAlign: TextAlign.center,
               style: usingTitle
-                  ? theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    )
+                  ? theme.textTheme.titleMedium
                   : theme.textTheme.bodyMedium,
             ),
             if (usingTitle && subtitle != null) ...[
@@ -65,13 +83,26 @@ class EmptyState extends StatelessWidget {
                 subtitle!,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey.shade600,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
+            if (secondaryActionLabel != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: onSecondaryAction,
+                child: secondaryActionLoading
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(secondaryActionLabel!),
+              ),
             ],
           ],
         ),

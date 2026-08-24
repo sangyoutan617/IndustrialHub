@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/manpower.dart';
 import '../../services/manpower_service.dart';
+import '../../widgets/kpi_card.dart';
 
 class ManpowerFormScreen extends StatefulWidget {
   final int factoryId;
@@ -89,7 +91,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
-              const SizedBox(height: 16),
+              const SectionHeader(title: 'Shift details'),
               TextFormField(
                 controller: _workersController,
                 keyboardType: TextInputType.number,
@@ -101,7 +103,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _hoursController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -117,7 +119,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _outputController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -133,7 +135,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
               FilledButton(
                 onPressed: _isSaving ? null : _save,
                 child: _isSaving

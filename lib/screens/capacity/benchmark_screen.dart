@@ -1,7 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
-import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../models/ipi_benchmark.dart';
 import '../../models/msic_code.dart';
@@ -196,9 +195,9 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
         children: [
           Card(
             child: ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.category_outlined,
-                color: AppColors.primary,
+                color: Theme.of(context).colorScheme.primary,
               ),
               title: Text(
                 _msic?.description ?? _factory.msicCode ?? 'Unknown industry',
@@ -383,11 +382,13 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                         ],
                         isCurved: true,
                         dotData: const FlDotData(show: false),
-                        color: AppColors.primary,
+                        color: Theme.of(context).colorScheme.primary,
                         barWidth: 3,
                         belowBarData: BarAreaData(
                           show: true,
-                          color: AppColors.primary.withValues(alpha: 0.15),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.15),
                         ),
                       ),
                     ],

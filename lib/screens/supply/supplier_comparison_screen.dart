@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
 import '../../services/mrp_service.dart';
 import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 
 /// Side-by-side comparison of every supplier available for one material —
@@ -101,7 +101,10 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
       shape: c.isRecommended
           ? RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: AppColors.primary, width: 2),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.primary,
+                width: 2,
+              ),
             )
           : null,
       child: Padding(
@@ -138,16 +141,22 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
-            _statRow('Quoted lead time', '${c.quotedLeadDays} days'),
-            _statRow('Effective lead time', '${c.effectiveLeadDays} days'),
-            _statRow(
-              'Reliability rating',
-              '${c.reliabilityRating.toStringAsFixed(1)}★',
+            const SizedBox(height: 4),
+            MetricRow(
+              label: 'Quoted lead time',
+              value: '${c.quotedLeadDays} days',
             ),
-            _statRow(
-              'On-time rate',
-              c.onTimeRate != null
+            MetricRow(
+              label: 'Effective lead time',
+              value: '${c.effectiveLeadDays} days',
+            ),
+            MetricRow(
+              label: 'Reliability rating',
+              value: '${c.reliabilityRating.toStringAsFixed(1)}★',
+            ),
+            MetricRow(
+              label: 'On-time rate',
+              value: c.onTimeRate != null
                   ? '${(c.onTimeRate! * 100).round()}% (${c.historyCount} delivered)'
                   : 'Not enough history (${c.historyCount} delivered)',
             ),
@@ -167,21 +176,4 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
     );
   }
 
-  Widget _statRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
-import '../../core/theme.dart';
 import '../../models/machine.dart';
 import '../../models/manpower.dart';
 import '../../services/capacity_service.dart';
@@ -217,10 +216,16 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   Widget _buildResultCard() {
     final scheme = Theme.of(context).colorScheme;
     final bottleneck = _bottleneck;
+    final containerColor = _justFlipped
+        ? scheme.tertiaryContainer
+        : scheme.primaryContainer;
+    final onContainerColor = _justFlipped
+        ? scheme.onTertiaryContainer
+        : scheme.onPrimaryContainer;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
-        color: _justFlipped ? AppColors.primaryAccent : scheme.primaryContainer,
+        color: containerColor,
         borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(20),
@@ -250,7 +255,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
             'Bottleneck: $bottleneck${_justFlipped ? '  (just changed!)' : ''}',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: scheme.onPrimaryContainer,
+              color: onContainerColor,
             ),
           ),
           if (bottleneck == 'MACHINE') ...[

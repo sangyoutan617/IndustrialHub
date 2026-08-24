@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
+import '../../core/theme.dart';
 import '../../models/machine.dart';
 import '../../services/capacity_service.dart';
 import '../../services/machine_service.dart';
@@ -7,6 +8,7 @@ import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
 import 'machine_form_screen.dart';
 
 class MachineListScreen extends StatefulWidget {
@@ -140,10 +142,28 @@ class _MachineListScreenState extends State<MachineListScreen> {
               return Card(
                 child: ListTile(
                   title: Text(machine.machineName),
-                  subtitle: Text(
-                    isActive
-                        ? '${formatUnits(contribution)}/day'
-                        : 'Excluded from capacity (${machine.status})',
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Row(
+                      children: [
+                        StatusChip(
+                          label: isActive ? 'Active' : 'Maintenance',
+                          status: isActive
+                              ? AppStatus.success
+                              : AppStatus.warning,
+                          dense: true,
+                        ),
+                        const SizedBox(width: AppSpacing.s),
+                        Expanded(
+                          child: Text(
+                            isActive
+                                ? '${formatUnits(contribution)}/day'
+                                : 'Excluded from capacity (${machine.status})',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   leading: CircleAvatar(
                     backgroundColor: isActive

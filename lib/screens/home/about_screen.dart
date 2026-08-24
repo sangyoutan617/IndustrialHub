@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart';
+import '../../widgets/auth_scaffold.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -9,6 +10,7 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context);
     final currentLang = Localizations.localeOf(context).languageCode;
     return Scaffold(
@@ -17,34 +19,12 @@ class AboutScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Center(
-              child: Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.factory,
-                  size: 32,
-                  color: AppColors.primary,
-                ),
-              ),
+            const AuthHeader(
+              icon: Icons.factory,
+              title: 'Industrial Hub',
+              subtitle: 'Industrial Hub Innovation Platform',
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Industrial Hub',
-              style: textTheme.headlineSmall,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Industrial Hub Innovation Platform',
-              style: textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             Card(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,7 +33,7 @@ class AboutScreen extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: Row(
                       children: [
-                        const Icon(Icons.translate, color: AppColors.primary),
+                        Icon(Icons.translate, color: scheme.primary),
                         const SizedBox(width: 12),
                         Text(l10n.language, style: textTheme.titleMedium),
                       ],
@@ -62,14 +42,14 @@ class AboutScreen extends StatelessWidget {
                   ListTile(
                     title: Text(l10n.languageEnglish),
                     trailing: currentLang == 'en'
-                        ? const Icon(Icons.check, color: AppColors.primary)
+                        ? Icon(Icons.check, color: scheme.primary)
                         : null,
                     onTap: () => MyApp.setLocale(context, const Locale('en')),
                   ),
                   ListTile(
                     title: Text(l10n.languageMalay),
                     trailing: currentLang == 'ms'
-                        ? const Icon(Icons.check, color: AppColors.primary)
+                        ? Icon(Icons.check, color: scheme.primary)
                         : null,
                     onTap: () => MyApp.setLocale(context, const Locale('ms')),
                   ),

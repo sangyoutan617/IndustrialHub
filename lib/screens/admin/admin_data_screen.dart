@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
 import '../../services/admin_data_service.dart';
 import '../../services/seed_service.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/status.dart';
 
 enum _LoadState { loading, error, ready }
 
@@ -166,31 +166,18 @@ class _AdminDataScreenState extends State<AdminDataScreen> {
                 ],
               ),
             ),
-            _pill(
-              '${count.simulated} simulated',
-              Theme.of(context).colorScheme.onSurfaceVariant,
+            StatusChip(
+              label: '${count.simulated} simulated',
+              status: AppStatus.info,
+              dense: true,
             ),
             const SizedBox(width: 8),
-            _pill('${count.real} real', AppColors.primary),
+            StatusChip(
+              label: '${count.real} real',
+              status: AppStatus.success,
+              dense: true,
+            ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _pill(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: color,
         ),
       ),
     );
