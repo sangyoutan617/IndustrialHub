@@ -5,10 +5,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants.dart';
 import 'core/theme.dart';
 import 'l10n/app_localizations.dart';
+import 'models/profile.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/home/onboarding_screen.dart';
 import 'services/notification_service.dart';
+import 'services/profile_service.dart';
 import 'services/session_prefs.dart';
 import 'widgets/responsive_shell.dart';
 
@@ -185,7 +188,46 @@ class _AuthGateState extends State<AuthGate> {
             Supabase.instance.client.auth.currentSession;
         if (session == null) return const LoginScreen();
         if (_isRecoveringPassword) return const ResetPasswordScreen();
-        return const HomeScreen();
+        return const OnboardingGate();
+      },
+    );
+  }
+}
+
+/// Sits between a signed-in session and the home screen. A brand-new user
+/// (profiles.onboarded == false) is sent through [OnboardingScreen] first;
+/// everyone else goes straight to [HomeScreen]. If the profile can't be
+/// read, the user is never trapped — they go to the home screen.
+class OnboardingGate extends StatefulWidget {
+  const OnboardingGate({super.key});
+
+  @override
+  State<OnboardingGate> createState() => _OnboardingGateState();
+}
+
+class _OnboardingGateState extends State<OnboardingGate> {
+  final _profileService = ProfileService();
+  late final Future<Profile?> _future = _profileService.getMyProfile();
+  bool _justCompleted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_justCompleted) return const HomeScreen();
+    return FutureBuilder<Profile?>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final profile = snapshot.data;
+        if (snapshot.hasError || profile == null || profile.onboarded) {
+          return const HomeScreen();
+        }
+        return OnboardingScreen(
+          onComplete: () => setState(() => _justCompleted = true),
+        );
       },
     );
   }
