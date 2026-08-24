@@ -14,6 +14,7 @@ import 'demand_form_screen.dart';
 import 'stock_cover_loader.dart';
 import 'stock_list_screen.dart';
 import 'stock_product_detail_screen.dart';
+import 'stock_trend_screen.dart';
 
 class StockDashboardScreen extends StatefulWidget {
   final int factoryId;
@@ -127,6 +128,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     _load();
   }
 
+  void _openStockTrend() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StockTrendScreen(factoryId: widget.factoryId),
+      ),
+    );
+  }
+
   Future<void> _openDetail(ProductCover cover) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -160,6 +169,10 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               .first;
     final criticalItems = withCover.where((c) => c.needsAttention).toList()
       ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!));
+    // Most overstocked first, same ordering convention as criticalItems.
+    final overstockItems =
+        withCover.where((c) => c.daysOfCover! > overstockDaysThreshold).toList()
+          ..sort((a, b) => b.daysOfCover!.compareTo(a.daysOfCover!));
 
     // AI card is built once so rotating between portrait/landscape never
     // recreates — and re-fetches — it.
@@ -173,12 +186,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           return _buildLandscape(
             mostUrgent: mostUrgent,
             criticalItems: criticalItems,
+            overstockItems: overstockItems,
             aiInsight: aiInsight,
           );
         }
         return _buildPortrait(
           mostUrgent: mostUrgent,
           criticalItems: criticalItems,
+          overstockItems: overstockItems,
           aiInsight: aiInsight,
         );
       },
@@ -188,6 +203,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   Widget _buildPortrait({
     required ProductCover? mostUrgent,
     required List<ProductCover> criticalItems,
+    required List<ProductCover> overstockItems,
     required Widget? aiInsight,
   }) {
     return RefreshIndicator(
@@ -208,6 +224,10 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             _buildCriticalSection(criticalItems),
             const SizedBox(height: AppSpacing.l),
           ],
+          if (overstockItems.isNotEmpty) ...[
+            _buildOverstockSection(overstockItems),
+            const SizedBox(height: AppSpacing.l),
+          ],
           _buildCoverListSection(),
           const SizedBox(height: AppSpacing.xl),
           _buildDemandSection(),
@@ -219,6 +239,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   Widget _buildLandscape({
     required ProductCover? mostUrgent,
     required List<ProductCover> criticalItems,
+    required List<ProductCover> overstockItems,
     required Widget? aiInsight,
   }) {
     return RefreshIndicator(
@@ -244,6 +265,10 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                   if (criticalItems.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.l),
                     _buildCriticalSection(criticalItems),
+                  ],
+                  if (overstockItems.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.l),
+                    _buildOverstockSection(overstockItems),
                   ],
                   if (aiInsight != null) ...[
                     const SizedBox(height: AppSpacing.l),
@@ -394,6 +419,57 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     );
   }
 
+  // Same visual weight as _buildCriticalSection — overstock is wasted
+  // capital too, not just a number in the summary row.
+  Widget _buildOverstockSection(List<ProductCover> overstockItems) {
+    return Card(
+      color: AppStatus.info.background,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, color: AppStatus.info.color, size: 20),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  'Overstocked — capital tied up',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppStatus.info.color,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.s),
+            for (final cover in overstockItems.take(3)) ...[
+              InkWell(
+                onTap: () => _openDetail(cover),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(cover.stock.productName)),
+                      Text(
+                        '${formatDays(cover.daysOfCover!)} of cover',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppStatus.info.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCoverListSection() {
     if (_covers.isEmpty) {
       return const Padding(
@@ -418,6 +494,16 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             onPressed: _openStockList,
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Log stock movement'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.calendar_view_month_outlined),
+            title: const Text('Stock activity'),
+            subtitle: const Text('Last 12 weeks, at a glance'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _openStockTrend,
           ),
         ),
       ],
