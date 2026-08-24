@@ -19,6 +19,7 @@ import '../stock/stock_dashboard_screen.dart';
 import '../supply/material_list_screen.dart';
 import 'about_screen.dart';
 import 'dashboard_home_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -400,6 +401,13 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_selectedFactory?.factoryName ?? l10n.appTitle),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'My profile',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+          ),
           IconButton(
             icon: const Icon(Icons.factory_outlined),
             tooltip: l10n.homeSwitchFactory,
