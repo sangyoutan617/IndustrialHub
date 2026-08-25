@@ -98,6 +98,18 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     return list;
   }
 
+  // Contact summary shown under a supplier when any contact detail exists —
+  // person, phone, email joined with dots. Null when nothing was recorded,
+  // so the card stays two-line.
+  String? _contactLine(Supplier supplier) {
+    final parts = [
+      supplier.contactPerson,
+      supplier.phone,
+      supplier.email,
+    ].where((p) => p != null && p.trim().isNotEmpty).cast<String>().toList();
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
   int _openOrderCount(int supplierId) => _orders
       .where(
         (o) => o.supplierId == supplierId && _openStatuses.contains(o.status),
@@ -339,14 +351,28 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
                             supplier,
                           );
                           final openCount = _openOrderCount(supplier.supplierId);
+                          final contact = _contactLine(supplier);
                           return Card(
                             child: ListTile(
+                              isThreeLine: contact != null,
                               title: Text(supplier.supplierName),
-                              subtitle: Text(
-                                'Supplies $materialName · quoted ${supplier.leadTimeDays}d '
-                                '→ effective ${effectiveLead}d lead · '
-                                '$openCount open PO${openCount == 1 ? '' : 's'}'
-                                '${supplier.location != null ? ' · ${supplier.location}' : ''}',
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Supplies $materialName · quoted ${supplier.leadTimeDays}d '
+                                    '→ effective ${effectiveLead}d lead · '
+                                    '$openCount open PO${openCount == 1 ? '' : 's'}'
+                                    '${supplier.location != null ? ' · ${supplier.location}' : ''}',
+                                  ),
+                                  if (contact != null)
+                                    Text(
+                                      contact,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                ],
                               ),
                               leading: _StarRow(rating: supplier.reliabilityRating),
                               onTap: () => _openForm(supplier: supplier),
