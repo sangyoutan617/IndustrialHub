@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
+import '../../models/raw_material_movement.dart';
+import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
 import '../../services/mrp_service.dart';
 import '../../services/supply_exceptions.dart';
@@ -40,9 +42,11 @@ enum _LoadState { loading, error, notFound, ready }
 class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   final _supplyService = SupplyService();
   final _materialService = MaterialService();
+  final _movementService = MaterialMovementService();
 
   _LoadState _state = _LoadState.loading;
   MaterialPlan? _plan;
+  List<RawMaterialMovement> _movements = [];
   int _loadToken = 0;
 
   @override
@@ -64,8 +68,19 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           break;
         }
       }
+      // Ledger is a nice-to-have; a failure here shouldn't blank the screen.
+      List<RawMaterialMovement> movements = const [];
+      if (plan != null) {
+        try {
+          movements = await _movementService.getMovements(widget.materialId);
+        } catch (e) {
+          debugPrint('supply: failed to load material ledger: $e');
+        }
+      }
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _plan = plan;
+        _movements = movements;
         _state = plan != null ? _LoadState.ready : _LoadState.notFound;
       });
     } catch (e) {
@@ -141,6 +156,95 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     ).showSnackBar(const SnackBar(content: Text('Purchase order created')));
   }
 
+  Future<void> _recordUsage() async {
+    final material = _plan!.material;
+    final qtyController = TextEditingController();
+    final noteController = TextEditingController();
+    var type = RawMaterialMovementType.consumption;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Record stock movement'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: RawMaterialMovementType.consumption,
+                    label: Text('Used'),
+                  ),
+                  ButtonSegment(
+                    value: RawMaterialMovementType.adjustment,
+                    label: Text('Adjust'),
+                  ),
+                ],
+                selected: {type},
+                onSelectionChanged: (s) => setDialogState(() => type = s.first),
+              ),
+              const SizedBox(height: AppSpacing.m),
+              TextField(
+                controller: qtyController,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: type == RawMaterialMovementType.consumption
+                      ? 'Quantity used (${material.unit})'
+                      : 'Adjustment: +add / -remove (${material.unit})',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.m),
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(labelText: 'Note (optional)'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Record'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true) return;
+    final qty = double.tryParse(qtyController.text.trim());
+    if (qty == null || qty == 0) return;
+    try {
+      await _movementService.recordMovement(
+        materialId: material.materialId,
+        factoryId: widget.factoryId,
+        movementType: type,
+        quantity: qty,
+        movementDate: DateTime.now(),
+        note: noteController.text.trim().isEmpty
+            ? null
+            : noteController.text.trim(),
+      );
+      if (!mounted) return;
+      _load();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Stock updated')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
   void _openComparison() {
     final plan = _plan!;
     Navigator.of(context).push(
@@ -214,7 +318,10 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: Text(material.materialName, style: theme.textTheme.titleLarge),
+                child: Text(
+                  material.materialName,
+                  style: theme.textTheme.titleLarge,
+                ),
               ),
               StatusChip(label: riskLabel, status: riskStatus),
             ],
@@ -239,11 +346,13 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                 children: [
                   MetricRow(
                     label: 'Current stock',
-                    value: '${formatNumber(material.currentStock)} ${material.unit}',
+                    value:
+                        '${formatNumber(material.currentStock)} ${material.unit}',
                   ),
                   MetricRow(
                     label: 'Reorder level',
-                    value: '${formatNumber(material.reorderLevel)} ${material.unit}',
+                    value:
+                        '${formatNumber(material.reorderLevel)} ${material.unit}',
                     status: plan.belowReorderLevel ? AppStatus.danger : null,
                     statusLabel: plan.belowReorderLevel ? 'Below' : null,
                   ),
@@ -267,13 +376,17 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                   ),
                   MetricRow(
                     label: 'Burn rate',
-                    value: '${formatNumber(plan.burnRatePerDay)} ${material.unit}/day',
+                    value:
+                        '${formatNumber(plan.burnRatePerDay)} ${material.unit}/day',
                   ),
                   if (plan.inboundTotal > 0)
                     MetricRow(
                       label: 'Inbound (open orders)',
-                      value: '${formatNumber(plan.inboundTotal)} ${material.unit}',
-                      status: plan.overdueOrderCount > 0 ? AppStatus.warning : null,
+                      value:
+                          '${formatNumber(plan.inboundTotal)} ${material.unit}',
+                      status: plan.overdueOrderCount > 0
+                          ? AppStatus.warning
+                          : null,
                       statusLabel: plan.overdueOrderCount > 0
                           ? '${plan.overdueOrderCount} overdue'
                           : null,
@@ -291,6 +404,38 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
               label: const Text('View 30-day trend'),
             ),
           ),
+
+          // Raw-material stock ledger — consumption/receipt/adjustment history,
+          // plus the entry point that actually depletes raw stock.
+          const SectionHeader(title: 'Stock ledger'),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _recordUsage,
+              icon: const Icon(Icons.edit_note, size: 18),
+              label: const Text('Record usage / adjust stock'),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.s),
+          if (_movements.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+              child: Text(
+                'No stock movements recorded yet.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          else
+            Card(
+              child: Column(
+                children: [
+                  for (final m in _movements.take(8))
+                    _ledgerTile(m, material.unit, theme),
+                ],
+              ),
+            ),
 
           const SectionHeader(title: 'Recommended action'),
           Card(
@@ -331,7 +476,9 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                           child: const Text('Compare suppliers'),
                         ),
                       ),
-                      if (canReorder && plan.suggestedQty != null && plan.suggestedQty! > 0) ...[
+                      if (canReorder &&
+                          plan.suggestedQty != null &&
+                          plan.suggestedQty! > 0) ...[
                         const SizedBox(width: AppSpacing.s),
                         Expanded(
                           child: FilledButton(
@@ -347,6 +494,34 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _ledgerTile(RawMaterialMovement m, String unit, ThemeData theme) {
+    final isOut =
+        m.movementType == RawMaterialMovementType.consumption ||
+        (m.movementType == RawMaterialMovementType.adjustment &&
+            m.quantity < 0);
+    final label = switch (m.movementType) {
+      RawMaterialMovementType.consumption => 'Consumption',
+      RawMaterialMovementType.receipt => 'Receipt',
+      _ => 'Adjustment',
+    };
+    return ListTile(
+      dense: true,
+      title: Text(label),
+      subtitle: Text(
+        m.note != null
+            ? '${formatDate(m.movementDate)} · ${m.note}'
+            : formatDate(m.movementDate),
+      ),
+      trailing: Text(
+        '${isOut ? '−' : '+'}${formatNumber(m.quantity.abs())} $unit',
+        style: TextStyle(
+          color: isOut ? AppColors.danger : AppColors.success,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
