@@ -386,6 +386,10 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     int healthyCount,
   ) {
     final scheme = Theme.of(context).colorScheme;
+    // Only materials with a recorded unit cost contribute; zero means no
+    // costs are set yet, so the line below stays hidden rather than reading
+    // a misleading RM 0.00.
+    final inventoryValue = MrpService.inventoryValue(overview.materials);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -431,6 +435,20 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   : 'assuming full capacity — set a demand forecast to refine this',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (inventoryValue > 0) ...[
+              const SizedBox(height: AppSpacing.s),
+              Text(
+                'Inventory value: ${formatCurrency(inventoryValue)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
+              ),
+              Text(
+                'raw material on hand at unit cost',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),

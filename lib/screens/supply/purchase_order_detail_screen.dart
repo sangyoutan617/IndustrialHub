@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/purchase_order.dart';
+import '../../services/mrp_service.dart';
 import '../../services/order_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/kpi_card.dart';
@@ -276,6 +277,16 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                   MetricRow(label: 'Supplier', value: widget.supplierName),
                   MetricRow(label: 'Material', value: widget.materialName),
                   MetricRow(label: 'Quantity', value: formatUnits(_order.quantity)),
+                  if (_order.unitPrice != null) ...[
+                    MetricRow(
+                      label: 'Unit price',
+                      value: formatCurrency(_order.unitPrice!),
+                    ),
+                    MetricRow(
+                      label: 'Order total',
+                      value: formatCurrency(MrpService.orderTotal(_order)!),
+                    ),
+                  ],
                   MetricRow(label: 'Order date', value: formatDate(_order.orderDate)),
                   MetricRow(
                     label: 'Expected delivery',

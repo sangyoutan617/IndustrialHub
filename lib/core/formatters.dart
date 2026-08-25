@@ -4,6 +4,7 @@ final _wholeNumber = NumberFormat('#,##0');
 final _upToOneDecimal = NumberFormat('#,##0.#');
 final _upToTwoDecimals = NumberFormat('#,##0.##');
 final _oneDecimal = NumberFormat('0.0');
+final _money = NumberFormat('#,##0.00');
 final _shortDate = DateFormat('d MMM y');
 
 /// "856 units" — whole numbers render with no decimal, fractional values
@@ -29,3 +30,7 @@ String formatDate(DateTime d) => _shortDate.format(d);
 
 /// "1.2 days".
 String formatDays(num v) => '${_oneDecimal.format(v)} days';
+
+/// Malaysian Ringgit with thousands separators and two decimals:
+/// 1234.5 -> "RM 1,234.50". Currency across the app is RM.
+String formatCurrency(num v) => 'RM ${_money.format(v)}';

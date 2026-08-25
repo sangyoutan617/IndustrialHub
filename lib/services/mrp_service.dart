@@ -111,6 +111,10 @@ class SupplierComparison {
   final double reliabilityRating;
   final double? onTimeRate;
   final int historyCount;
+
+  /// Most recent price per unit this supplier charged for the material,
+  /// from order history — null when it has no priced history.
+  final double? unitPrice;
   final bool isRecommended;
   final String reason;
 
@@ -121,6 +125,7 @@ class SupplierComparison {
     required this.reliabilityRating,
     required this.onTimeRate,
     required this.historyCount,
+    required this.unitPrice,
     required this.isRecommended,
     required this.reason,
   });
@@ -172,6 +177,40 @@ class MrpService {
     return materials
         .where((m) => m.consumptionPerUnit * unitsProduced > m.currentStock)
         .toList();
+  }
+
+  /// Total spend for one purchase order at its captured price: `quantity ×
+  /// unit_price`. Null when no price was recorded (older orders), so callers
+  /// can render "—" rather than a misleading RM 0.00. Pure — no DB.
+  static double? orderTotal(PurchaseOrder order) {
+    final price = order.unitPrice;
+    if (price == null) return null;
+    return order.quantity * price;
+  }
+
+  /// Total value of raw-material stock on hand at each material's unit cost:
+  /// `Σ current_stock × unit_cost`. Materials without a recorded cost
+  /// contribute nothing (their value is unknown, not zero). Pure — no DB.
+  static double inventoryValue(Iterable<RawMaterial> materials) {
+    var total = 0.0;
+    for (final m in materials) {
+      final cost = m.unitCost;
+      if (cost != null) total += m.currentStock * cost;
+    }
+    return total;
+  }
+
+  /// The most recent unit price a supplier charged for a material, taken from
+  /// its purchase-order history (latest [PurchaseOrder.orderDate] with a
+  /// recorded price). Null when the supplier has no priced history — used to
+  /// show and rank on price in the supplier comparison. Pure — no DB.
+  static double? latestUnitPrice(Iterable<PurchaseOrder> supplierHistory) {
+    PurchaseOrder? latest;
+    for (final o in supplierHistory) {
+      if (o.unitPrice == null) continue;
+      if (latest == null || o.orderDate.isAfter(latest.orderDate)) latest = o;
+    }
+    return latest?.unitPrice;
   }
 
   /// A 5★ supplier is trusted to hit its quoted lead time. Padding scales
@@ -482,6 +521,7 @@ class MrpService {
           .toList();
       final rate = onTimeRate(history);
       final lead = effectiveLeadDays(supplier);
+      final price = latestUnitPrice(history);
       final isRecommended =
           recommended != null && supplier.supplierId == recommended.supplierId;
 
@@ -500,12 +540,26 @@ class MrpService {
         reliabilityRating: supplier.reliabilityRating,
         onTimeRate: rate,
         historyCount: history.length,
+        unitPrice: price,
         isRecommended: isRecommended,
         reason: reason,
       );
     }).toList();
 
-    rows.sort((a, b) => a.effectiveLeadDays.compareTo(b.effectiveLeadDays));
+    // Primary key: shortest effective (reliability-adjusted) lead time — the
+    // same criterion [bestSupplier] uses, so the recommended row still sorts
+    // to the top. Price breaks ties as a secondary key (cheaper known price
+    // first; unknown prices sort last), then reliability as a final tiebreak.
+    rows.sort((a, b) {
+      final lead = a.effectiveLeadDays.compareTo(b.effectiveLeadDays);
+      if (lead != 0) return lead;
+      final ap = a.unitPrice;
+      final bp = b.unitPrice;
+      if (ap != null && bp != null && ap != bp) return ap.compareTo(bp);
+      if (ap == null && bp != null) return 1;
+      if (ap != null && bp == null) return -1;
+      return b.reliabilityRating.compareTo(a.reliabilityRating);
+    });
     return rows;
   }
 }

@@ -18,6 +18,11 @@ class PurchaseOrder {
   final String status;
   final bool isSimulated;
 
+  /// Price per unit captured when the order was placed, in the factory's
+  /// currency (RM). Null when not recorded — older orders predate price
+  /// tracking, so the order total is unknown, not zero.
+  final double? unitPrice;
+
   const PurchaseOrder({
     required this.poId,
     required this.supplierId,
@@ -28,6 +33,7 @@ class PurchaseOrder {
     this.deliveredAt,
     required this.status,
     required this.isSimulated,
+    this.unitPrice,
   });
 
   /// True once this PO can no longer arrive or change — used to decide
@@ -53,6 +59,9 @@ class PurchaseOrder {
           : null,
       status: json['status'] as String,
       isSimulated: json['is_simulated'] as bool? ?? false,
+      // Nullable and absent on an un-migrated database — stays null so the
+      // order total reads as unknown rather than a misleading zero.
+      unitPrice: (json['unit_price'] as num?)?.toDouble(),
     );
   }
 
@@ -64,6 +73,7 @@ class PurchaseOrder {
       'order_date': orderDate.toIso8601String().substring(0, 10),
       'expected_delivery': expectedDelivery?.toIso8601String().substring(0, 10),
       'status': status,
+      'unit_price': unitPrice,
     };
   }
 }

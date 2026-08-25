@@ -8,6 +8,11 @@ class RawMaterial {
   final double reorderLevel;
   final int safetyStockDays;
 
+  /// Cost of one [unit] of this material on hand, in the factory's currency
+  /// (RM). Null when no cost has been recorded — older rows predate cost
+  /// tracking, so callers must treat it as unknown rather than zero.
+  final double? unitCost;
+
   const RawMaterial({
     required this.materialId,
     required this.factoryId,
@@ -17,6 +22,7 @@ class RawMaterial {
     required this.consumptionPerUnit,
     required this.reorderLevel,
     this.safetyStockDays = 3,
+    this.unitCost,
   });
 
   factory RawMaterial.fromJson(Map<String, dynamic> json) {
@@ -31,6 +37,9 @@ class RawMaterial {
       // Falls back to 3 when the column hasn't been migrated yet, so the
       // app keeps working against an older database schema.
       safetyStockDays: (json['safety_stock_days'] as num?)?.toInt() ?? 3,
+      // Nullable and absent on an un-migrated database — stays null rather
+      // than defaulting to a misleading zero cost.
+      unitCost: (json['unit_cost'] as num?)?.toDouble(),
     );
   }
 
@@ -43,6 +52,7 @@ class RawMaterial {
       'consumption_per_unit': consumptionPerUnit,
       'reorder_level': reorderLevel,
       'safety_stock_days': safetyStockDays,
+      'unit_cost': unitCost,
     };
   }
 }
