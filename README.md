@@ -186,3 +186,92 @@ number, Gemini only explains it — and reuse the same `AiInsightCard` and
   feature is fully usable standalone. If/when the stock module should trigger
   it automatically, call `DailyProductionService.logProduction()` from wherever
   Module 2 records a production movement.
+
+## Raw-material consumption tracking
+
+Previously `raw_materials.current_stock` was only ever *increased* (a
+purchase order's `receiveDelivery`) or manually overwritten — logging
+production and recording finished-goods `production_in` decremented
+nothing. MRP burn rate, days-of-cover, and reorder alerts were therefore
+driven by *theoretical planned* production, never actual usage. A new
+`raw_material_movements` table (`consumption` | `receipt` | `adjustment`,
+RLS-scoped per factory like every other table) and two entry points close
+that loop:
+
+- **Automatic** — logging production
+  (`capacity/production_trend_screen.dart`, Module 1) has a "Deduct raw
+  materials used" checkbox. On save,
+  `MaterialMovementService.recordProductionConsumption()` records a
+  `consumption` row per material for `units_produced × consumption_per_unit`.
+  A material without enough stock is skipped rather than blocking the log
+  entry, and named in a non-blocking snackbar.
+- **Manual** — the material detail screen (Module 3) has a
+  "Record usage / adjust stock" action plus a stock-ledger history list,
+  mirroring the finished-goods stock-ledger pattern already used in Module 2.
+
+The bill-of-materials arithmetic itself —
+`MrpService.computeProductionConsumption()` and
+`MrpService.insufficientMaterials()` — is pure (no DB), so it's unit-tested
+independent of Supabase (`test/material_consumption_test.dart`).
+
+## Costs & spend
+
+Currency is Malaysian Ringgit (RM) throughout, via `formatCurrency()` in
+`core/formatters.dart`. `raw_materials.unit_cost` and
+`purchase_orders.unit_price` are both **nullable** — a cost/price is
+optional at entry, and rows created before this feature predate cost
+tracking entirely. Every consumer (`MrpService.orderTotal()`,
+`inventoryValue()`, `latestUnitPrice()`) treats a missing cost as
+*unknown*, never a silent zero, so an unpriced material doesn't quietly
+report RM 0 of inventory value.
+
+Supplier comparison (`MrpService.compareSuppliers()`) gained price as a
+**secondary** sort key: effective (reliability-adjusted) lead time still
+decides the recommended supplier, matching `bestSupplier()` exactly, so the
+two never disagree. Price only breaks ties among otherwise-equal-lead-time
+suppliers, and an unpriced supplier sorts after any priced one.
+
+## Data-completeness quick wins
+
+- **Finished-goods product rename**
+  (`StockService.updateStock()`) — demand is matched to stock by exact
+  product-name string (`stock_cover_loader.dart`), so a typo previously
+  broke days-of-cover silently and permanently, with no way to fix it. The
+  rename dialog uses a new reusable `widgets/text_prompt_dialog.dart`
+  rather than an inline `showDialog` call: its `TextEditingController`
+  lives inside the dialog's own `State` and is disposed in that `State`'s
+  `dispose()`, avoiding a Flutter framework assertion
+  (`_dependents.isEmpty`) that a controller disposed in the *caller's*
+  `finally` block can trigger while the route is still animating out —
+  caught live on the emulator during testing, then fixed with this pattern.
+- **Factory location / state / industry are now editable** after creation
+  (`FactorySettingsScreen`, reached from the factory switcher's ⋮ menu →
+  "Edit details"). This also fixes `factories.location` never being
+  written at all: `OnboardingScreen` previously captured state and
+  industry but silently dropped location.
+- **Supplier contact fields** (`contact_person`, `phone`, `email` — all
+  nullable) so a supplier the app recommends reordering from is actually
+  reachable; shown as an optional third line on the supplier list card
+  only when at least one is set.
+- **Demand-forecast period filtering** —
+  `DemandForecast.isActiveOn(day)` / `.activeOn(forecasts, day)` (pure,
+  unit-tested). An expired or not-yet-started forecast no longer inflates
+  today's planned production or days-of-cover. A forecast with no period
+  set (the common case before this) is always active, so existing data
+  behaves exactly as before.
+
+## Startup robustness
+
+- `Supabase.initialize` (previously called directly in `main()`) is now
+  wrapped in a retryable `_bootstrap()`. A failed init — bad config, no
+  network on first launch — used to throw before `runApp`, leaving a blank
+  screen with no recovery; it now shows a `StartupErrorApp` with a Retry
+  button.
+- The "remember me" 30-day-window check (`_enforceRememberMeWindow` in
+  `main.dart`) now always clears its loading flag in a `finally`.
+  Previously an exception partway through (a failed prefs read, a failed
+  `signOut`) left the app permanently stuck on the startup spinner with no
+  way to reach the login screen.
+- `AdminFactoryDetailScreen._raisePurchaseOrder()` now guards its supplier
+  fetch; a failed fetch used to make the "Raise PO" tap silently do
+  nothing.
