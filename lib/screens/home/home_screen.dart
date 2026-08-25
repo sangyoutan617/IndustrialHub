@@ -19,6 +19,7 @@ import '../stock/stock_dashboard_screen.dart';
 import '../supply/material_list_screen.dart';
 import 'about_screen.dart';
 import 'dashboard_home_screen.dart';
+import 'factory_settings_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -265,6 +266,27 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _editFactoryDetails(Factory factory) async {
+    final updated = await Navigator.of(context).push<Factory>(
+      MaterialPageRoute(
+        builder: (_) => FactorySettingsScreen(factory: factory),
+      ),
+    );
+    if (!mounted || updated == null) return;
+    setState(() {
+      _factories = [
+        for (final f in _factories)
+          f.factoryId == updated.factoryId ? updated : f,
+      ];
+      if (_selectedFactory?.factoryId == updated.factoryId) {
+        _selectedFactory = updated;
+      }
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Factory details updated')));
+  }
+
   Future<void> _deleteFactory(Factory factory) async {
     final confirmed = await showConfirmDialog(
       context,
@@ -348,12 +370,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.pop(context);
                         if (value == 'rename') {
                           _renameFactory(factory);
+                        } else if (value == 'settings') {
+                          _editFactoryDetails(factory);
                         } else if (value == 'delete') {
                           _deleteFactory(factory);
                         }
                       },
                       itemBuilder: (context) => const [
                         PopupMenuItem(value: 'rename', child: Text('Rename')),
+                        PopupMenuItem(
+                          value: 'settings',
+                          child: Text('Edit details'),
+                        ),
                         PopupMenuItem(value: 'delete', child: Text('Delete')),
                       ],
                     ),

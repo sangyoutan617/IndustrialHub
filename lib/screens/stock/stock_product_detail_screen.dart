@@ -8,6 +8,7 @@ import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
 import '../../widgets/stock_movement_history_sheet.dart';
+import '../../widgets/text_prompt_dialog.dart';
 import 'stock_cover_loader.dart';
 import 'stock_movement_form_screen.dart';
 
@@ -65,6 +66,38 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
       debugPrint('stock: failed to load product detail: $e');
       if (!mounted) return;
       setState(() => _state = _LoadState.error);
+    }
+  }
+
+  Future<void> _rename() async {
+    final stock = _cover!.stock;
+    final newName = await showTextPromptDialog(
+      context,
+      title: 'Rename product',
+      label: 'Product name',
+      initialValue: stock.productName,
+    );
+    if (!mounted ||
+        newName == null ||
+        newName.isEmpty ||
+        newName == stock.productName) {
+      return;
+    }
+    try {
+      await _service.updateStock(stock.stockId, newName);
+      if (!mounted) return;
+      _load();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Product renamed')));
+    } catch (e) {
+      debugPrint('stock: failed to rename product: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not rename product. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -127,6 +160,11 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
         title: Text(_cover?.stock.productName ?? 'Product'),
         actions: _state == _LoadState.ready
             ? [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Rename product',
+                  onPressed: _rename,
+                ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
                   tooltip: 'Remove product',

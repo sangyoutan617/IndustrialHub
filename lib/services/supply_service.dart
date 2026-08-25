@@ -87,7 +87,12 @@ class SupplyService {
     final suppliers = results[0] as List<Supplier>;
     final orders = results[1] as List<PurchaseOrder>;
     final snapshot = results[2] as CapacitySnapshot;
-    final forecasts = results[3] as List<DemandForecast>;
+    final allForecasts = results[3] as List<DemandForecast>;
+
+    final today = DateTime.now();
+    // Only forecasts in effect today drive planned production — an expired
+    // or not-yet-started forecast must not inflate demand.
+    final forecasts = DemandForecast.activeOn(allForecasts, today);
 
     final productionFromForecast =
         forecasts.fold<int>(0, (sum, f) => sum + f.requiredPerDay) > 0;
@@ -96,7 +101,6 @@ class SupplyService {
       forecasts,
     );
 
-    final today = DateTime.now();
     final plans = materials.map((material) {
       final materialSuppliers = suppliers
           .where((s) => s.materialId == material.materialId)
