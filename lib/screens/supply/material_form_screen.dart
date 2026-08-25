@@ -32,6 +32,9 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
   late final _reorderController = TextEditingController(
     text: (widget.material?.reorderLevel ?? 0).toString(),
   );
+  late final _unitCostController = TextEditingController(
+    text: widget.material?.unitCost?.toString() ?? '',
+  );
   late final _safetyStockController = TextEditingController(
     text: (widget.material?.safetyStockDays ?? 3).toString(),
   );
@@ -46,6 +49,7 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
     _unitController.dispose();
     _consumptionController.dispose();
     _reorderController.dispose();
+    _unitCostController.dispose();
     _safetyStockController.dispose();
     super.dispose();
   }
@@ -65,6 +69,9 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
         consumptionPerUnit: double.parse(_consumptionController.text),
         reorderLevel: double.parse(_reorderController.text),
         safetyStockDays: int.parse(_safetyStockController.text),
+        unitCost: _unitCostController.text.trim().isEmpty
+            ? null
+            : double.parse(_unitCostController.text),
       );
       if (_isEditing) {
         await _service.updateMaterial(widget.material!.materialId, material);
@@ -90,6 +97,13 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
     if (parsed == null) return 'Enter a valid number';
     if (parsed < min) return 'Must be at least $min';
     return null;
+  }
+
+  // Cost is optional — an empty field means "unknown" and saves as null.
+  // A non-empty value still has to be a valid non-negative number.
+  String? _optionalNumber(String? value, {double min = 0}) {
+    if (value == null || value.trim().isEmpty) return null;
+    return _requiredNumber(value, min: min);
   }
 
   @override
@@ -130,6 +144,18 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                   labelText: 'Unit',
                   helperText: 'e.g. kg, litres, rolls',
                 ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _unitCostController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Unit cost (RM, optional)',
+                  helperText: 'Cost per ${_unitController.text.trim().isEmpty ? 'unit' : _unitController.text.trim()} — used for inventory value',
+                ),
+                validator: (v) => _optionalNumber(v, min: 0),
               ),
               const SectionHeader(
                 title: 'Consumption & reorder settings',

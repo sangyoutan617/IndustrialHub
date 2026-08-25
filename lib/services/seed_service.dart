@@ -112,12 +112,12 @@ class SeedService {
 
   Future<List<RawMaterial>> _seedMaterials(int factoryId) async {
     final specs = [
-      ('Plastic Resin', 20000.0, 'kg', 3.0, 2000.0),
-      ('Colorant', 800.0, 'litres', 0.5, 100.0),
-      ('Packaging Boxes', 10000.0, 'boxes', 1.0, 1000.0),
+      ('Plastic Resin', 20000.0, 'kg', 3.0, 2000.0, 4.5),
+      ('Colorant', 800.0, 'litres', 0.5, 100.0, 12.0),
+      ('Packaging Boxes', 10000.0, 'boxes', 1.0, 1000.0, 0.8),
     ];
     final created = <RawMaterial>[];
-    for (final (name, stock, unit, consumption, reorder) in specs) {
+    for (final (name, stock, unit, consumption, reorder, unitCost) in specs) {
       created.add(
         await _materialService.createMaterial(
           RawMaterial(
@@ -128,6 +128,7 @@ class SeedService {
             unit: unit,
             consumptionPerUnit: consumption,
             reorderLevel: reorder,
+            unitCost: unitCost,
           ),
         ),
       );
@@ -220,6 +221,7 @@ class SeedService {
         expectedDelivery: now.add(const Duration(days: 3)),
         status: PurchaseOrderStatus.pending,
         isSimulated: true,
+        unitPrice: 12.5,
       ),
       isSimulated: true,
     );
@@ -234,6 +236,7 @@ class SeedService {
         expectedDelivery: now.add(const Duration(days: 2)),
         status: PurchaseOrderStatus.processing,
         isSimulated: true,
+        unitPrice: 4.6,
       ),
       isSimulated: true,
     );
@@ -248,6 +251,7 @@ class SeedService {
         expectedDelivery: now.subtract(const Duration(days: 3)),
         status: PurchaseOrderStatus.shipped,
         isSimulated: true,
+        unitPrice: 0.85,
       ),
       isSimulated: true,
     );
