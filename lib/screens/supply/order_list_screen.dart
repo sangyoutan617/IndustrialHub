@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../models/purchase_order.dart';
+import '../../services/mrp_service.dart';
 import '../../services/material_service.dart';
 import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
@@ -216,6 +217,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final materialName = _materialNames[order.materialId] ?? 'Unknown material';
     final supplierName = _supplierNames[order.supplierId] ?? 'Unknown supplier';
     final isOpen = _openStatuses.contains(order.status);
+    final total = MrpService.orderTotal(order);
     final theme = Theme.of(context);
     return Card(
       child: InkWell(
@@ -239,7 +241,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       materialName,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    Text('$supplierName · ${formatUnits(order.quantity)}'),
+                    Text(
+                      '$supplierName · ${formatUnits(order.quantity)}'
+                      '${total != null ? ' · ${formatCurrency(total)}' : ''}',
+                    ),
                     Text(
                       'Ordered ${formatDate(order.orderDate)}'
                       '${order.expectedDelivery != null ? ' · expected ${formatDate(order.expectedDelivery!)}' : ''}'

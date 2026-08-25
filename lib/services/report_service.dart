@@ -160,10 +160,14 @@ class ReportService {
         return ad.compareTo(bd);
       });
 
+    final inventoryValue = MrpService.inventoryValue(supply.materials);
+
     return _section('Supply risk', [
       _row('Raw materials tracked', plans.length.toString()),
       _row('Reorder now', reorderCount.toString()),
       _row('Watch', watchCount.toString()),
+      if (inventoryValue > 0)
+        _row('Inventory value', formatCurrency(inventoryValue)),
       if (attention.isNotEmpty)
         _row(
           'Most urgent',
