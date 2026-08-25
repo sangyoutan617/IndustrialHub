@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
@@ -47,6 +48,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   final _supplyService = SupplyService();
   final _orderService = OrderService();
   final _quantityController = TextEditingController();
+  final _priceController = TextEditingController();
 
   _LoadState _state = _LoadState.loading;
   List<RawMaterial> _materials = [];
@@ -86,6 +88,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           _orderDate = order.orderDate;
           _expectedDelivery = order.expectedDelivery;
           _quantityController.text = order.quantity.toString();
+          _priceController.text = order.unitPrice?.toString() ?? '';
           // A supplier can be re-pointed to a different material after this
           // PO was raised against it. If that happened, the dropdown below
           // would be handed a value that isn't among its own items (a
@@ -164,6 +167,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   @override
   void dispose() {
     _quantityController.dispose();
+    _priceController.dispose();
     super.dispose();
   }
 
@@ -194,6 +198,15 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   String _formatDate(DateTime? date) {
     if (date == null) return 'Not set';
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String? _orderTotalHelperText() {
+    final quantity = double.tryParse(_quantityController.text);
+    final price = double.tryParse(_priceController.text);
+    if (quantity == null || price == null || quantity <= 0 || price <= 0) {
+      return null;
+    }
+    return 'Order total: ${formatCurrency(quantity * price)}';
   }
 
   String? _coverageHelperText() {
@@ -232,6 +245,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         deliveredAt: widget.order?.deliveredAt,
         status: widget.order?.status ?? PurchaseOrderStatus.pending,
         isSimulated: false,
+        unitPrice: _priceController.text.trim().isEmpty
+            ? null
+            : double.parse(_priceController.text),
       );
       if (_isEditing) {
         await _orderService.updateOrder(widget.order!.poId, order);
@@ -337,6 +353,26 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                   final parsed = double.tryParse(v ?? '');
                   if (parsed == null || parsed <= 0) {
                     return 'Enter a positive number';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _priceController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Unit price (RM, optional)',
+                  helperText: _orderTotalHelperText(),
+                ),
+                onChanged: (_) => setState(() {}),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final parsed = double.tryParse(v);
+                  if (parsed == null || parsed < 0) {
+                    return 'Enter a valid price';
                   }
                   return null;
                 },

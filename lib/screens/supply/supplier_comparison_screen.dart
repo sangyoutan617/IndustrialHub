@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../services/mrp_service.dart';
 import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
@@ -159,6 +160,12 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
               value: c.onTimeRate != null
                   ? '${(c.onTimeRate! * 100).round()}% (${c.historyCount} delivered)'
                   : 'Not enough history (${c.historyCount} delivered)',
+            ),
+            MetricRow(
+              label: 'Last unit price',
+              value: c.unitPrice != null
+                  ? formatCurrency(c.unitPrice!)
+                  : 'No price history',
             ),
             if (c.reason.isNotEmpty) ...[
               const SizedBox(height: 8),
