@@ -39,4 +39,31 @@ class DemandForecast {
       'period_end': periodEnd?.toIso8601String().substring(0, 10),
     };
   }
+
+  /// Whether this forecast is in effect on [day]. An open-ended period (null
+  /// start or end) is always in effect on that side, so a forecast with no
+  /// dates at all counts every day — keeping rows created before periods
+  /// existed exactly as they behaved before. Compared date-only, and both
+  /// boundaries are inclusive.
+  bool isActiveOn(DateTime day) {
+    final d = DateTime(day.year, day.month, day.day);
+    final start = periodStart;
+    if (start != null &&
+        d.isBefore(DateTime(start.year, start.month, start.day))) {
+      return false;
+    }
+    final end = periodEnd;
+    if (end != null && d.isAfter(DateTime(end.year, end.month, end.day))) {
+      return false;
+    }
+    return true;
+  }
+
+  /// The subset of [forecasts] in effect on [day] — used so an expired or
+  /// future forecast no longer inflates today's demand / planned production.
+  /// Pure — no DB.
+  static List<DemandForecast> activeOn(
+    Iterable<DemandForecast> forecasts,
+    DateTime day,
+  ) => forecasts.where((f) => f.isActiveOn(day)).toList();
 }

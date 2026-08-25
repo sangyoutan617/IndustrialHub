@@ -138,15 +138,39 @@ class SeedService {
 
   Future<List<Supplier>> _seedSuppliers(List<RawMaterial> materials) async {
     final specs = {
-      'Plastic Resin': ('Resin Supply Co', 'Klang', 5, 4.2),
-      'Colorant': ('ColorTech Industries', 'Shah Alam', 3, 3.8),
-      'Packaging Boxes': ('PackRight Sdn Bhd', 'Klang', 10, 4.7),
+      'Plastic Resin': (
+        'Resin Supply Co',
+        'Klang',
+        5,
+        4.2,
+        'Lim Wei Sheng',
+        '+60 3-3345 6789',
+        'sales@resinsupply.com.my',
+      ),
+      'Colorant': (
+        'ColorTech Industries',
+        'Shah Alam',
+        3,
+        3.8,
+        'Nurul Aina',
+        '+60 3-5521 2345',
+        'orders@colortech.com.my',
+      ),
+      'Packaging Boxes': (
+        'PackRight Sdn Bhd',
+        'Klang',
+        10,
+        4.7,
+        'Ravi Kumar',
+        '+60 3-3122 8899',
+        'hello@packright.com.my',
+      ),
     };
     final created = <Supplier>[];
     for (final material in materials) {
       final spec = specs[material.materialName];
       if (spec == null) continue;
-      final (name, location, leadTime, rating) = spec;
+      final (name, location, leadTime, rating, contact, phone, email) = spec;
       created.add(
         await _supplierService.createSupplier(
           Supplier(
@@ -157,6 +181,9 @@ class SeedService {
             leadTimeDays: leadTime,
             reliabilityRating: rating,
             isSimulated: true,
+            contactPerson: contact,
+            phone: phone,
+            email: email,
           ),
           isSimulated: true,
         ),

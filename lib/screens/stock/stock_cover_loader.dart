@@ -73,8 +73,11 @@ Future<StockOverview> loadStockOverview(int factoryId) async {
   final stockList = await stockService.getStockList(factoryId);
   final forecasts = await demandService.getForecasts(factoryId);
 
+  // Days-of-cover reflects only demand in effect today — an expired or
+  // future-dated forecast shouldn't count against current stock. The full
+  // forecast list is still returned below for the demand-management views.
   final requiredByName = <String, int>{};
-  for (final forecast in forecasts) {
+  for (final forecast in DemandForecast.activeOn(forecasts, DateTime.now())) {
     final key = forecast.productName.trim().toLowerCase();
     requiredByName[key] = (requiredByName[key] ?? 0) + forecast.requiredPerDay;
   }

@@ -35,6 +35,22 @@ class StockService {
     return FinishedStock.fromJson(row);
   }
 
+  /// Renames a finished-goods product. Demand is matched to stock by product
+  /// name (see loadStockOverview), so fixing a typo here also repairs the
+  /// days-of-cover calculation that a mismatched name silently broke.
+  Future<FinishedStock> updateStock(int stockId, String productName) async {
+    final row = await _client
+        .from('finished_stock')
+        .update({
+          'product_name': productName,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('stock_id', stockId)
+        .select()
+        .single();
+    return FinishedStock.fromJson(row);
+  }
+
   Future<void> deleteStock(int stockId) async {
     await _client.from('finished_stock').delete().eq('stock_id', stockId);
   }

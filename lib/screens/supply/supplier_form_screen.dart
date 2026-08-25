@@ -34,6 +34,15 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
   late final _locationController = TextEditingController(
     text: widget.supplier?.location,
   );
+  late final _contactPersonController = TextEditingController(
+    text: widget.supplier?.contactPerson,
+  );
+  late final _phoneController = TextEditingController(
+    text: widget.supplier?.phone,
+  );
+  late final _emailController = TextEditingController(
+    text: widget.supplier?.email,
+  );
   late final _leadTimeController = TextEditingController(
     text: (widget.supplier?.leadTimeDays ?? 7).toString(),
   );
@@ -91,6 +100,9 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
   void dispose() {
     _nameController.dispose();
     _locationController.dispose();
+    _contactPersonController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
     _leadTimeController.dispose();
     super.dispose();
   }
@@ -110,6 +122,15 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
         leadTimeDays: int.parse(_leadTimeController.text),
         reliabilityRating: _rating,
         isSimulated: false,
+        contactPerson: _contactPersonController.text.trim().isEmpty
+            ? null
+            : _contactPersonController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
+        email: _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
       );
       if (_isEditing) {
         await _supplierService.updateSupplier(
@@ -185,6 +206,37 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Location (optional)',
                 ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _contactPersonController,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Contact person (optional)',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone (optional)',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email (optional)',
+                ),
+                validator: (v) {
+                  final value = v?.trim() ?? '';
+                  if (value.isEmpty) return null;
+                  // Light sanity check — a single @ with text on both sides.
+                  final ok = RegExp(r'^[^@\s]+@[^@\s]+$').hasMatch(value);
+                  return ok ? null : 'Enter a valid email';
+                },
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
