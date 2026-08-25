@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/factory.dart';
 import '../../models/raw_material.dart';
+import '../../models/supplier.dart';
 import '../../services/bottleneck_service.dart';
 import '../../services/material_service.dart';
 import '../../services/mrp_service.dart';
@@ -67,9 +68,23 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   }
 
   Future<void> _raisePurchaseOrder(RawMaterial material) async {
-    final suppliers = await _supplierService.getSuppliersForMaterials([
-      material.materialId,
-    ]);
+    List<Supplier> suppliers;
+    try {
+      suppliers = await _supplierService.getSuppliersForMaterials([
+        material.materialId,
+      ]);
+    } catch (e) {
+      // Unguarded, a failed fetch here made the "Raise PO" tap do nothing
+      // (and threw in the background) — tell the admin instead.
+      debugPrint('admin: failed to load suppliers for material: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not load suppliers. Please try again.'),
+        ),
+      );
+      return;
+    }
     final supplier = MrpService.bestSupplier(suppliers);
     if (supplier == null) {
       if (!mounted) return;
