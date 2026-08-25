@@ -50,6 +50,38 @@ class FactoryService {
     return Factory.fromJson(row);
   }
 
+  /// Updates a factory's location (city/town), state, and industry code.
+  /// Only the fields passed are written, so a caller can update one without
+  /// clobbering the others. A field passed explicitly as null is left
+  /// unchanged too — omit it to keep it, pass a value to change it.
+  Future<Factory> updateFactoryDetails(
+    int factoryId, {
+    String? location,
+    String? state,
+    String? msicCode,
+  }) async {
+    final updates = <String, dynamic>{
+      'location': ?location,
+      'state': ?state,
+      'msic_code': ?msicCode,
+    };
+    if (updates.isEmpty) {
+      final row = await _client
+          .from('factories')
+          .select()
+          .eq('factory_id', factoryId)
+          .single();
+      return Factory.fromJson(row);
+    }
+    final row = await _client
+        .from('factories')
+        .update(updates)
+        .eq('factory_id', factoryId)
+        .select()
+        .single();
+    return Factory.fromJson(row);
+  }
+
   Future<Factory> renameFactory(int factoryId, String newName) async {
     final row = await _client
         .from('factories')

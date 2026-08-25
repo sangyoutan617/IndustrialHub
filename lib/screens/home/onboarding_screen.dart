@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/malaysian_states.dart';
 import '../../models/msic_code.dart';
 import '../../services/capacity_service.dart';
 import '../../services/factory_service.dart';
@@ -22,26 +23,6 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-// Malaysian states and federal territories, for the factory location.
-const _malaysianStates = [
-  'Johor',
-  'Kedah',
-  'Kelantan',
-  'Melaka',
-  'Negeri Sembilan',
-  'Pahang',
-  'Perak',
-  'Perlis',
-  'Pulau Pinang',
-  'Sabah',
-  'Sarawak',
-  'Selangor',
-  'Terengganu',
-  'Wilayah Persekutuan Kuala Lumpur',
-  'Wilayah Persekutuan Labuan',
-  'Wilayah Persekutuan Putrajaya',
-];
-
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _profileService = ProfileService();
   final _factoryService = FactoryService();
@@ -53,6 +34,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _jobTitleController = TextEditingController();
   final _companyController = TextEditingController();
   final _factoryNameController = TextEditingController();
+  final _locationController = TextEditingController();
 
   List<MsicCode> _msicCodes = [];
   String? _selectedMsic;
@@ -72,6 +54,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _jobTitleController.dispose();
     _companyController.dispose();
     _factoryNameController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -97,6 +80,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
       await _factoryService.createFactory(
         _factoryNameController.text.trim(),
+        location: _locationController.text.trim().isEmpty
+            ? null
+            : _locationController.text.trim(),
         state: _selectedState,
         msicCode: _selectedMsic,
       );
@@ -199,6 +185,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     : null,
               ),
               const SizedBox(height: 16),
+              TextFormField(
+                controller: _locationController,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Location / city (e.g. Shah Alam)',
+                ),
+              ),
+              const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 initialValue: _selectedMsic,
                 isExpanded: true,
@@ -223,7 +217,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'State'),
                 items: [
-                  for (final state in _malaysianStates)
+                  for (final state in malaysianStates)
                     DropdownMenuItem(value: state, child: Text(state)),
                 ],
                 onChanged: (v) => setState(() => _selectedState = v),
