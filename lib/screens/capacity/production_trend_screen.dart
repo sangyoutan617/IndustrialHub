@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../models/daily_production.dart';
 import '../../models/factory.dart';
 import '../../services/daily_production_service.dart';
+import '../../services/material_movement_service.dart';
+import '../../services/material_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
@@ -30,6 +32,8 @@ class _TrendPoint {
 
 class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   final _service = DailyProductionService();
+  final _materialService = MaterialService();
+  final _movementService = MaterialMovementService();
 
   _LoadState _state = _LoadState.loading;
   _Granularity _granularity = _Granularity.day;
@@ -95,6 +99,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     TextEditingController downtimeController,
     DateTime logDate,
   ) async {
+    var deductMaterials = true;
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -135,6 +140,14 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                 ),
                 decoration: const InputDecoration(labelText: 'Downtime hours'),
               ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: deductMaterials,
+                onChanged: (v) =>
+                    setDialogState(() => deductMaterials = v ?? true),
+                title: const Text('Deduct raw materials used'),
+              ),
             ],
           ),
           actions: [
@@ -164,6 +177,9 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         actualOutput: actualOutput,
         downtimeHours: downtimeHours,
       );
+      if (deductMaterials && actualOutput > 0) {
+        await _consumeMaterials(actualOutput, logDate);
+      }
       _load();
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -178,6 +194,33 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       );
     } finally {
       if (mounted) setState(() => _isLogging = false);
+    }
+  }
+
+  /// Deducts the raw material this output consumed, and warns (non-blocking)
+  /// about any material that didn't have enough stock. Best-effort — a
+  /// consumption failure never undoes the already-logged production.
+  Future<void> _consumeMaterials(int units, DateTime date) async {
+    try {
+      final materials = await _materialService.getMaterials(
+        widget.factory.factoryId,
+      );
+      final skipped = await _movementService.recordProductionConsumption(
+        factoryId: widget.factory.factoryId,
+        materials: materials,
+        unitsProduced: units,
+        date: date,
+      );
+      if (!mounted || skipped.isEmpty) return;
+      final names = materials
+          .where((m) => skipped.contains(m.materialId))
+          .map((m) => m.materialName)
+          .join(', ');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Not enough stock to fully deduct: $names')),
+      );
+    } catch (e) {
+      debugPrint('capacity: material consumption failed: $e');
     }
   }
 
