@@ -17,26 +17,112 @@ import 'widgets/responsive_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    publishableKey: SupabaseConfig.anonKey,
-    // Password-reset (and email-confirmation) links are opened from an
-    // email client, which is almost never the same browser tab that
-    // requested them. The default PKCE flow needs a code verifier stashed
-    // in that original tab's local storage to complete the sign-in, so it
-    // silently fails whenever the link is opened elsewhere — landing back
-    // on the login screen with no session. Implicit flow carries the
-    // session tokens directly in the redirect URL instead, so it works
-    // regardless of which browser/tab opens the link.
-    authOptions: const FlutterAuthClientOptions(
-      authFlowType: AuthFlowType.implicit,
-    ),
-  );
+  await _bootstrap();
+}
+
+/// Initialises Supabase and launches the app. Isolated (and retryable) so a
+/// failed init — bad config, no network on first launch — shows a friendly
+/// retry screen instead of the blank/black screen that an exception thrown
+/// before [runApp] used to leave behind.
+Future<void> _bootstrap() async {
+  try {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      publishableKey: SupabaseConfig.anonKey,
+      // Password-reset (and email-confirmation) links are opened from an
+      // email client, which is almost never the same browser tab that
+      // requested them. The default PKCE flow needs a code verifier stashed
+      // in that original tab's local storage to complete the sign-in, so it
+      // silently fails whenever the link is opened elsewhere — landing back
+      // on the login screen with no session. Implicit flow carries the
+      // session tokens directly in the redirect URL instead, so it works
+      // regardless of which browser/tab opens the link.
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.implicit,
+      ),
+    );
+  } catch (e, st) {
+    debugPrint('startup: Supabase.initialize failed: $e\n$st');
+    runApp(StartupErrorApp(onRetry: _bootstrap));
+    return;
+  }
   // Best-effort: sets up the local-notifications channel and asks for
   // permission over the running app. No-op on web. Not awaited so the
   // permission dialog never blocks first paint.
   unawaited(NotificationService.instance.init());
   runApp(const MyApp());
+}
+
+/// Standalone fallback shown when [Supabase.initialize] fails, so startup
+/// can't reach [MyApp]. Deliberately self-contained — it depends on nothing
+/// that initialisation set up — and offers a Retry that re-runs [_bootstrap].
+class StartupErrorApp extends StatefulWidget {
+  final Future<void> Function() onRetry;
+
+  const StartupErrorApp({super.key, required this.onRetry});
+
+  @override
+  State<StartupErrorApp> createState() => _StartupErrorAppState();
+}
+
+class _StartupErrorAppState extends State<StartupErrorApp> {
+  bool _retrying = false;
+
+  Future<void> _retry() async {
+    setState(() => _retrying = true);
+    // On success this replaces the whole app via runApp, so this widget is
+    // torn down and the flag never needs resetting; on failure _bootstrap
+    // calls runApp(StartupErrorApp) again with a fresh state.
+    await widget.onRetry();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.system,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_outlined, size: 56),
+                const SizedBox(height: 16),
+                Text(
+                  'Couldn\'t start Industrial Hub',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'We couldn\'t connect to set things up. Check your internet '
+                  'connection and try again.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _retrying ? null : _retry,
+                  icon: _retrying
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: Text(_retrying ? 'Retrying…' : 'Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -167,28 +253,40 @@ class _AuthGateState extends State<AuthGate> {
   // persistence: if the box wasn't checked at login (or the 30 days are up),
   // sign out on this cold start even though a valid session still exists.
   Future<void> _enforceRememberMeWindow() async {
-    // A password-recovery link also completes via a full page reload on
-    // web, which looks identical to a stale restart to the check below —
-    // consuming this flag (set by ForgotPasswordScreen right before the
-    // email was sent) lets that reload's session survive long enough for
-    // ResetPasswordScreen to use it, instead of being signed straight out.
-    final pendingRecovery = await SessionPrefs.consumePendingPasswordRecovery();
-    final pendingOAuthChoice =
-        await SessionPrefs.consumePendingOAuthRememberMe();
-    if (pendingRecovery) {
-      if (mounted) setState(() => _isRecoveringPassword = true);
-    } else if (pendingOAuthChoice != null) {
-      // This cold start is a web OAuth redirect completing a sign-in that
-      // just happened, not a real app restart — apply the choice made
-      // before the redirect instead of treating it as a stale session.
-      await SessionPrefs.setRememberMe(pendingOAuthChoice);
-    } else if (_initialSession != null && !_isRecoveringPassword) {
-      final stayLoggedIn = await SessionPrefs.shouldStayLoggedIn();
-      if (!stayLoggedIn) {
-        await Supabase.instance.client.auth.signOut();
+    // Whatever happens below, the gate must stop showing the startup spinner
+    // and fall through to the auth check — an exception here (a failed prefs
+    // read or signOut) used to leave _checkedRememberMe false forever, which
+    // pinned the app on the spinner with no way out. Failing open is safe:
+    // a null session lands on LoginScreen, and the worst case (a session that
+    // should have been signed out surviving) is far better than a dead app.
+    try {
+      // A password-recovery link also completes via a full page reload on
+      // web, which looks identical to a stale restart to the check below —
+      // consuming this flag (set by ForgotPasswordScreen right before the
+      // email was sent) lets that reload's session survive long enough for
+      // ResetPasswordScreen to use it, instead of being signed straight out.
+      final pendingRecovery =
+          await SessionPrefs.consumePendingPasswordRecovery();
+      final pendingOAuthChoice =
+          await SessionPrefs.consumePendingOAuthRememberMe();
+      if (pendingRecovery) {
+        if (mounted) setState(() => _isRecoveringPassword = true);
+      } else if (pendingOAuthChoice != null) {
+        // This cold start is a web OAuth redirect completing a sign-in that
+        // just happened, not a real app restart — apply the choice made
+        // before the redirect instead of treating it as a stale session.
+        await SessionPrefs.setRememberMe(pendingOAuthChoice);
+      } else if (_initialSession != null && !_isRecoveringPassword) {
+        final stayLoggedIn = await SessionPrefs.shouldStayLoggedIn();
+        if (!stayLoggedIn) {
+          await Supabase.instance.client.auth.signOut();
+        }
       }
+    } catch (e, st) {
+      debugPrint('auth: remember-me check failed: $e\n$st');
+    } finally {
+      if (mounted) setState(() => _checkedRememberMe = true);
     }
-    if (mounted) setState(() => _checkedRememberMe = true);
   }
 
   @override
