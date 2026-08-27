@@ -259,12 +259,21 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: scheme.onSurface,
+          // FittedBox so a long space-formatted number (e.g. "40 000")
+          // shrinks to fit this cell instead of pinching against its
+          // neighbour when the banner sits in a half-width landscape
+          // column — same treatment KpiCard already uses for its own
+          // big-number display.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: scheme.onSurface,
+              ),
             ),
           ),
         ],

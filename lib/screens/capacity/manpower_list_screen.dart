@@ -143,7 +143,11 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
               for (final shift in _shifts)
                 Card(
                   child: ListTile(
-                    title: Text(shift.shiftName),
+                    title: Text(
+                      shift.shiftName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: Text(
                       '${shift.workerCount} workers × ${shift.shiftHours}h × '
                       '${shift.outputPerWorkerHour}/worker-hour',

@@ -138,11 +138,20 @@ class MetricRow extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: scheme.onSurface,
+          // Flexible so a long value (a user-entered supplier/material name,
+          // not just a number) shrinks to fit instead of overflowing the
+          // row — label already yields via Expanded above, but without this
+          // the value itself lays out at its intrinsic width regardless.
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurface,
+              ),
             ),
           ),
           if (status != null && statusLabel != null) ...[

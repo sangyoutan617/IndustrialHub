@@ -427,7 +427,10 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectedFactory?.factoryName ?? l10n.appTitle),
+        title: Text(
+          _selectedFactory?.factoryName ?? l10n.appTitle,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.person_outline),
