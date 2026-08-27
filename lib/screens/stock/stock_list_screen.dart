@@ -215,7 +215,11 @@ class _StockListScreenState extends State<StockListScreen> {
               final stock = _stock[index];
               return Card(
                 child: ListTile(
-                  title: Text(stock.productName),
+                  title: Text(
+                    stock.productName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     '${formatUnits(stock.currentQuantity)} in stock',
                   ),

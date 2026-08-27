@@ -99,7 +99,12 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Record movement — ${widget.productName}')),
+      appBar: AppBar(
+        title: Text(
+          'Record movement — ${widget.productName}',
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,

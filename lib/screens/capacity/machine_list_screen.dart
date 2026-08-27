@@ -141,7 +141,11 @@ class _MachineListScreenState extends State<MachineListScreen> {
                   : 0.0;
               return Card(
                 child: ListTile(
-                  title: Text(machine.machineName),
+                  title: Text(
+                    machine.machineName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
                     child: Row(

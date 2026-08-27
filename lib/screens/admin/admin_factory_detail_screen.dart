@@ -117,7 +117,12 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.factory.factoryName)),
+      appBar: AppBar(
+        title: Text(
+          widget.factory.factoryName,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
       body: _buildBody(),
     );
   }

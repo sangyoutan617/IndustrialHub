@@ -273,7 +273,11 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                 MachineListScreen(factoryId: widget.factory.factoryId),
               ),
               icon: const Icon(Icons.settings_outlined),
-              label: const Text('Machines'),
+              label: const Text(
+                'Machines',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -283,7 +287,11 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                 ManpowerListScreen(factoryId: widget.factory.factoryId),
               ),
               icon: const Icon(Icons.people_outline),
-              label: const Text('Manpower'),
+              label: const Text(
+                'Manpower',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
         ],
@@ -374,12 +382,17 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         : 6.0;
     return Column(
       children: [
-        Text(
-          formatNumber(value),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface,
+        // FittedBox so a wide space-formatted value doesn't clip when this
+        // bar sits inside a half-width landscape column.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            formatNumber(value),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         ),
         const SizedBox(height: 6),
