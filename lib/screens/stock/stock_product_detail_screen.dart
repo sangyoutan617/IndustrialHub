@@ -157,7 +157,10 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_cover?.stock.productName ?? 'Product'),
+        title: Text(
+          _cover?.stock.productName ?? 'Product',
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: _state == _LoadState.ready
             ? [
                 IconButton(
@@ -208,7 +211,12 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: Text(stock.productName, style: theme.textTheme.titleLarge),
+                child: Text(
+                  stock.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge,
+                ),
               ),
               StatusChip(label: cover.status, status: cover.appStatus),
             ],

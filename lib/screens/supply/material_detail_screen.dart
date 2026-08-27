@@ -262,7 +262,10 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_plan?.material.materialName ?? 'Material'),
+        title: Text(
+          _plan?.material.materialName ?? 'Material',
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: _state == _LoadState.ready
             ? [
                 IconButton(
@@ -320,6 +323,8 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
               Expanded(
                 child: Text(
                   material.materialName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge,
                 ),
               ),

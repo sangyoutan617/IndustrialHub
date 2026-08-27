@@ -94,11 +94,17 @@ class _AdminFactoriesScreenState extends State<AdminFactoriesScreen> {
                 Icons.factory_outlined,
                 color: Theme.of(context).colorScheme.primary,
               ),
-              title: Text(factory.factoryName),
+              title: Text(
+                factory.factoryName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 subtitle.isEmpty
                     ? (factory.msicCode ?? 'No location set')
                     : subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
