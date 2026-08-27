@@ -252,7 +252,12 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: Text(widget.materialName, style: theme.textTheme.titleLarge),
+                child: Text(
+                  widget.materialName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge,
+                ),
               ),
               StatusChip(label: _order.status, status: status),
             ],

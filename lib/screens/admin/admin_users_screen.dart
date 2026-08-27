@@ -142,11 +142,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                             profile.displayName?.isNotEmpty == true
                                 ? profile.displayName!
                                 : (profile.email ?? 'Unknown'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
                             profile.displayName?.isNotEmpty == true
                                 ? (profile.email ?? '')
                                 : 'Joined ${formatDate(profile.createdAt)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           trailing: Text(
                             formatDate(profile.createdAt),

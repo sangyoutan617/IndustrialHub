@@ -493,7 +493,13 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
                   child: Row(
                     children: [
-                      Expanded(child: Text(cover.stock.productName)),
+                      Expanded(
+                        child: Text(
+                          cover.stock.productName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                       Text(
                         formatDays(cover.daysOfCover!),
                         style: TextStyle(
@@ -544,7 +550,13 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
                   child: Row(
                     children: [
-                      Expanded(child: Text(cover.stock.productName)),
+                      Expanded(
+                        child: Text(
+                          cover.stock.productName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                       Text(
                         '${formatDays(cover.daysOfCover!)} of cover',
                         style: TextStyle(
@@ -627,7 +639,11 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           for (final forecast in _forecasts)
             Card(
               child: ListTile(
-                title: Text(forecast.productName),
+                title: Text(
+                  forecast.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(
                   '${formatNumber(forecast.requiredPerDay)} units/day required',
                 ),
@@ -723,15 +739,24 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   Widget _summaryStat(String label, String value, Color color) {
     return Column(
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: color,
+        // FittedBox so a wide space-formatted count doesn't pinch when
+        // this 3-up row lands inside a half-width landscape column.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       ],
     );
   }
@@ -762,6 +787,8 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                   Expanded(
                     child: Text(
                       cover.stock.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: primaryTextColor,

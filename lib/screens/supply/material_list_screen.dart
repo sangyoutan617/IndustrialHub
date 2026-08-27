@@ -491,6 +491,8 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   children: [
                     Text(
                       plan.material.materialName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontWeight: FontWeight.w700, color: riskStatus.color),
                     ),
                     Text(
@@ -730,12 +732,17 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   Widget _summaryStat(String label, String value, Color color) {
     return Column(
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: color,
+        // FittedBox so a wide space-formatted count doesn't pinch when
+        // this row lands inside a half-width landscape column.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ),
         Text(label, style: Theme.of(context).textTheme.bodySmall, textAlign: TextAlign.center),
@@ -769,6 +776,8 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   children: [
                     Text(
                       material.materialName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 2),
