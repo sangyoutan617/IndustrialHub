@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../models/factory.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
@@ -182,7 +183,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
                   InfoBanner(
                     status: AppStatus.danger,
                     title:
-                        'Output shortfall: short by ${bottleneck.shortfall!.toStringAsFixed(0)} units/day',
+                        'Output shortfall: short by ${formatWhole(bottleneck.shortfall!)} units/day',
                     message:
                         'Limiting resource: ${_resourceLabel(bottleneck.limiter ?? bottleneck.bottleneckResource)}',
                   ),
@@ -192,9 +193,9 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
                   InfoBanner(
                     status: AppStatus.danger,
                     title:
-                        '${material.materialName}: ${material.currentStock.toStringAsFixed(0)} ${material.unit} in stock',
+                        '${material.materialName}: ${formatWhole(material.currentStock)} ${material.unit} in stock',
                     message:
-                        'Reorder level: ${material.reorderLevel.toStringAsFixed(0)} ${material.unit}',
+                        'Reorder level: ${formatWhole(material.reorderLevel)} ${material.unit}',
                     actionLabel: 'Raise PO',
                     onAction: () => _raisePurchaseOrder(material),
                   ),

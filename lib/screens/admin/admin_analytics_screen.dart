@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../services/admin_service.dart';
@@ -136,7 +137,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                   child: KpiCard(
                     icon: Icons.speed_outlined,
                     label: 'Aggregate achievable/day',
-                    value: stats.totalAchievable.toStringAsFixed(0),
+                    value: formatWhole(stats.totalAchievable),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.m),
@@ -144,7 +145,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                   child: KpiCard(
                     icon: Icons.trending_up,
                     label: 'Aggregate demand/day',
-                    value: stats.totalDemand.toStringAsFixed(0),
+                    value: formatWhole(stats.totalDemand),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.m),
@@ -201,7 +202,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                   child: Text(
                     '${p.category}: ${p.belowPeerMedianCount} of ${p.factoryCount} factories below the peer median '
                     'output/worker (avg ${p.avgOutputPerWorker.toStringAsFixed(2)} units/day/worker)'
-                    '${p.benchmark.valueAddedPerWorker != null ? ' — DOSM RM ${p.benchmark.valueAddedPerWorker!.toStringAsFixed(0)}/worker/year for context' : ''}',
+                    '${p.benchmark.valueAddedPerWorker != null ? ' — DOSM RM ${formatWhole(p.benchmark.valueAddedPerWorker!)}/worker/year for context' : ''}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -357,22 +358,21 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         DataCell(
                           Text(
                             stat.bottleneck.hasData
-                                ? stat.bottleneck.achievable.toStringAsFixed(0)
+                                ? formatWhole(stat.bottleneck.achievable)
                                 : '—',
                           ),
                         ),
                         DataCell(
                           Text(
                             stat.bottleneck.hasData
-                                ? stat.bottleneck.requiredPerDay
-                                      .toStringAsFixed(0)
+                                ? formatWhole(stat.bottleneck.requiredPerDay)
                                 : '—',
                           ),
                         ),
                         DataCell(
                           Text(
                             stat.bottleneck.shortfall != null
-                                ? stat.bottleneck.shortfall!.toStringAsFixed(0)
+                                ? formatWhole(stat.bottleneck.shortfall!)
                                 : '—',
                           ),
                         ),
