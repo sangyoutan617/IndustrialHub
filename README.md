@@ -260,6 +260,36 @@ suppliers, and an unpriced supplier sorts after any priced one.
   set (the common case before this) is always active, so existing data
   behaves exactly as before.
 
+## Offline-first stock movements (SQLite)
+
+Recording a stock movement (Module 2) doesn't wait on the network:
+`StockService.recordMovementQueued()` writes it to a **local SQLite
+database first** — via `sqflite`, in `stock_offline_queue_service.dart` —
+so it always succeeds instantly, then attempts to sync it to Supabase in
+the background.
+
+- **Table:** `pending_movements` (own SQLite file, `stock_offline_queue.db`,
+  created on first use — visible live in Android Studio's Database
+  Inspector while the app runs). Columns mirror a `stock_movements` row
+  plus a `synced` flag.
+- **Sync flow:** on every stock-dashboard load,
+  `StockService.syncPendingMovements()` retries every unsynced queue entry
+  against Supabase. A row that's simply unreachable (no network) stays
+  queued silently; a row that's a genuine data conflict (e.g. it would
+  take stock below zero) is surfaced to the user instead of retried
+  forever — dropped only on an explicit user retry via the pending-sync
+  pill's "Retry" button (`dropConflicts: true`), never on a silent
+  background load.
+- **Visibility:** `StockDashboardScreen` shows a "N pending sync" pill
+  (`_pendingMovements`, from `pendingMovementCount()`) whenever the queue
+  isn't empty, so a movement recorded while offline is never silently
+  invisible to the user.
+- **Platform scope:** `sqflite` only ships a native implementation for
+  Android/iOS. Every method on `StockOfflineQueueService` is a no-op on
+  web/desktop instead of throwing (`_supported` gate), so those platforms
+  keep working, just without the offline queue — a movement there goes
+  straight to Supabase.
+
 ## Startup robustness
 
 - `Supabase.initialize` (previously called directly in `main()`) is now
