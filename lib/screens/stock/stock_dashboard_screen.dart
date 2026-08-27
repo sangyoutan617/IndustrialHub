@@ -628,7 +628,9 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             Card(
               child: ListTile(
                 title: Text(forecast.productName),
-                subtitle: Text('${forecast.requiredPerDay} units/day required'),
+                subtitle: Text(
+                  '${formatNumber(forecast.requiredPerDay)} units/day required',
+                ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -693,14 +695,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
       final m = withCover.first;
       buffer.writeln(
         'Closest to stock-out: ${m.stock.productName} — '
-        '${m.stock.currentQuantity} units in stock, demand '
-        '${m.requiredPerDay}/day, ${m.daysOfCover!.toStringAsFixed(1)} days of '
+        '${formatNumber(m.stock.currentQuantity)} units in stock, demand '
+        '${formatNumber(m.requiredPerDay!)}/day, ${m.daysOfCover!.toStringAsFixed(1)} days of '
         'cover${m.stockOutDate != null ? ', predicted stock-out ${formatDate(m.stockOutDate!)}' : ''}.',
       );
     }
     for (final c in withCover) {
       buffer.writeln(
-        '- ${c.stock.productName}: ${c.stock.currentQuantity} units, '
+        '- ${c.stock.productName}: ${formatNumber(c.stock.currentQuantity)} units, '
         '${c.daysOfCover!.toStringAsFixed(1)} days of cover (${c.status}).',
       );
     }
@@ -791,7 +793,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               ),
               const SizedBox(height: AppSpacing.s),
               Text(
-                '${cover.stock.currentQuantity} units in stock',
+                '${formatNumber(cover.stock.currentQuantity)} units in stock',
                 style: TextStyle(color: primaryTextColor),
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -815,7 +817,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               const SizedBox(height: AppSpacing.xs),
               if (cover.daysOfCover != null) ...[
                 Text(
-                  'Demand ${cover.requiredPerDay}/day · '
+                  'Demand ${formatNumber(cover.requiredPerDay!)}/day · '
                   '${cover.daysOfCover!.toStringAsFixed(1)} days of cover',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: secondaryTextColor,
