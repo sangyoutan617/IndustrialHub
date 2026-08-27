@@ -229,7 +229,7 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
                   MetricRow(
                     label: 'Demand',
                     value: cover.requiredPerDay != null
-                        ? '${cover.requiredPerDay}/day'
+                        ? '${formatNumber(cover.requiredPerDay!)}/day'
                         : 'Not set',
                   ),
                   MetricRow(
