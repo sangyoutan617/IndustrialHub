@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/responsive_grid_list.dart';
 import '../../core/theme.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
@@ -339,9 +340,10 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
                           ),
                         ],
                       )
-                    : ListView.builder(
+                    : ResponsiveGridList(
                         padding: const EdgeInsets.all(8),
                         itemCount: filtered.length,
+                        landscapeChildAspectRatio: 2.4,
                         itemBuilder: (context, index) {
                           final supplier = filtered[index];
                           final materialName =

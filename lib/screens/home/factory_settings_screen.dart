@@ -4,6 +4,7 @@ import '../../models/factory.dart';
 import '../../models/msic_code.dart';
 import '../../services/capacity_service.dart';
 import '../../services/factory_service.dart';
+import '../../widgets/responsive_form_fields.dart';
 
 /// Edit a factory's location, state, and industry after it's been created —
 /// the details onboarding captured (or skipped) are otherwise fixed for the
@@ -97,58 +98,66 @@ class _FactorySettingsScreenState extends State<FactorySettingsScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(
-                widget.factory.factoryName,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _locationController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Location / city (e.g. Shah Alam)',
-                ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedState,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'State'),
-                items: [
-                  for (final state in malaysianStates)
-                    DropdownMenuItem(value: state, child: Text(state)),
-                ],
-                onChanged: (v) => setState(() => _selectedState = v),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedMsic,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Industry (MSIC)',
-                ),
-                items: [
-                  for (final code in _msicCodes)
-                    DropdownMenuItem(
-                      value: code.msicCode,
-                      child: Text(
-                        code.description,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              ResponsiveFormFields(
+                children: [
+                  FormBreak(
+                    Text(
+                      widget.factory.factoryName,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _locationController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Location / city (e.g. Shah Alam)',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedState,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'State'),
+                    items: [
+                      for (final state in malaysianStates)
+                        DropdownMenuItem(value: state, child: Text(state)),
+                    ],
+                    onChanged: (v) => setState(() => _selectedState = v),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedMsic,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Industry (MSIC)',
+                    ),
+                    items: [
+                      for (final code in _msicCodes)
+                        DropdownMenuItem(
+                          value: code.msicCode,
+                          child: Text(
+                            code.description,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) => setState(() => _selectedMsic = v),
+                  ),
+                  const SizedBox(height: 28),
+                  FormBreak(
+                    FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
+                  ),
                 ],
-                onChanged: (v) => setState(() => _selectedMsic = v),
-              ),
-              const SizedBox(height: 28),
-              FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
               ),
             ],
           ),

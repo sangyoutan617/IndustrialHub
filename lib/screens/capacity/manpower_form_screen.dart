@@ -3,6 +3,7 @@ import '../../core/theme.dart';
 import '../../models/manpower.dart';
 import '../../services/manpower_service.dart';
 import '../../widgets/kpi_card.dart';
+import '../../widgets/responsive_form_fields.dart';
 
 class ManpowerFormScreen extends StatefulWidget {
   final int factoryId;
@@ -85,66 +86,72 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Shift name'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              const SectionHeader(title: 'Shift details'),
-              TextFormField(
-                controller: _workersController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Worker count'),
-                validator: (v) {
-                  final parsed = int.tryParse(v ?? '');
-                  if (parsed == null) return 'Enter a valid whole number';
-                  if (parsed < 0) return 'Must be at least 0';
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.l),
-              TextFormField(
-                controller: _hoursController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Shift hours'),
-                validator: (v) {
-                  final parsed = double.tryParse(v ?? '');
-                  if (parsed == null) return 'Enter a valid number';
-                  if (parsed < 0 || parsed > 24) {
-                    return 'Must be between 0 and 24';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.l),
-              TextFormField(
-                controller: _outputController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Output per worker-hour',
-                ),
-                validator: (v) {
-                  final parsed = double.tryParse(v ?? '');
-                  if (parsed == null) return 'Enter a valid number';
-                  if (parsed < 0) return 'Must be at least 0';
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
+              ResponsiveFormFields(
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Shift name'),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const FormBreak(SectionHeader(title: 'Shift details')),
+                  TextFormField(
+                    controller: _workersController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Worker count'),
+                    validator: (v) {
+                      final parsed = int.tryParse(v ?? '');
+                      if (parsed == null) return 'Enter a valid whole number';
+                      if (parsed < 0) return 'Must be at least 0';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  TextFormField(
+                    controller: _hoursController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(labelText: 'Shift hours'),
+                    validator: (v) {
+                      final parsed = double.tryParse(v ?? '');
+                      if (parsed == null) return 'Enter a valid number';
+                      if (parsed < 0 || parsed > 24) {
+                        return 'Must be between 0 and 24';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  TextFormField(
+                    controller: _outputController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Output per worker-hour',
+                    ),
+                    validator: (v) {
+                      final parsed = double.tryParse(v ?? '');
+                      if (parsed == null) return 'Enter a valid number';
+                      if (parsed < 0) return 'Must be at least 0';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  FormBreak(
+                    FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

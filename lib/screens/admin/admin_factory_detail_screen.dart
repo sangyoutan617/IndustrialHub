@@ -10,6 +10,7 @@ import '../../services/supplier_service.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import '../supply/order_form_screen.dart';
 
@@ -142,84 +143,113 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
     final factory = widget.factory;
     final bottleneck = _bottleneck!;
 
+    final infoCard = Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              factory.factoryName,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              [
+                if (factory.location != null) factory.location!,
+                if (factory.state != null) factory.state!,
+              ].join(', '),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (factory.msicCode != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'MSIC ${factory.msicCode}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+    
+    final bottleneckBanner = BottleneckBanner(factoryId: factory.factoryId);
+
+    final alertsSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Alerts', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (bottleneck.hasData && !bottleneck.canMeetDemand) ...[
+          InfoBanner(
+            status: AppStatus.danger,
+            title:
+                'Output shortfall: short by ${formatWhole(bottleneck.shortfall!)} units/day',
+            message:
+                'Limiting resource: ${_resourceLabel(bottleneck.limiter ?? bottleneck.bottleneckResource)}',
+          ),
+          const SizedBox(height: 8),
+        ],
+        for (final material in _lowStockMaterials) ...[
+          InfoBanner(
+            status: AppStatus.danger,
+            title:
+                '${material.materialName}: ${formatWhole(material.currentStock)} ${material.unit} in stock',
+            message:
+                'Reorder level: ${formatWhole(material.reorderLevel)} ${material.unit}',
+            actionLabel: 'Raise PO',
+            onAction: () => _raisePurchaseOrder(material),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if ((!bottleneck.hasData || bottleneck.canMeetDemand) &&
+            _lowStockMaterials.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'No open alerts for this factory.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+      ],
+    );
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    factory.factoryName,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    [
-                      if (factory.location != null) factory.location!,
-                      if (factory.state != null) factory.state!,
-                    ].join(', '),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (factory.msicCode != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'MSIC ${factory.msicCode}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+      child: ResponsiveTwoPane(
+        portrait: (context) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            infoCard,
+            bottleneckBanner,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: alertsSection,
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+        landscape: (context) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    infoCard,
+                    bottleneckBanner,
                   ],
-                ],
+                ),
               ),
-            ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: alertsSection,
+              ),
+            ],
           ),
-          BottleneckBanner(factoryId: factory.factoryId),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Alerts', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                if (bottleneck.hasData && !bottleneck.canMeetDemand) ...[
-                  InfoBanner(
-                    status: AppStatus.danger,
-                    title:
-                        'Output shortfall: short by ${formatWhole(bottleneck.shortfall!)} units/day',
-                    message:
-                        'Limiting resource: ${_resourceLabel(bottleneck.limiter ?? bottleneck.bottleneckResource)}',
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                for (final material in _lowStockMaterials) ...[
-                  InfoBanner(
-                    status: AppStatus.danger,
-                    title:
-                        '${material.materialName}: ${formatWhole(material.currentStock)} ${material.unit} in stock',
-                    message:
-                        'Reorder level: ${formatWhole(material.reorderLevel)} ${material.unit}',
-                    actionLabel: 'Raise PO',
-                    onAction: () => _raisePurchaseOrder(material),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if ((!bottleneck.hasData || bottleneck.canMeetDemand) &&
-                    _lowStockMaterials.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      'No open alerts for this factory.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
     );
   }

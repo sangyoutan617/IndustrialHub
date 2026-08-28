@@ -8,6 +8,7 @@ import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_grid_list.dart';
 import '../../widgets/status.dart';
 import 'machine_form_screen.dart';
 
@@ -130,9 +131,10 @@ class _MachineListScreenState extends State<MachineListScreen> {
         }
         return RefreshIndicator(
           onRefresh: _load,
-          child: ListView.builder(
+          child: ResponsiveGridList(
             padding: const EdgeInsets.all(8),
             itemCount: _machines.length,
+            landscapeChildAspectRatio: 3.0,
             itemBuilder: (context, index) {
               final machine = _machines[index];
               final isActive = machine.isActive;

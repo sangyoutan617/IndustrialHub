@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/responsive_grid_list.dart';
 import '../../core/formatters.dart';
 import '../../models/finished_stock.dart';
 import '../../services/stock_service.dart';
@@ -208,9 +209,10 @@ class _StockListScreenState extends State<StockListScreen> {
         }
         return RefreshIndicator(
           onRefresh: _load,
-          child: ListView.builder(
+          child: ResponsiveGridList(
             padding: const EdgeInsets.all(8),
             itemCount: _stock.length,
+            landscapeChildAspectRatio: 3.5,
             itemBuilder: (context, index) {
               final stock = _stock[index];
               return Card(

@@ -6,6 +6,7 @@ import '../../services/mrp_service.dart';
 import '../../services/order_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/kpi_card.dart';
+import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import 'order_form_screen.dart';
 
@@ -244,78 +245,118 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     final theme = Theme.of(context);
     final status = _statusFor(_order.status);
     final isOpen = _openStatuses.contains(_order.status);
+    
+    final header = Row(
+      children: [
+        Expanded(
+          child: Text(
+            widget.materialName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleLarge,
+          ),
+        ),
+        StatusChip(label: _order.status, status: status),
+      ],
+    );
+    
+    final deliveryText = isOpen && _order.expectedDelivery != null ? Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Text(
+        _relativeDeliveryText(),
+        style: theme.textTheme.bodyMedium?.copyWith(color: status.color),
+      ),
+    ) : const SizedBox.shrink();
+    
+    final detailsCard = Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.l,
+          vertical: AppSpacing.s,
+        ),
+        child: Column(
+          children: [
+            MetricRow(label: 'PO number', value: formatPoNumber(_order.poId)),
+            MetricRow(label: 'Supplier', value: widget.supplierName),
+            MetricRow(label: 'Material', value: widget.materialName),
+            MetricRow(label: 'Quantity', value: formatUnits(_order.quantity)),
+            if (_order.unitPrice != null) ...[
+              MetricRow(
+                label: 'Unit price',
+                value: formatCurrency(_order.unitPrice!),
+              ),
+              MetricRow(
+                label: 'Order total',
+                value: formatCurrency(MrpService.orderTotal(_order)!),
+              ),
+            ],
+            MetricRow(label: 'Order date', value: formatDate(_order.orderDate)),
+            MetricRow(
+              label: 'Expected delivery',
+              value: _order.expectedDelivery != null
+                  ? formatDate(_order.expectedDelivery!)
+                  : 'Not set',
+            ),
+            if (_order.deliveredAt != null)
+              MetricRow(
+                label: 'Delivered on',
+                value: formatDate(_order.deliveredAt!),
+              ),
+          ],
+        ),
+      ),
+    );
+    
+    final actionsSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Actions'),
+        Wrap(
+          spacing: AppSpacing.s,
+          runSpacing: AppSpacing.s,
+          children: _actions(),
+        ),
+      ],
+    );
+    
     return Scaffold(
       appBar: AppBar(title: Text(formatPoNumber(_order.poId))),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        children: [
-          Row(
+      body: ResponsiveTwoPane(
+        portrait: (context) => ListView(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          children: [
+            header,
+            deliveryText,
+            const SizedBox(height: AppSpacing.l),
+            detailsCard,
+            const SizedBox(height: AppSpacing.l),
+            actionsSection,
+          ],
+        ),
+        landscape: (context) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(AppSpacing.l),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  widget.materialName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    header,
+                    deliveryText,
+                    const SizedBox(height: AppSpacing.l),
+                    detailsCard,
+                  ],
                 ),
               ),
-              StatusChip(label: _order.status, status: status),
+              const SizedBox(width: 16),
+              Expanded(
+                child: actionsSection,
+              ),
             ],
           ),
-          if (isOpen && _order.expectedDelivery != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              _relativeDeliveryText(),
-              style: theme.textTheme.bodyMedium?.copyWith(color: status.color),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.l),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.l,
-                vertical: AppSpacing.s,
-              ),
-              child: Column(
-                children: [
-                  MetricRow(label: 'PO number', value: formatPoNumber(_order.poId)),
-                  MetricRow(label: 'Supplier', value: widget.supplierName),
-                  MetricRow(label: 'Material', value: widget.materialName),
-                  MetricRow(label: 'Quantity', value: formatUnits(_order.quantity)),
-                  if (_order.unitPrice != null) ...[
-                    MetricRow(
-                      label: 'Unit price',
-                      value: formatCurrency(_order.unitPrice!),
-                    ),
-                    MetricRow(
-                      label: 'Order total',
-                      value: formatCurrency(MrpService.orderTotal(_order)!),
-                    ),
-                  ],
-                  MetricRow(label: 'Order date', value: formatDate(_order.orderDate)),
-                  MetricRow(
-                    label: 'Expected delivery',
-                    value: _order.expectedDelivery != null
-                        ? formatDate(_order.expectedDelivery!)
-                        : 'Not set',
-                  ),
-                  if (_order.deliveredAt != null)
-                    MetricRow(
-                      label: 'Delivered on',
-                      value: formatDate(_order.deliveredAt!),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.l),
-          const SectionHeader(title: 'Actions'),
-          Wrap(
-            spacing: AppSpacing.s,
-            runSpacing: AppSpacing.s,
-            children: _actions(),
-          ),
-        ],
+        ),
       ),
     );
   }

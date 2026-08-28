@@ -9,6 +9,7 @@ import '../../services/supply_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_form_fields.dart';
 
 /// Values used to pre-populate a new order — e.g. from the material
 /// dashboard's "Reorder" button, which already knows the best supplier
@@ -295,118 +296,124 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const SectionHeader(
-                title: 'What to order',
-                padding: EdgeInsets.only(bottom: 4),
-              ),
-              DropdownButtonFormField<int>(
-                initialValue: _selectedMaterialId,
-                decoration: const InputDecoration(labelText: 'Material'),
-                items: [
-                  for (final material in _materials)
-                    DropdownMenuItem(
-                      value: material.materialId,
-                      child: Text(material.materialName),
-                    ),
-                ],
-                onChanged: _isEditing ? null : _selectMaterial,
-                validator: (v) => v == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              if (supplierOptions.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    'This material has no supplier yet — add one before '
-                    'raising a purchase order for it.',
-                  ),
-                )
-              else
-                DropdownButtonFormField<int>(
-                  initialValue: _selectedSupplierId,
-                  decoration: const InputDecoration(labelText: 'Supplier'),
-                  items: [
-                    for (final supplier in supplierOptions)
-                      DropdownMenuItem(
-                        value: supplier.supplierId,
-                        child: Text(
-                          '${supplier.supplierName} '
-                          '(${MrpService.effectiveLeadDays(supplier)}d lead)',
+              ResponsiveFormFields(
+                children: [
+                  const FormBreak(SectionHeader(
+                    title: 'What to order',
+                    padding: EdgeInsets.only(bottom: 4),
+                  )),
+                  DropdownButtonFormField<int>(
+                    initialValue: _selectedMaterialId,
+                    decoration: const InputDecoration(labelText: 'Material'),
+                    items: [
+                      for (final material in _materials)
+                        DropdownMenuItem(
+                          value: material.materialId,
+                          child: Text(material.materialName),
                         ),
+                    ],
+                    onChanged: _isEditing ? null : _selectMaterial,
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  if (supplierOptions.isEmpty)
+                    const FormBreak(Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'This material has no supplier yet — add one before '
+                        'raising a purchase order for it.',
                       ),
-                  ],
-                  onChanged: _selectSupplier,
-                  validator: (v) => v == null ? 'Required' : null,
-                ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _quantityController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Quantity',
-                  helperText: coverageText,
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) {
-                  final parsed = double.tryParse(v ?? '');
-                  if (parsed == null || parsed <= 0) {
-                    return 'Enter a positive number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _priceController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Unit price (RM, optional)',
-                  helperText: _orderTotalHelperText(),
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
-                  final parsed = double.tryParse(v);
-                  if (parsed == null || parsed < 0) {
-                    return 'Enter a valid price';
-                  }
-                  return null;
-                },
-              ),
-              const SectionHeader(
-                title: 'Dates',
-                padding: EdgeInsets.only(top: 20, bottom: 4),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Order date'),
-                subtitle: Text(_formatDate(_orderDate)),
-                trailing: const Icon(Icons.calendar_today_outlined),
-                onTap: () => _pickDate(isOrderDate: true),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Expected delivery'),
-                subtitle: Text(_formatDate(_expectedDelivery)),
-                trailing: const Icon(Icons.calendar_today_outlined),
-                onTap: () => _pickDate(isOrderDate: false),
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: (_isSaving || supplierOptions.isEmpty)
-                    ? null
-                    : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
+                    ))
+                  else
+                    DropdownButtonFormField<int>(
+                      initialValue: _selectedSupplierId,
+                      decoration: const InputDecoration(labelText: 'Supplier'),
+                      items: [
+                        for (final supplier in supplierOptions)
+                          DropdownMenuItem(
+                            value: supplier.supplierId,
+                            child: Text(
+                              '${supplier.supplierName} '
+                              '(${MrpService.effectiveLeadDays(supplier)}d lead)',
+                            ),
+                          ),
+                      ],
+                      onChanged: _selectSupplier,
+                      validator: (v) => v == null ? 'Required' : null,
+                    ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _quantityController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Quantity',
+                      helperText: coverageText,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    validator: (v) {
+                      final parsed = double.tryParse(v ?? '');
+                      if (parsed == null || parsed <= 0) {
+                        return 'Enter a positive number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _priceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Unit price (RM, optional)',
+                      helperText: _orderTotalHelperText(),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return null;
+                      final parsed = double.tryParse(v);
+                      if (parsed == null || parsed < 0) {
+                        return 'Enter a valid price';
+                      }
+                      return null;
+                    },
+                  ),
+                  const FormBreak(SectionHeader(
+                    title: 'Dates',
+                    padding: EdgeInsets.only(top: 20, bottom: 4),
+                  )),
+                  FormBreak(ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Order date'),
+                    subtitle: Text(_formatDate(_orderDate)),
+                    trailing: const Icon(Icons.calendar_today_outlined),
+                    onTap: () => _pickDate(isOrderDate: true),
+                  )),
+                  FormBreak(ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Expected delivery'),
+                    subtitle: Text(_formatDate(_expectedDelivery)),
+                    trailing: const Icon(Icons.calendar_today_outlined),
+                    onTap: () => _pickDate(isOrderDate: false),
+                  )),
+                  const SizedBox(height: 24),
+                  FormBreak(
+                    FilledButton(
+                      onPressed: (_isSaving || supplierOptions.isEmpty)
+                          ? null
+                          : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

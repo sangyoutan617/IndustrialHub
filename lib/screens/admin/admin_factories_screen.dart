@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/responsive_grid_list.dart';
 import '../../models/factory.dart';
 import '../../services/factory_service.dart';
 import '../../widgets/empty_state.dart';
@@ -79,9 +80,10 @@ class _AdminFactoriesScreenState extends State<AdminFactoriesScreen> {
   Widget _buildReady() {
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.builder(
+      child: ResponsiveGridList(
         padding: const EdgeInsets.all(16),
         itemCount: _factories.length,
+        landscapeChildAspectRatio: 3.5,
         itemBuilder: (context, index) {
           final factory = _factories[index];
           final subtitle = [
