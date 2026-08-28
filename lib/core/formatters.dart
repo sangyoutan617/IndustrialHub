@@ -12,6 +12,7 @@ final _upToTwoDecimals = NumberFormat('#,##0.##', 'en_US');
 final _oneDecimal = NumberFormat('0.0', 'en_US');
 final _money = NumberFormat('#,##0.00', 'en_US');
 final _shortDate = DateFormat('d MMM y');
+final _monthYear = DateFormat('MMM y');
 
 /// House style is a space, not a comma, between thousands groups:
 /// "40 000" rather than "40,000".
@@ -44,6 +45,9 @@ String formatPercent(num v) => '${_oneDecimal.format(v)}%';
 
 /// "24 Jul 2026".
 String formatDate(DateTime d) => _shortDate.format(d);
+
+/// "Jul 2026" — for series reported by calendar month rather than by day.
+String formatMonth(DateTime d) => _monthYear.format(d);
 
 /// "1.2 days".
 String formatDays(num v) => '${_oneDecimal.format(v)} days';
