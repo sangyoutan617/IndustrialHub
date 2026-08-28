@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
+import '../../core/theme.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
@@ -250,13 +251,21 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         isSimulated: false,
         unitPrice: double.parse(_priceController.text),
       );
+      PurchaseOrder savedOrder;
       if (_isEditing) {
-        await _orderService.updateOrder(widget.order!.poId, order);
+        savedOrder = await _orderService.updateOrder(
+          widget.order!.poId,
+          order,
+          factoryId: widget.factoryId,
+        );
       } else {
-        await _orderService.createOrder(order);
+        savedOrder = await _orderService.createOrder(
+          order,
+          factoryId: widget.factoryId,
+        );
       }
       if (!mounted) return;
-      Navigator.pop(context, true);
+      Navigator.pop(context, savedOrder);
     } catch (e) {
       debugPrint('supply: failed to save order: $e');
       _showMessage('Could not save order. Please try again.');
@@ -269,7 +278,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Edit purchase order' : 'New purchase order'),
+        title: Text(
+          _isEditing
+              ? 'Edit ${formatPoNumber(widget.order!.poId)}'
+              : 'New purchase order',
+        ),
       ),
       body: SafeArea(child: _buildBody()),
     );
@@ -291,6 +304,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         }
         final supplierOptions = _suppliersForSelectedMaterial;
         final coverageText = _coverageHelperText();
+        final theme = Theme.of(context);
         return Form(
           key: _formKey,
           child: ListView(
@@ -298,6 +312,47 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
             children: [
               ResponsiveFormFields(
                 children: [
+                  FormBreak(
+                    Card(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.m,
+                          vertical: AppSpacing.s,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.tag,
+                              size: 18,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: AppSpacing.s),
+                            Text(
+                              'PO Number: ',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              _isEditing
+                                  ? formatPoNumber(widget.order!.poId)
+                                  : 'Auto-assigned upon creation (e.g. PO-XXXX)',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: _isEditing
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                                fontWeight: _isEditing
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   const FormBreak(SectionHeader(
                     title: 'What to order',
                     padding: EdgeInsets.only(bottom: 4),

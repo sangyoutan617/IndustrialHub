@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/demand_forecast.dart';
 import '../models/stock_movement.dart';
+import 'data_event_service.dart';
 
 class DemandService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -22,7 +23,12 @@ class DemandService {
         .insert(forecast.toInsertJson(forecast.factoryId))
         .select()
         .single();
-    return DemandForecast.fromJson(row);
+    final result = DemandForecast.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: forecast.factoryId,
+      source: DataChangeSource.demand,
+    );
+    return result;
   }
 
   Future<DemandForecast> updateForecast(
@@ -35,11 +41,22 @@ class DemandService {
         .eq('demand_id', demandId)
         .select()
         .single();
-    return DemandForecast.fromJson(row);
+    final result = DemandForecast.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: forecast.factoryId,
+      source: DataChangeSource.demand,
+    );
+    return result;
   }
 
-  Future<void> deleteForecast(int demandId) async {
+  Future<void> deleteForecast(int demandId, {int? factoryId}) async {
     await _client.from('demand_forecast').delete().eq('demand_id', demandId);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.demand,
+      );
+    }
   }
 
   /// Suggests a required_per_day baseline from actual shipment history,

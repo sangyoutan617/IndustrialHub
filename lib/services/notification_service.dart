@@ -1,9 +1,25 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, ValueNotifier;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../core/formatters.dart';
 import '../models/factory.dart';
 import 'mrp_service.dart';
 import 'supply_service.dart';
+
+/// In-app delivery event emitted when a raw material delivery arrives.
+class MaterialDeliveryEvent {
+  final int factoryId;
+  final String materialName;
+  final double quantity;
+  final DateTime timestamp;
+
+  const MaterialDeliveryEvent({
+    required this.factoryId,
+    required this.materialName,
+    required this.quantity,
+    required this.timestamp,
+  });
+}
 
 /// Surfaces supply-risk alerts as OS notifications. The risk itself is
 /// computed by [MrpService] (via [SupplyService]); this only decides whether
@@ -16,6 +32,15 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _initialised = false;
+
+  /// Holds the most recent delivery event so other screens (like Stock)
+  /// can display interactive update notifications and reload data immediately.
+  final ValueNotifier<MaterialDeliveryEvent?> lastDelivery =
+      ValueNotifier<MaterialDeliveryEvent?>(null);
+
+  void clearDeliveryAlert() {
+    lastDelivery.value = null;
+  }
 
   Future<void> init() async {
     if (kIsWeb || _initialised) return;
@@ -62,6 +87,17 @@ class NotificationService {
     iOS: DarwinNotificationDetails(),
   );
 
+  static const _deliveryDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'delivery_alerts',
+      'Delivery alerts',
+      channelDescription: 'Incoming material delivery notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+    iOS: DarwinNotificationDetails(),
+  );
+
   /// Fires one summary notification when [supply] contains materials that
   /// must be reordered now (or are already stocked out). No-op on web, and
   /// when nothing is urgent. The id is keyed by factory so alerts for
@@ -102,6 +138,41 @@ class NotificationService {
       title: title,
       body: body,
       notificationDetails: _details,
+    );
+  }
+
+  /// Fires a local notification when an incoming material purchase order has been
+  /// delivered and added to raw material stock.
+  Future<void> notifyDeliveryReceived({
+    required int factoryId,
+    required String materialName,
+    required double quantity,
+    String? factoryName,
+  }) async {
+    lastDelivery.value = MaterialDeliveryEvent(
+      factoryId: factoryId,
+      materialName: materialName,
+      quantity: quantity,
+      timestamp: DateTime.now(),
+    );
+
+    if (kIsWeb) return;
+    await init();
+
+    final title = 'Material Delivered';
+    final qtyFormatted = formatUnits(quantity);
+    final prefix = factoryName != null && factoryName.isNotEmpty
+        ? '$factoryName: '
+        : '';
+    final body =
+        '$prefix$qtyFormatted of $materialName received and added to stock.';
+
+    final notifId = (factoryId * 10000 + (DateTime.now().millisecondsSinceEpoch % 10000)).toSigned(31);
+    await _plugin.show(
+      id: notifId,
+      title: title,
+      body: body,
+      notificationDetails: _deliveryDetails,
     );
   }
 }

@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/factory.dart';
 import '../../services/capacity_service.dart';
+import '../../services/data_event_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -35,12 +36,26 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
   void initState() {
     super.initState();
     _load();
+    DataEventService.instance.changeEvent.addListener(_onDataEvent);
   }
 
   @override
   void didUpdateWidget(covariant CapacityDashboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.factory.factoryId != widget.factory.factoryId) _load();
+  }
+
+  @override
+  void dispose() {
+    DataEventService.instance.changeEvent.removeListener(_onDataEvent);
+    super.dispose();
+  }
+
+  void _onDataEvent() {
+    final event = DataEventService.instance.changeEvent.value;
+    if (mounted && event != null && event.factoryId == widget.factory.factoryId) {
+      _load();
+    }
   }
 
   Future<void> _load() async {

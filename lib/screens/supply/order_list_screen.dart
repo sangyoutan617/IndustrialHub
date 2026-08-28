@@ -80,21 +80,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _openForm({PurchaseOrder? order}) async {
-    final saved = await Navigator.of(context).push<bool>(
+    final saved = await Navigator.of(context).push<dynamic>(
       MaterialPageRoute(
         builder: (_) =>
             OrderFormScreen(factoryId: widget.factoryId, order: order),
       ),
     );
-    if (!mounted) return;
-    if (saved == true) {
-      _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(order == null ? 'Order added' : 'Order updated'),
+    if (!mounted || saved == null) return;
+    _load();
+    final poNumber = saved is PurchaseOrder ? ' ${formatPoNumber(saved.poId)}' : '';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          order == null ? 'Purchase order$poNumber created' : 'Purchase order$poNumber updated',
         ),
-      );
-    }
+      ),
+    );
   }
 
   Future<void> _openDetail(PurchaseOrder order) async {

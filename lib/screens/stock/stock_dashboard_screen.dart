@@ -1,9 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/demand_forecast.dart';
+import '../../services/data_event_service.dart';
 import '../../services/demand_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/stock_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../../widgets/confirm_dialog.dart';
@@ -41,6 +43,29 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   void initState() {
     super.initState();
     _load();
+    NotificationService.instance.lastDelivery.addListener(_onDeliveryEvent);
+    DataEventService.instance.changeEvent.addListener(_onDataEvent);
+  }
+
+  @override
+  void dispose() {
+    NotificationService.instance.lastDelivery.removeListener(_onDeliveryEvent);
+    DataEventService.instance.changeEvent.removeListener(_onDataEvent);
+    super.dispose();
+  }
+
+  void _onDeliveryEvent() {
+    if (mounted) {
+      _load();
+      setState(() {});
+    }
+  }
+
+  void _onDataEvent() {
+    final event = DataEventService.instance.changeEvent.value;
+    if (mounted && event != null && event.factoryId == widget.factoryId) {
+      _load();
+    }
   }
 
   @override
@@ -218,11 +243,19 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     required List<ProductCover> overstockItems,
     required Widget? aiInsight,
   }) {
+    final delivery = NotificationService.instance.lastDelivery.value;
+    final showDeliveryBanner =
+        delivery != null && delivery.factoryId == widget.factoryId;
+
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.l),
         children: [
+          if (showDeliveryBanner) ...[
+            _buildDeliveryBanner(delivery),
+            const SizedBox(height: AppSpacing.l),
+          ],
           if (_pendingMovements > 0) ...[
             _buildPendingSyncBanner(),
             const SizedBox(height: AppSpacing.l),
@@ -243,6 +276,76 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           _buildCoverListSection(),
           const SizedBox(height: AppSpacing.xl),
           _buildDemandSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryBanner(MaterialDeliveryEvent delivery) {
+    final theme = Theme.of(context);
+    final formattedQty = formatUnits(delivery.quantity);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.m,
+        vertical: AppSpacing.s,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.successLight,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.mark_email_read_outlined,
+            color: AppColors.success,
+            size: 22,
+          ),
+          const SizedBox(width: AppSpacing.m),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Raw Material Delivered',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.success,
+                  ),
+                ),
+                Text(
+                  '$formattedQty of ${delivery.materialName} arrived in stock. Tap to update projections.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.tonal(
+            onPressed: () {
+              _load();
+              NotificationService.instance.clearDeliveryAlert();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Stock data refreshed with latest materials'),
+                ),
+              );
+            },
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            child: const Text('Update'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16, color: AppColors.success),
+            tooltip: 'Dismiss',
+            onPressed: () {
+              NotificationService.instance.clearDeliveryAlert();
+            },
+          ),
         ],
       ),
     );
