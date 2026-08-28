@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/formatters.dart';
 import '../../models/machine.dart';
 import '../../models/manpower.dart';
@@ -29,10 +30,18 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   double _avgOperatingHoursPerDay = 0;
   double _avgOutputPerWorkerHour = 0;
 
-  late double _workers;
-  late double _shiftHours;
-  late double _activeMachines;
-  late double _uptimePercent;
+  // Simulation state — always whole numbers per user requirement.
+  int _workers = 0;
+  int _shiftHours = 0;
+  int _activeMachines = 0;
+  int _uptimePercent = 100;
+
+  // Controllers are late final so their text (and therefore any partially
+  // typed value) survives orientation changes without re-fetching data.
+  late final TextEditingController _workersCtrl;
+  late final TextEditingController _shiftHoursCtrl;
+  late final TextEditingController _activeMachinesCtrl;
+  late final TextEditingController _uptimePercentCtrl;
 
   String? _lastBottleneck;
   bool _justFlipped = false;
@@ -40,7 +49,20 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   @override
   void initState() {
     super.initState();
+    _workersCtrl = TextEditingController();
+    _shiftHoursCtrl = TextEditingController();
+    _activeMachinesCtrl = TextEditingController();
+    _uptimePercentCtrl = TextEditingController();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _workersCtrl.dispose();
+    _shiftHoursCtrl.dispose();
+    _activeMachinesCtrl.dispose();
+    _uptimePercentCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -74,13 +96,20 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   }
 
   void _resetToActual() {
-    _workers = _shifts.fold<int>(0, (sum, s) => sum + s.workerCount).toDouble();
-    _shiftHours = _average(_shifts.map((s) => s.shiftHours));
-    _activeMachines = _machines.where((m) => m.isActive).length.toDouble();
-    _uptimePercent = _average(_machines.map((m) => m.uptimePercent));
-    if (_uptimePercent == 0 && _machines.isEmpty) _uptimePercent = 100;
+    _workers = _shifts.fold<int>(0, (sum, s) => sum + s.workerCount);
+    _shiftHours = _average(_shifts.map((s) => s.shiftHours)).round();
+    final avgUptime = _average(_machines.map((m) => m.uptimePercent));
+    _uptimePercent =
+        (_machines.isEmpty ? 100 : avgUptime.round()).clamp(0, 100);
+    _activeMachines = _machines.where((m) => m.isActive).length;
     _lastBottleneck = null;
     _justFlipped = false;
+
+    // Sync text controllers to the newly computed values.
+    _workersCtrl.text = '$_workers';
+    _shiftHoursCtrl.text = '$_shiftHours';
+    _activeMachinesCtrl.text = '$_activeMachines';
+    _uptimePercentCtrl.text = '$_uptimePercent';
   }
 
   double get _machineCapacity =>
@@ -92,16 +121,17 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   double get _manpowerCapacity =>
       _workers * _shiftHours * _avgOutputPerWorkerHour;
 
-  double get _effectiveCapacity => _machineCapacity < _manpowerCapacity
-      ? _machineCapacity
-      : _manpowerCapacity;
+  double get _effectiveCapacity =>
+      _machineCapacity < _manpowerCapacity
+          ? _machineCapacity
+          : _manpowerCapacity;
 
   String get _bottleneck => CapacityService.bottleneckResourceFor(
-    _machineCapacity,
-    _manpowerCapacity,
-  );
+        _machineCapacity,
+        _manpowerCapacity,
+      );
 
-  void _onSliderChanged(VoidCallback update) {
+  void _onFieldChanged(VoidCallback update) {
     setState(() {
       update();
       final current = _bottleneck;
@@ -142,48 +172,54 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
         final manpowerSection = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Manpower', style: Theme.of(context).textTheme.titleMedium),
-            _buildSlider(
-              label: 'Workers',
-              value: _workers,
-              min: 0,
-              max: (_workers < 100 ? 100 : _workers * 2),
-              display: _workers.toStringAsFixed(0),
-              onChanged: (v) => _onSliderChanged(() => _workers = v),
+            Text(
+              'Manpower',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
-            _buildSlider(
+            const SizedBox(height: 12),
+            _buildIntField(
+              label: 'Workers',
+              controller: _workersCtrl,
+              hint: 'e.g. 20',
+              max: 9999,
+              onValid: (v) => _onFieldChanged(() => _workers = v),
+            ),
+            const SizedBox(height: 12),
+            _buildIntField(
               label: 'Shift hours',
-              value: _shiftHours,
-              min: 0,
+              controller: _shiftHoursCtrl,
+              hint: '0 – 24',
               max: 24,
-              display: '${_shiftHours.toStringAsFixed(1)} h',
-              onChanged: (v) => _onSliderChanged(() => _shiftHours = v),
+              onValid: (v) => _onFieldChanged(() => _shiftHours = v),
             ),
           ],
         );
         final machinesSection = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Machines', style: Theme.of(context).textTheme.titleMedium),
-            _buildSlider(
-              label: 'Active machines',
-              value: _activeMachines,
-              min: 0,
-              max: (_machines.isEmpty ? 10 : _machines.length.toDouble()),
-              display: _activeMachines.toStringAsFixed(0),
-              onChanged: (v) => _onSliderChanged(() => _activeMachines = v),
+            Text(
+              'Machines',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
-            _buildSlider(
+            const SizedBox(height: 12),
+            _buildIntField(
+              label: 'Active machines',
+              controller: _activeMachinesCtrl,
+              hint: _machines.isEmpty ? 'e.g. 5' : '0 – ${_machines.length}',
+              max: _machines.isEmpty ? 9999 : _machines.length,
+              onValid: (v) => _onFieldChanged(() => _activeMachines = v),
+            ),
+            const SizedBox(height: 12),
+            _buildIntField(
               label: 'Uptime %',
-              value: _uptimePercent,
-              min: 0,
+              controller: _uptimePercentCtrl,
+              hint: '0 – 100',
               max: 100,
-              display: formatPercent(_uptimePercent),
-              onChanged: (v) => _onSliderChanged(() => _uptimePercent = v),
+              onValid: (v) => _onFieldChanged(() => _uptimePercent = v),
             ),
           ],
         );
-        
+
         return RefreshIndicator(
           onRefresh: _load,
           child: ResponsiveTwoPane(
@@ -213,9 +249,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Expanded(
-                    child: resultCard,
-                  ),
+                  Expanded(child: resultCard),
                 ],
               ),
             ),
@@ -224,40 +258,60 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     }
   }
 
-  Widget _buildSlider({
+  /// A labelled [TextFormField] that accepts only whole (non-negative integer)
+  /// numbers. Live-updates the simulation on every valid keystroke.
+  ///
+  /// Validation rules:
+  /// - Digits only (no decimal point, no sign) — enforced by [FilteringTextInputFormatter].
+  /// - Value must be between 0 and [max] inclusive.
+  /// - Empty field and out-of-range values show an inline error but do NOT
+  ///   update the simulation (last valid value is retained).
+  Widget _buildIntField({
     required String label,
-    required double value,
-    required double min,
-    required double max,
-    required String display,
-    required ValueChanged<double> onChanged,
+    required TextEditingController controller,
+    required String hint,
+    required int max,
+    required ValueChanged<int> onValid,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label),
-            Text(display, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ],
+    return TextFormField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      // Reject any non-digit character at the input layer — no decimal point,
+      // no minus sign, no spaces.
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
         ),
-        Slider(
-          value: value.clamp(min, max).toDouble(),
-          min: min,
-          max: max <= min ? min + 1 : max,
-          onChanged: onChanged,
-        ),
-      ],
+      ),
+      onChanged: (text) {
+        // Do not update while the field is being cleared or partially typed.
+        if (text.isEmpty) return;
+        final parsed = int.tryParse(text);
+        if (parsed == null || parsed < 0 || parsed > max) return;
+        onValid(parsed);
+      },
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      validator: (value) {
+        if (value == null || value.isEmpty) return 'Enter a whole number';
+        final parsed = int.tryParse(value);
+        if (parsed == null) return 'Whole numbers only (no decimals)';
+        if (parsed < 0) return 'Must be 0 or more';
+        if (parsed > max) return 'Maximum is $max';
+        return null;
+      },
     );
   }
 
   Widget _buildResultCard() {
     final scheme = Theme.of(context).colorScheme;
     final bottleneck = _bottleneck;
-    final containerColor = _justFlipped
-        ? scheme.tertiaryContainer
-        : scheme.primaryContainer;
+    final containerColor =
+        _justFlipped ? scheme.tertiaryContainer : scheme.primaryContainer;
     final onContainerColor = _justFlipped
         ? scheme.onTertiaryContainer
         : scheme.onPrimaryContainer;
@@ -277,16 +331,19 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
           ),
           Text(
             '${formatUnits(_effectiveCapacity)}/day',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
             children: [
               Chip(label: Text('Machine: ${formatNumber(_machineCapacity)}')),
-              const SizedBox(width: 8),
-              Chip(label: Text('Manpower: ${formatNumber(_manpowerCapacity)}')),
+              Chip(
+                label: Text('Manpower: ${formatNumber(_manpowerCapacity)}'),
+              ),
             ],
           ),
           const SizedBox(height: 8),
