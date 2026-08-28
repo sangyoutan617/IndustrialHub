@@ -77,12 +77,10 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
       label: 'Product name',
       initialValue: stock.productName,
     );
-    if (!mounted ||
-        newName == null ||
-        newName.isEmpty ||
-        newName == stock.productName) {
-      return;
-    }
+    // The dialog's default required-validator already guarantees newName
+    // is non-empty whenever non-null — only cancellation and "unchanged"
+    // are left to check here.
+    if (!mounted || newName == null || newName == stock.productName) return;
     try {
       await _service.updateStock(stock.stockId, newName);
       if (!mounted) return;

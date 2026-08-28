@@ -14,6 +14,7 @@ import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/text_prompt_dialog.dart';
 import '../capacity/capacity_dashboard_screen.dart';
 import '../stock/stock_dashboard_screen.dart';
 import '../supply/material_list_screen.dart';
@@ -96,35 +97,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _createFactory() async {
-    final controller = TextEditingController();
-    String? name;
-    try {
-      name = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          icon: const Icon(Icons.add_business_outlined),
-          title: const Text('New factory'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Factory name'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: const Text('Create'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      controller.dispose();
-    }
-    if (name == null || name.isEmpty) return;
+    // showTextPromptDialog owns its own controller's lifecycle (created and
+    // disposed inside the dialog's own State) rather than one created here
+    // and disposed in a `finally` around showDialog — the latter pattern
+    // already caused a real rotation-during-dialog crash once this session.
+    // Its default required-validator also means a non-null result here is
+    // always non-empty.
+    final name = await showTextPromptDialog(
+      context,
+      icon: Icons.add_business_outlined,
+      title: 'New factory',
+      label: 'Factory name',
+      confirmLabel: 'Create',
+    );
+    if (!mounted || name == null) return;
     try {
       final factory = await _factoryService.createFactory(name);
       if (!mounted) return;
@@ -212,35 +198,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _renameFactory(Factory factory) async {
-    final controller = TextEditingController(text: factory.factoryName);
-    String? name;
-    try {
-      name = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          icon: const Icon(Icons.edit_outlined),
-          title: const Text('Rename factory'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Factory name'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      controller.dispose();
-    }
-    if (name == null || name.isEmpty || name == factory.factoryName) return;
+    final name = await showTextPromptDialog(
+      context,
+      icon: Icons.edit_outlined,
+      title: 'Rename factory',
+      label: 'Factory name',
+      initialValue: factory.factoryName,
+    );
+    if (!mounted || name == null || name == factory.factoryName) return;
     try {
       final updated = await _factoryService.renameFactory(
         factory.factoryId,
