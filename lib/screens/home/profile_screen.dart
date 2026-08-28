@@ -3,6 +3,7 @@ import '../../models/profile.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_form_fields.dart';
 
 /// The signed-in user's own profile — view and edit their personal details.
 /// The email is read-only (it's the auth identity); everything else writes
@@ -112,60 +113,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Center(
-              child: CircleAvatar(
-                radius: 36,
-                backgroundColor: scheme.primaryContainer,
-                child: Icon(
-                  Icons.person_outline,
-                  size: 40,
-                  color: scheme.onPrimaryContainer,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            _readOnlyTile('Email', _profile?.email ?? '—', scheme),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Full name'),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Name is required' : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _jobTitleController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Job title (e.g. Factory Manager)',
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _companyController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Company'),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone'),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _isSaving ? null : _save,
-              child: _isSaving
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+            ResponsiveFormFields(
+              children: [
+                FormBreak(
+                  Center(
+                    child: CircleAvatar(
+                      radius: 36,
+                      backgroundColor: scheme.primaryContainer,
+                      child: Icon(
+                        Icons.person_outline,
+                        size: 40,
+                        color: scheme.onPrimaryContainer,
                       ),
-                    )
-                  : const Text('Save'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FormBreak(_readOnlyTile('Email', _profile?.email ?? '—', scheme)),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Full name'),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _jobTitleController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Job title (e.g. Factory Manager)',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _companyController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Company'),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Phone'),
+                ),
+                const SizedBox(height: 24),
+                FormBreak(
+                  FilledButton(
+                    onPressed: _isSaving ? null : _save,
+                    child: _isSaving
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Save'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

@@ -10,6 +10,7 @@ import '../../services/factory_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_two_pane.dart';
 
 class BenchmarkScreen extends StatefulWidget {
   final Factory factory;
@@ -188,34 +189,69 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   }
 
   Widget _buildReady() {
+    final topCard = Card(
+      child: ListTile(
+        leading: Icon(
+          Icons.category_outlined,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        title: Text(
+          _msic?.description ?? _factory.msicCode ?? 'Unknown industry',
+        ),
+        subtitle: Text('MSIC ${_factory.msicCode}'),
+        trailing: TextButton(
+          onPressed: _isAssigning ? null : _assignMsicCode,
+          child: const Text('Change'),
+        ),
+      ),
+    );
+    final yourFactoryCard = _buildYourFactoryCard();
+    final productivityCard = _buildProductivityCard();
+    final ipiCard = _buildIpiCard();
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: ListTile(
-              leading: Icon(
-                Icons.category_outlined,
-                color: Theme.of(context).colorScheme.primary,
+      child: ResponsiveTwoPane(
+        portrait: (context) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            topCard,
+            const SizedBox(height: 16),
+            yourFactoryCard,
+            const SizedBox(height: 16),
+            productivityCard,
+            const SizedBox(height: 16),
+            ipiCard,
+          ],
+        ),
+        landscape: (context) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    topCard,
+                    const SizedBox(height: 16),
+                    ipiCard,
+                  ],
+                ),
               ),
-              title: Text(
-                _msic?.description ?? _factory.msicCode ?? 'Unknown industry',
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    yourFactoryCard,
+                    const SizedBox(height: 16),
+                    productivityCard,
+                  ],
+                ),
               ),
-              subtitle: Text('MSIC ${_factory.msicCode}'),
-              trailing: TextButton(
-                onPressed: _isAssigning ? null : _assignMsicCode,
-                child: const Text('Change'),
-              ),
-            ),
+            ],
           ),
-          const SizedBox(height: 16),
-          _buildYourFactoryCard(),
-          const SizedBox(height: 16),
-          _buildProductivityCard(),
-          const SizedBox(height: 16),
-          _buildIpiCard(),
-        ],
+        ),
       ),
     );
   }

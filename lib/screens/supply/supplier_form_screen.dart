@@ -8,6 +8,7 @@ import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_form_fields.dart';
 import '../../widgets/status.dart';
 
 class SupplierFormScreen extends StatefulWidget {
@@ -194,142 +195,148 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Supplier name'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _locationController,
-                decoration: const InputDecoration(
-                  labelText: 'Location (optional)',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _contactPersonController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Contact person (optional)',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone (optional)',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email (optional)',
-                ),
-                validator: (v) {
-                  final value = v?.trim() ?? '';
-                  if (value.isEmpty) return null;
-                  // Light sanity check — a single @ with text on both sides.
-                  final ok = RegExp(r'^[^@\s]+@[^@\s]+$').hasMatch(value);
-                  return ok ? null : 'Enter a valid email';
-                },
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                initialValue: _selectedMaterialId,
-                decoration: const InputDecoration(
-                  labelText: 'Supplies which material',
-                ),
-                items: [
-                  for (final material in _materials)
-                    DropdownMenuItem(
-                      value: material.materialId,
-                      child: Text(material.materialName),
-                    ),
-                ],
-                onChanged: (value) =>
-                    setState(() => _selectedMaterialId = value),
-                validator: (v) => v == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _leadTimeController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Lead time (days)',
-                  helperText: 'How long an order takes to arrive',
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) {
-                  final parsed = int.tryParse(v ?? '');
-                  if (parsed == null || parsed < 0) {
-                    return 'Enter a non-negative whole number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Reliability rating',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Row(
+              ResponsiveFormFields(
                 children: [
-                  for (var i = 1; i <= 5; i++)
-                    IconButton(
-                      icon: Icon(
-                        _rating >= i ? Icons.star : Icons.star_border,
-                        // Intentional exception to the AppStatus vocabulary:
-                        // star ratings read as gold worldwide, not as a
-                        // "warning" signal. AppColors.warning is close
-                        // enough in hue to stay themed without introducing
-                        // a new ad hoc literal.
-                        color: AppColors.warning,
-                      ),
-                      onPressed: () => setState(() => _rating = i.toDouble()),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Supplier name'),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _locationController,
+                    decoration: const InputDecoration(
+                      labelText: 'Location (optional)',
                     ),
-                  Text('${_rating.toStringAsFixed(1)}★'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _contactPersonController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact person (optional)',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone (optional)',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email (optional)',
+                    ),
+                    validator: (v) {
+                      final value = v?.trim() ?? '';
+                      if (value.isEmpty) return null;
+                      // Light sanity check — a single @ with text on both sides.
+                      final ok = RegExp(r'^[^@\s]+@[^@\s]+$').hasMatch(value);
+                      return ok ? null : 'Enter a valid email';
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    initialValue: _selectedMaterialId,
+                    decoration: const InputDecoration(
+                      labelText: 'Supplies which material',
+                    ),
+                    items: [
+                      for (final material in _materials)
+                        DropdownMenuItem(
+                          value: material.materialId,
+                          child: Text(material.materialName),
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _selectedMaterialId = value),
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _leadTimeController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Lead time (days)',
+                      helperText: 'How long an order takes to arrive',
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    validator: (v) {
+                      final parsed = int.tryParse(v ?? '');
+                      if (parsed == null || parsed < 0) {
+                        return 'Enter a non-negative whole number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  FormBreak(Text(
+                    'Reliability rating',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  )),
+                  FormBreak(Row(
+                    children: [
+                      for (var i = 1; i <= 5; i++)
+                        IconButton(
+                          icon: Icon(
+                            _rating >= i ? Icons.star : Icons.star_border,
+                            // Intentional exception to the AppStatus vocabulary:
+                            // star ratings read as gold worldwide, not as a
+                            // "warning" signal. AppColors.warning is close
+                            // enough in hue to stay themed without introducing
+                            // a new ad hoc literal.
+                            color: AppColors.warning,
+                          ),
+                          onPressed: () => setState(() => _rating = i.toDouble()),
+                        ),
+                      Text('${_rating.toStringAsFixed(1)}★'),
+                    ],
+                  )),
+                  FormBreak(Slider(
+                    value: _rating,
+                    min: 0,
+                    max: 5,
+                    divisions: 10,
+                    label: _rating.toStringAsFixed(1),
+                    onChanged: (v) => setState(() => _rating = v),
+                  )),
+                  FormBreak(Text(
+                    'Quoted $leadTime d → planned $effectiveLead d effective lead at '
+                    '${_rating.toStringAsFixed(1)}★',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  )),
+                  if (_suggestedRating != null) ...[
+                    const SizedBox(height: 8),
+                    FormBreak(InfoBanner(
+                      status: AppStatus.info,
+                      message:
+                          'Based on delivery history: suggested '
+                          '${_suggestedRating!.toStringAsFixed(1)}★',
+                      actionLabel: 'Apply',
+                      onAction: () =>
+                          setState(() => _rating = _suggestedRating!),
+                    )),
+                  ],
+                  const SizedBox(height: 24),
+                  FormBreak(
+                    FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
+                  ),
                 ],
-              ),
-              Slider(
-                value: _rating,
-                min: 0,
-                max: 5,
-                divisions: 10,
-                label: _rating.toStringAsFixed(1),
-                onChanged: (v) => setState(() => _rating = v),
-              ),
-              Text(
-                'Quoted $leadTime d → planned $effectiveLead d effective lead at '
-                '${_rating.toStringAsFixed(1)}★',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              if (_suggestedRating != null) ...[
-                const SizedBox(height: 8),
-                InfoBanner(
-                  status: AppStatus.info,
-                  message:
-                      'Based on delivery history: suggested '
-                      '${_suggestedRating!.toStringAsFixed(1)}★',
-                  actionLabel: 'Apply',
-                  onAction: () =>
-                      setState(() => _rating = _suggestedRating!),
-                ),
-              ],
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
               ),
             ],
           ),

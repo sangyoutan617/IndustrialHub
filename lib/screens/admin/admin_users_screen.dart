@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/responsive_grid_list.dart';
 import '../../core/formatters.dart';
 import '../../models/profile.dart';
 import '../../services/profile_service.dart';
@@ -123,9 +124,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                       ),
                     ],
                   )
-                : ListView.builder(
+                : ResponsiveGridList(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: filtered.length,
+                    landscapeChildAspectRatio: 3.5,
                     itemBuilder: (context, index) {
                       final profile = filtered[index];
                       final scheme = Theme.of(context).colorScheme;

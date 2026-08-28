@@ -3,6 +3,7 @@ import '../../services/admin_data_service.dart';
 import '../../services/seed_service.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 
 enum _LoadState { loading, error, ready }
@@ -88,58 +89,85 @@ class _AdminDataScreenState extends State<AdminDataScreen> {
   }
 
   Widget _buildReady() {
+    final topCard = Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Run seed',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Creates the demo factory with sample machines, manpower, materials, '
+              'suppliers and orders. Safe to press more than once — it checks whether '
+              'the demo factory already exists before creating anything.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _isSeeding ? null : _runSeed,
+              icon: _isSeeding
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.grass_outlined),
+              label: const Text('Run seed'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final countsSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Simulated data by table',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Read-only. Deleting or resetting demo data is a server-side operation performed '
+          'by an operator via SQL, not exposed here.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        for (final count in _counts) _buildCountCard(count),
+      ],
+    );
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Run seed',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Creates the demo factory with sample machines, manpower, materials, '
-                    'suppliers and orders. Safe to press more than once — it checks whether '
-                    'the demo factory already exists before creating anything.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _isSeeding ? null : _runSeed,
-                    icon: _isSeeding
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.grass_outlined),
-                    label: const Text('Run seed'),
-                  ),
-                ],
+      child: ResponsiveTwoPane(
+        portrait: (context) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            topCard,
+            const SizedBox(height: 16),
+            countsSection,
+          ],
+        ),
+        landscape: (context) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: topCard,
               ),
-            ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: countsSection,
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Simulated data by table',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Read-only. Deleting or resetting demo data is a server-side operation performed '
-            'by an operator via SQL, not exposed here.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          for (final count in _counts) _buildCountCard(count),
-        ],
+        ),
       ),
     );
   }
