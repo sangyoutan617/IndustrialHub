@@ -88,6 +88,27 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
     if (!mounted || saved == null) return;
     _load();
+    // Brand-new order (this method is never called with an existing one —
+    // editing goes through _openDetail's own flow): jump straight into its
+    // detail screen so the user sees the real, Supabase-generated PO number
+    // immediately, on the exact same screen "View purchase order" uses.
+    if (order == null && saved is PurchaseOrder) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PurchaseOrderDetailScreen(
+            factoryId: widget.factoryId,
+            order: saved,
+            materialName:
+                _materialNames[saved.materialId] ?? 'Unknown material',
+            supplierName:
+                _supplierNames[saved.supplierId] ?? 'Unknown supplier',
+          ),
+        ),
+      );
+      if (!mounted) return;
+      _load();
+      return;
+    }
     final poNumber = saved is PurchaseOrder ? ' ${formatPoNumber(saved.poId)}' : '';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
