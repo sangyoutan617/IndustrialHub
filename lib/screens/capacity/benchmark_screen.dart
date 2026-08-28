@@ -10,7 +10,6 @@ import '../../services/factory_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 
 class BenchmarkScreen extends StatefulWidget {
   final Factory factory;
@@ -211,47 +210,17 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ResponsiveTwoPane(
-        portrait: (context) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            topCard,
-            const SizedBox(height: 16),
-            yourFactoryCard,
-            const SizedBox(height: 16),
-            productivityCard,
-            const SizedBox(height: 16),
-            ipiCard,
-          ],
-        ),
-        landscape: (context) => SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    topCard,
-                    const SizedBox(height: 16),
-                    ipiCard,
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  children: [
-                    yourFactoryCard,
-                    const SizedBox(height: 16),
-                    productivityCard,
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          topCard,
+          const SizedBox(height: 16),
+          yourFactoryCard,
+          const SizedBox(height: 16),
+          productivityCard,
+          const SizedBox(height: 16),
+          ipiCard,
+        ],
       ),
     );
   }

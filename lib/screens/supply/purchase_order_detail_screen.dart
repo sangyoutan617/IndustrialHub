@@ -6,7 +6,6 @@ import '../../services/mrp_service.dart';
 import '../../services/order_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/kpi_card.dart';
-import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import 'order_form_screen.dart';
 
@@ -39,7 +38,6 @@ class PurchaseOrderDetailScreen extends StatefulWidget {
 }
 
 const _openStatuses = [
-  PurchaseOrderStatus.pending,
   PurchaseOrderStatus.processing,
   PurchaseOrderStatus.shipped,
 ];
@@ -57,7 +55,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
 
   AppStatus _statusFor(String status) {
     switch (status) {
-      case PurchaseOrderStatus.pending:
       case PurchaseOrderStatus.processing:
         return AppStatus.info;
       case PurchaseOrderStatus.shipped:
@@ -187,23 +184,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
 
   List<Widget> _actions() {
     switch (_order.status) {
-      case PurchaseOrderStatus.pending:
-        return [
-          FilledButton(
-            onPressed: _busy
-                ? null
-                : () => _advanceStatus(PurchaseOrderStatus.processing),
-            child: const Text('Start processing'),
-          ),
-          OutlinedButton(
-            onPressed: _busy ? null : _edit,
-            child: const Text('Edit'),
-          ),
-          TextButton(
-            onPressed: _busy ? null : _cancel,
-            child: const Text('Cancel order'),
-          ),
-        ];
       case PurchaseOrderStatus.processing:
         return [
           FilledButton(
@@ -211,6 +191,10 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                 ? null
                 : () => _advanceStatus(PurchaseOrderStatus.shipped),
             child: const Text('Mark shipped'),
+          ),
+          OutlinedButton(
+            onPressed: _busy ? null : _edit,
+            child: const Text('Edit'),
           ),
           TextButton(
             onPressed: _busy ? null : _cancel,
@@ -321,42 +305,16 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     
     return Scaffold(
       appBar: AppBar(title: Text(formatPoNumber(_order.poId))),
-      body: ResponsiveTwoPane(
-        portrait: (context) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.l),
-          children: [
-            header,
-            deliveryText,
-            const SizedBox(height: AppSpacing.l),
-            detailsCard,
-            const SizedBox(height: AppSpacing.l),
-            actionsSection,
-          ],
-        ),
-        landscape: (context) => SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(AppSpacing.l),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    header,
-                    deliveryText,
-                    const SizedBox(height: AppSpacing.l),
-                    detailsCard,
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: actionsSection,
-              ),
-            ],
-          ),
-        ),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        children: [
+          header,
+          deliveryText,
+          const SizedBox(height: AppSpacing.l),
+          detailsCard,
+          const SizedBox(height: AppSpacing.l),
+          actionsSection,
+        ],
       ),
     );
   }

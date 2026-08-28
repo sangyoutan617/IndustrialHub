@@ -74,6 +74,11 @@ class MaterialPlan {
   final DateTime? orderByDate;
   final double? suggestedQty;
   final SupplyRisk risk;
+
+  /// The stock level below which this material is flagged low — computed
+  /// from planned usage (see [MrpService.reorderLevelFor]), not a number
+  /// anyone types in.
+  final double reorderLevel;
   final bool belowReorderLevel;
   final List<double> dailyBalances;
 
@@ -91,6 +96,7 @@ class MaterialPlan {
     required this.orderByDate,
     required this.suggestedQty,
     required this.risk,
+    required this.reorderLevel,
     required this.belowReorderLevel,
     required this.dailyBalances,
   });
@@ -147,7 +153,24 @@ class MrpService {
   /// "watch" rather than "healthy".
   static const int watchWindowDays = 7;
 
+  /// Reorder level is a flat 20% of one week's planned consumption — a
+  /// simple low-stock threshold, distinct from the lead-time-aware
+  /// [orderByDate]/[suggestedQty] machinery below.
+  static const double reorderLevelWeeklyBuffer = 0.2;
+
   const MrpService._();
+
+  /// Low-stock threshold for a material, computed from planned usage
+  /// instead of typed in by hand: 20% of one week's consumption at the
+  /// planned production rate. Pure — no DB.
+  static double reorderLevelFor({
+    required double consumptionPerUnit,
+    required double plannedProductionPerDay,
+  }) {
+    final weeklyConsumption =
+        consumptionPerUnit * plannedProductionPerDay * 7;
+    return weeklyConsumption * reorderLevelWeeklyBuffer;
+  }
 
   /// Raw material a production run consumes: `unitsProduced ×
   /// consumption_per_unit` per material. Pure — no DB. In the single-product
@@ -378,6 +401,10 @@ class MrpService {
     required DateTime today,
   }) {
     final burnRate = material.consumptionPerUnit * plannedProductionPerDay;
+    final reorderLevel = reorderLevelFor(
+      consumptionPerUnit: material.consumptionPerUnit,
+      plannedProductionPerDay: plannedProductionPerDay,
+    );
     final supplier = bestSupplier(suppliersForMaterial);
     final leadDays = supplier != null ? effectiveLeadDays(supplier) : null;
 
@@ -473,7 +500,8 @@ class MrpService {
       orderByDate: orderBy,
       suggestedQty: suggested,
       risk: risk,
-      belowReorderLevel: material.currentStock <= material.reorderLevel,
+      reorderLevel: reorderLevel,
+      belowReorderLevel: material.currentStock <= reorderLevel,
       dailyBalances: projection.dailyBalances,
     );
   }

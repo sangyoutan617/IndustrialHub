@@ -6,7 +6,6 @@ import '../../widgets/confirm_dialog.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import '../../widgets/stock_movement_history_sheet.dart';
 import '../../widgets/text_prompt_dialog.dart';
@@ -241,100 +240,44 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ResponsiveTwoPane(
-        portrait: (context) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.l),
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    stock.productName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleLarge,
-                  ),
-                ),
-                StatusChip(label: cover.status, status: cover.appStatus),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.l),
-            metricsPanel,
-            const SizedBox(height: AppSpacing.l),
-            const SectionHeader(title: 'Actions'),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _recordMovement,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Record stock movement'),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.s),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _viewMovements,
-                icon: const Icon(Icons.history, size: 18),
-                label: const Text('View movement history'),
-              ),
-            ),
-          ],
-        ),
-        landscape: (context) => SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.l),
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        children: [
+          Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            stock.productName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleLarge,
-                          ),
-                        ),
-                        StatusChip(
-                          label: cover.status,
-                          status: cover.appStatus,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.l),
-                    metricsPanel,
-                  ],
+                child: Text(
+                  stock.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge,
                 ),
               ),
-              const SizedBox(width: AppSpacing.l),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SectionHeader(title: 'Actions'),
-                    FilledButton.icon(
-                      onPressed: _recordMovement,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Record stock movement'),
-                    ),
-                    const SizedBox(height: AppSpacing.s),
-                    OutlinedButton.icon(
-                      onPressed: _viewMovements,
-                      icon: const Icon(Icons.history, size: 18),
-                      label: const Text('View movement history'),
-                    ),
-                  ],
-                ),
-              ),
+              StatusChip(label: cover.status, status: cover.appStatus),
             ],
           ),
-        ),
+          const SizedBox(height: AppSpacing.l),
+          metricsPanel,
+          const SizedBox(height: AppSpacing.l),
+          const SectionHeader(title: 'Actions'),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _recordMovement,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Record stock movement'),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.s),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _viewMovements,
+              icon: const Icon(Icons.history, size: 18),
+              label: const Text('View movement history'),
+            ),
+          ),
+        ],
       ),
     );
   }

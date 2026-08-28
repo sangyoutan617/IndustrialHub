@@ -134,7 +134,6 @@ class _MachineListScreenState extends State<MachineListScreen> {
           child: ResponsiveGridList(
             padding: const EdgeInsets.all(8),
             itemCount: _machines.length,
-            landscapeChildAspectRatio: 3.0,
             itemBuilder: (context, index) {
               final machine = _machines[index];
               final isActive = machine.isActive;

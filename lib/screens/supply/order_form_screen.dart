@@ -244,11 +244,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         orderDate: _orderDate,
         expectedDelivery: _expectedDelivery,
         deliveredAt: widget.order?.deliveredAt,
-        status: widget.order?.status ?? PurchaseOrderStatus.pending,
+        // New orders start Processing, not Pending — Pending only still
+        // exists as a status for orders that already have it.
+        status: widget.order?.status ?? PurchaseOrderStatus.processing,
         isSimulated: false,
-        unitPrice: _priceController.text.trim().isEmpty
-            ? null
-            : double.parse(_priceController.text),
+        unitPrice: double.parse(_priceController.text),
       );
       if (_isEditing) {
         await _orderService.updateOrder(widget.order!.poId, order);
@@ -367,13 +367,12 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       decimal: true,
                     ),
                     decoration: InputDecoration(
-                      labelText: 'Unit price (RM, optional)',
+                      labelText: 'Unit price (RM)',
                       helperText: _orderTotalHelperText(),
                     ),
                     onChanged: (_) => setState(() {}),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return null;
-                      final parsed = double.tryParse(v);
+                      final parsed = double.tryParse(v ?? '');
                       if (parsed == null || parsed < 0) {
                         return 'Enter a valid price';
                       }

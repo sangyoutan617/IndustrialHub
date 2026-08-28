@@ -291,6 +291,25 @@ class AppTheme {
           );
         }),
       ),
+      // Mirrors navigationBarTheme above so the landscape NavigationRail
+      // (HomeScreen) reads as the same nav, just repositioned — same teal
+      // selected indicator, same selected/unselected text weight.
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: colorScheme.surface,
+        indicatorColor: colorScheme.primaryContainer,
+        elevation: 0,
+        selectedLabelTextStyle: TextStyle(
+          fontSize: 12,
+          color: colorScheme.onSurface,
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelTextStyle: TextStyle(
+          fontSize: 12,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        selectedIconTheme: IconThemeData(color: colorScheme.onPrimaryContainer),
+        unselectedIconTheme: IconThemeData(color: colorScheme.onSurfaceVariant),
+      ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: colorScheme.primary,
         linearTrackColor: colorScheme.primaryContainer,

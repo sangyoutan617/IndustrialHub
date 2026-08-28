@@ -9,7 +9,6 @@ import '../../services/report_service.dart';
 import '../../services/seed_service.dart';
 import '../../services/supply_service.dart';
 import '../../l10n/app_localizations.dart';
-import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
@@ -44,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Factory? _selectedFactory;
   int _tabIndex = 0;
   bool _isSeeding = false;
-  int _bottleneckRefreshTick = 0;
 
   // Tabs are built lazily (on first visit) and then kept alive via
   // IndexedStack, so switching tabs never re-fetches a module's data, but a
@@ -294,22 +292,31 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Factories',
-                  style: Theme.of(context).textTheme.titleMedium,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Factories',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
               ),
-            ),
-            for (final factory in _factories)
-              ListTile(
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final factory in _factories)
+                      ListTile(
                 leading: CircleAvatar(
                   backgroundColor: factory.factoryId ==
                           _selectedFactory?.factoryId
@@ -357,25 +364,29 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.pop(context);
                 },
               ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('New factory'),
-              onTap: () {
-                Navigator.pop(context);
-                _createFactory();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.auto_awesome_outlined),
-              title: const Text('Load demo data'),
-              onTap: () {
-                Navigator.pop(context);
-                _loadDemoData();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('New factory'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _createFactory();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.auto_awesome_outlined),
+                title: const Text('Load demo data'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _loadDemoData();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -431,24 +442,54 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tabIndex,
-        onDestinationSelected: (index) => setState(() {
-          _tabIndex = index;
-          _visitedTabs.add(index);
-          _bottleneckRefreshTick++;
-        }),
-        destinations: [
-          for (var i = 0; i < tabLabels.length; i++)
-            NavigationDestination(
-              icon: Icon(_tabIcons[i]),
-              label: tabLabels[i],
-            ),
-        ],
+      body: OrientationBuilder(
+        builder: (context, orientation) {
+          if (orientation == Orientation.landscape) {
+            return Row(
+              children: [
+                SafeArea(
+                  child: NavigationRail(
+                    selectedIndex: _tabIndex,
+                    onDestinationSelected: _onTabSelected,
+                    labelType: NavigationRailLabelType.all,
+                    destinations: [
+                      for (var i = 0; i < tabLabels.length; i++)
+                        NavigationRailDestination(
+                          icon: Icon(_tabIcons[i]),
+                          label: Text(tabLabels[i]),
+                        ),
+                    ],
+                  ),
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(child: _buildBody()),
+              ],
+            );
+          }
+          return _buildBody();
+        },
       ),
+      bottomNavigationBar: MediaQuery.of(context).orientation ==
+              Orientation.landscape
+          ? null
+          : NavigationBar(
+              selectedIndex: _tabIndex,
+              onDestinationSelected: _onTabSelected,
+              destinations: [
+                for (var i = 0; i < tabLabels.length; i++)
+                  NavigationDestination(
+                    icon: Icon(_tabIcons[i]),
+                    label: tabLabels[i],
+                  ),
+              ],
+            ),
     );
   }
+
+  void _onTabSelected(int index) => setState(() {
+    _tabIndex = index;
+    _visitedTabs.add(index);
+  });
 
   Widget _buildBody() {
     if (_loadState == _LoadState.loading) {
@@ -473,10 +514,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // The banner is handed to each tab to render as the first item in its
-    // own scrollable list (see _buildTabContent) rather than pinned here as
-    // a fixed sibling — it should scroll away with the rest of the content,
-    // not permanently occupy screen space above it.
     return _buildTabContent();
   }
 
@@ -486,20 +523,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // hasn't been opened yet renders nothing instead of eagerly loading its
   // data at startup. Keys include the factory id so switching factories
   // still forces each tab to load fresh, correctly-scoped data.
-  // Re-keyed by _bottleneckRefreshTick so the (cheap, single-RPC) banner
-  // still refreshes on every tab visit, even though the surrounding tab's
-  // own (heavier) data stays cached across switches via IndexedStack above.
-  // padding: zero because it's embedded as the first item of a list that
-  // already applies its own padding — see CapacityDashboardScreen /
-  // StockDashboardScreen / MaterialListScreen's bottleneckBanner param.
-  Widget _bottleneckBanner(int factoryId) {
-    return BottleneckBanner(
-      key: ValueKey('banner-$factoryId-$_bottleneckRefreshTick'),
-      factoryId: factoryId,
-      padding: EdgeInsets.zero,
-    );
-  }
-
   Widget _buildTabContent() {
     final factory = _selectedFactory!;
     return IndexedStack(
@@ -515,21 +538,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ? CapacityDashboardScreen(
                 key: ValueKey('capacity-${factory.factoryId}'),
                 factory: factory,
-                bottleneckBanner: _bottleneckBanner(factory.factoryId),
               )
             : const SizedBox.shrink(),
         _visitedTabs.contains(2)
             ? StockDashboardScreen(
                 key: ValueKey('stock-${factory.factoryId}'),
                 factoryId: factory.factoryId,
-                bottleneckBanner: _bottleneckBanner(factory.factoryId),
               )
             : const SizedBox.shrink(),
         _visitedTabs.contains(3)
             ? MaterialListScreen(
                 key: ValueKey('supply-${factory.factoryId}'),
                 factoryId: factory.factoryId,
-                bottleneckBanner: _bottleneckBanner(factory.factoryId),
               )
             : const SizedBox.shrink(),
       ],

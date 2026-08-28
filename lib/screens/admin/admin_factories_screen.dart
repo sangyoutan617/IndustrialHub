@@ -83,7 +83,6 @@ class _AdminFactoriesScreenState extends State<AdminFactoriesScreen> {
       child: ResponsiveGridList(
         padding: const EdgeInsets.all(16),
         itemCount: _factories.length,
-        landscapeChildAspectRatio: 3.5,
         itemBuilder: (context, index) {
           final factory = _factories[index];
           final subtitle = [

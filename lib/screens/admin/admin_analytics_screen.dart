@@ -8,7 +8,6 @@ import '../../services/bottleneck_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import 'admin_factory_detail_screen.dart';
 
@@ -111,39 +110,15 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ResponsiveTwoPane(
-        portrait: (context) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.l),
-          children: [
-            benchmarkCard,
-            const SizedBox(height: AppSpacing.l),
-            chartCard,
-            const SizedBox(height: AppSpacing.l),
-            tableCard,
-          ],
-        ),
-        landscape: (context) => SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(AppSpacing.l),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    benchmarkCard,
-                    const SizedBox(height: AppSpacing.l),
-                    chartCard,
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: tableCard,
-              ),
-            ],
-          ),
-        ),
+      child: ListView(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        children: [
+          benchmarkCard,
+          const SizedBox(height: AppSpacing.l),
+          chartCard,
+          const SizedBox(height: AppSpacing.l),
+          tableCard,
+        ],
       ),
     );
   }
