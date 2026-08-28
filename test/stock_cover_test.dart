@@ -26,13 +26,21 @@ void main() {
       expect(cover.appStatus, AppStatus.neutral);
     });
 
-    test('demand forecast of exactly zero also reads as "No demand set"', () {
+    // Zero demand used to render as "No demand set" too, which hid a real
+    // difference: nobody set a forecast, versus somebody set one asking for
+    // nothing. The states are separate now. What this still guards is the
+    // short-circuit — a zero demand must not fall through to the
+    // daysOfCover branches, even when handed a nonsense cover figure the
+    // loader would never produce alongside it.
+    test('demand forecast of exactly zero is its own state, and still '
+        'short-circuits the cover branches', () {
       final cover = ProductCover(
         stock: stock(),
         requiredPerDay: 0,
         daysOfCover: 999,
       );
-      expect(cover.status, 'No demand set');
+      expect(cover.demandGap, DemandGap.zeroPerDay);
+      expect(cover.status, 'Demand set to 0/day');
       expect(cover.appStatus, AppStatus.neutral);
     });
 

@@ -87,6 +87,18 @@ class _SmartAction {
   });
 }
 
+/// MaterialListScreen and StockDashboardScreen are normally tab bodies
+/// embedded under HomeScreen's own AppBar, so neither owns one itself. Smart
+/// actions push them as standalone routes instead, where that AppBar isn't
+/// there to supply a title or a back button — this wraps them with one for
+/// just that case, without touching how they render as tabs.
+Widget _pushedWithAppBar(String title, Widget child) {
+  return Scaffold(
+    appBar: AppBar(title: Text(title)),
+    body: child,
+  );
+}
+
 /// Read-only: only calls BottleneckService/CapacityService reads.
 class DashboardHomeScreen extends StatefulWidget {
   final Factory factory;
@@ -1010,7 +1022,10 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
             title: 'Check Material Cover',
             subtitle: "Confirm materials won't be the next bottleneck",
             color: pal.neutral,
-            builder: () => MaterialListScreen(factoryId: factoryId),
+            builder: () => _pushedWithAppBar(
+              'Materials',
+              MaterialListScreen(factoryId: factoryId),
+            ),
           ),
         ];
       case 'MANPOWER':
@@ -1027,7 +1042,10 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
             title: 'Check Material Cover',
             subtitle: "Confirm materials won't be the next bottleneck",
             color: pal.neutral,
-            builder: () => MaterialListScreen(factoryId: factoryId),
+            builder: () => _pushedWithAppBar(
+              'Materials',
+              MaterialListScreen(factoryId: factoryId),
+            ),
           ),
         ];
       default:
@@ -1037,7 +1055,10 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
             title: 'Review Demand Forecast',
             subtitle: 'Stay ahead of the next shift in demand',
             color: pal.ok,
-            builder: () => StockDashboardScreen(factoryId: factoryId),
+            builder: () => _pushedWithAppBar(
+              'Stock overview',
+              StockDashboardScreen(factoryId: factoryId),
+            ),
           ),
           _SmartAction(
             icon: Icons.local_shipping_outlined,

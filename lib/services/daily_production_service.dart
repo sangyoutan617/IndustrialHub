@@ -69,4 +69,35 @@ class DailyProductionService {
         .map((row) => DailyProduction.fromJson(row as Map<String, dynamic>))
         .toList();
   }
+
+  /// Average output per *logged* day, grouped by calendar month. Averaging
+  /// rather than summing is what makes this comparable to DOSM's monthly
+  /// index: a month with only a handful of logged days would otherwise read
+  /// as a collapse in output when it is really just fewer rows.
+  Future<Map<DateTime, double>> getMonthlyAverageOutput(
+    int factoryId, {
+    required DateTime since,
+  }) async {
+    final rows = await _client
+        .from('daily_production')
+        .select('log_date, actual_output')
+        .eq('factory_id', factoryId)
+        .gte('log_date', since.toIso8601String().substring(0, 10))
+        .order('log_date', ascending: true);
+
+    final totals = <DateTime, double>{};
+    final counts = <DateTime, int>{};
+    for (final row in rows as List) {
+      final map = row as Map<String, dynamic>;
+      final date = DateTime.parse(map['log_date'] as String);
+      final month = DateTime(date.year, date.month);
+      totals[month] =
+          (totals[month] ?? 0) + (map['actual_output'] as num).toDouble();
+      counts[month] = (counts[month] ?? 0) + 1;
+    }
+    return {
+      for (final entry in totals.entries)
+        entry.key: entry.value / counts[entry.key]!,
+    };
+  }
 }
