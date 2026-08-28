@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/formatters.dart';
 import '../../models/machine.dart';
-import '../../models/manpower.dart';
 import '../../services/capacity_service.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -23,11 +22,10 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   _LoadState _state = _LoadState.loading;
 
   List<Machine> _machines = [];
-  List<Manpower> _shifts = [];
 
-  double _avgRatedOutputPerHour = 0;
-  double _avgOperatingHoursPerDay = 0;
-  double _avgOutputPerWorkerHour = 0;
+  /// Rates the sliders extrapolate from. Weighted so the untouched baseline
+  /// reproduces the same ceiling the Capacity dashboard shows.
+  SimulatorBaseline? _baseline;
 
   // Simulation state — always whole numbers per user requirement.
   int _workers = 0;
@@ -70,16 +68,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
       final snapshot = await _capacityService.getSnapshot(widget.factoryId);
       setState(() {
         _machines = snapshot.machines;
-        _shifts = snapshot.shifts;
-        _avgRatedOutputPerHour = _average(
-          _machines.map((m) => m.ratedOutputPerHour),
-        );
-        _avgOperatingHoursPerDay = _average(
-          _machines.map((m) => m.operatingHoursPerDay),
-        );
-        _avgOutputPerWorkerHour = _average(
-          _shifts.map((s) => s.outputPerWorkerHour),
-        );
+        _baseline = SimulatorBaseline.from(snapshot);
         _resetToActual();
         _state = _LoadState.ready;
       });
@@ -88,19 +77,12 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     }
   }
 
-  double _average(Iterable<double> values) {
-    final list = values.toList();
-    if (list.isEmpty) return 0;
-    return list.reduce((a, b) => a + b) / list.length;
-  }
-
   void _resetToActual() {
-    _workers = _shifts.fold<int>(0, (sum, s) => sum + s.workerCount);
-    _shiftHours = _average(_shifts.map((s) => s.shiftHours)).round();
-    final avgUptime = _average(_machines.map((m) => m.uptimePercent));
-    _uptimePercent =
-        (_machines.isEmpty ? 100 : avgUptime.round()).clamp(0, 100);
-    _activeMachines = _machines.where((m) => m.isActive).length;
+    final baseline = _baseline;
+    _workers = baseline?.workers ?? 0;
+    _shiftHours = baseline?.shiftHours ?? 0;
+    _uptimePercent = baseline?.uptimePercent ?? 100;
+    _activeMachines = baseline?.activeMachines ?? 0;
     _lastBottleneck = null;
     _justFlipped = false;
 
@@ -111,24 +93,26 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     _uptimePercentCtrl.text = '$_uptimePercent';
   }
 
-  double get _machineCapacity =>
-      _activeMachines *
-      _avgRatedOutputPerHour *
-      _avgOperatingHoursPerDay *
-      (_uptimePercent / 100);
+  double get _machineCapacity {
+    final baseline = _baseline;
+    if (baseline == null) return 0;
+    return _activeMachines * baseline.machineNameplate * (_uptimePercent / 100);
+  }
 
-  double get _manpowerCapacity =>
-      _workers * _shiftHours * _avgOutputPerWorkerHour;
+  double get _manpowerCapacity {
+    final baseline = _baseline;
+    if (baseline == null) return 0;
+    return _workers * _shiftHours * baseline.outputPerWorkerHour;
+  }
 
-  double get _effectiveCapacity =>
-      _machineCapacity < _manpowerCapacity
-          ? _machineCapacity
-          : _manpowerCapacity;
+  double get _effectiveCapacity => _machineCapacity < _manpowerCapacity
+      ? _machineCapacity
+      : _manpowerCapacity;
 
   String get _bottleneck => CapacityService.bottleneckResourceFor(
-        _machineCapacity,
-        _manpowerCapacity,
-      );
+    _machineCapacity,
+    _manpowerCapacity,
+  );
 
   void _onFieldChanged(VoidCallback update) {
     setState(() {
@@ -171,10 +155,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
         final manpowerSection = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Manpower',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Manpower', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             _buildIntField(
               label: 'Workers',
@@ -196,10 +177,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
         final machinesSection = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Machines',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Machines', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             _buildIntField(
               label: 'Active machines',
@@ -287,8 +265,9 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   Widget _buildResultCard() {
     final scheme = Theme.of(context).colorScheme;
     final bottleneck = _bottleneck;
-    final containerColor =
-        _justFlipped ? scheme.tertiaryContainer : scheme.primaryContainer;
+    final containerColor = _justFlipped
+        ? scheme.tertiaryContainer
+        : scheme.primaryContainer;
     final onContainerColor = _justFlipped
         ? scheme.onTertiaryContainer
         : scheme.onPrimaryContainer;
@@ -308,9 +287,9 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
           ),
           Text(
             '${formatUnits(_effectiveCapacity)}/day',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -318,9 +297,7 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
             runSpacing: 4,
             children: [
               Chip(label: Text('Machine: ${formatNumber(_machineCapacity)}')),
-              Chip(
-                label: Text('Manpower: ${formatNumber(_manpowerCapacity)}'),
-              ),
+              Chip(label: Text('Manpower: ${formatNumber(_manpowerCapacity)}')),
             ],
           ),
           const SizedBox(height: 8),
