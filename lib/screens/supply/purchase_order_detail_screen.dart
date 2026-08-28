@@ -3,15 +3,12 @@ import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/purchase_order.dart';
 import '../../services/mrp_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/order_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/status.dart';
 import 'order_form_screen.dart';
-
-/// Formats a purchase order id the same way everywhere it's shown (list,
-/// detail, snackbars) — e.g. po_id 42 -> "PO-0042".
-String formatPoNumber(int poId) => 'PO-${poId.toString().padLeft(4, '0')}';
 
 /// Decision-focused detail view for one purchase order — every field the
 /// list card used to pack into one dense row, plus the status-transition
@@ -129,7 +126,19 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     setState(() => _busy = true);
     try {
       await _orderService.receiveDelivery(_order);
+      await NotificationService.instance.notifyDeliveryReceived(
+        factoryId: widget.factoryId,
+        materialName: widget.materialName,
+        quantity: _order.quantity,
+      );
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Received ${formatUnits(_order.quantity)} of ${widget.materialName}. Stock updated.',
+          ),
+        ),
+      );
       Navigator.of(context).pop(true);
     } catch (e) {
       debugPrint('supply: failed to receive delivery: $e');

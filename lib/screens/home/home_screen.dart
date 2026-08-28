@@ -486,9 +486,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  int _tabVersion = 0;
+
   void _onTabSelected(int index) => setState(() {
     _tabIndex = index;
     _visitedTabs.add(index);
+    _tabVersion++;
   });
 
   Widget _buildBody() {
@@ -517,12 +520,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return _buildTabContent();
   }
 
-  // IndexedStack keeps every visited tab's widget (and its State — loaded
-  // data, scroll position, in-progress filters) alive underneath the visible
-  // one, so switching tabs is instant and never re-fetches. A tab that
-  // hasn't been opened yet renders nothing instead of eagerly loading its
-  // data at startup. Keys include the factory id so switching factories
-  // still forces each tab to load fresh, correctly-scoped data.
+  // IndexedStack keeps every visited tab's widget alive, while tab versioning
+  // ensures switching between tabs automatically loads fresh data so changes
+  // across modules (e.g. demand forecast, delivery receipt) reflect immediately.
   Widget _buildTabContent() {
     final factory = _selectedFactory!;
     return IndexedStack(
@@ -530,25 +530,25 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         _visitedTabs.contains(0)
             ? DashboardHomeScreen(
-                key: ValueKey('home-${factory.factoryId}'),
+                key: ValueKey('home-${factory.factoryId}-${_tabIndex == 0 ? _tabVersion : 0}'),
                 factory: factory,
               )
             : const SizedBox.shrink(),
         _visitedTabs.contains(1)
             ? CapacityDashboardScreen(
-                key: ValueKey('capacity-${factory.factoryId}'),
+                key: ValueKey('capacity-${factory.factoryId}-${_tabIndex == 1 ? _tabVersion : 0}'),
                 factory: factory,
               )
             : const SizedBox.shrink(),
         _visitedTabs.contains(2)
             ? StockDashboardScreen(
-                key: ValueKey('stock-${factory.factoryId}'),
+                key: ValueKey('stock-${factory.factoryId}-${_tabIndex == 2 ? _tabVersion : 0}'),
                 factoryId: factory.factoryId,
               )
             : const SizedBox.shrink(),
         _visitedTabs.contains(3)
             ? MaterialListScreen(
-                key: ValueKey('supply-${factory.factoryId}'),
+                key: ValueKey('supply-${factory.factoryId}-${_tabIndex == 3 ? _tabVersion : 0}'),
                 factoryId: factory.factoryId,
               )
             : const SizedBox.shrink(),

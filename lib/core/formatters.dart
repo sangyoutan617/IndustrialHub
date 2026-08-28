@@ -51,3 +51,7 @@ String formatDays(num v) => '${_oneDecimal.format(v)} days';
 /// Malaysian Ringgit with space-separated thousands and two decimals:
 /// 1234.5 -> "RM 1 234.50". Currency across the app is RM.
 String formatCurrency(num v) => 'RM ${_spaced(_money.format(v))}';
+
+/// Formats a purchase order id into standard display format — e.g. 42 -> "PO-0042".
+String formatPoNumber(int poId) => 'PO-${poId.toString().padLeft(4, '0')}';
+

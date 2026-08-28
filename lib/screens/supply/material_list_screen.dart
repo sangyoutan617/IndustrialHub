@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
+import '../../services/data_event_service.dart';
 import '../../services/mrp_service.dart';
 import '../../services/supply_service.dart';
 import '../../widgets/ai_insight_card.dart';
@@ -48,6 +49,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   void initState() {
     super.initState();
     _load();
+    DataEventService.instance.changeEvent.addListener(_onDataEvent);
   }
 
   @override
@@ -58,8 +60,16 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
 
   @override
   void dispose() {
+    DataEventService.instance.changeEvent.removeListener(_onDataEvent);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onDataEvent() {
+    final event = DataEventService.instance.changeEvent.value;
+    if (mounted && event != null && event.factoryId == widget.factoryId) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
