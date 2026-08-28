@@ -81,104 +81,29 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     _load();
   }
 
+  // Delegates all input state (controllers, date, checkbox, validation) to
+  // _LogProductionDialog, which owns its own State — the same pattern
+  // widgets/text_prompt_dialog.dart uses, and for the same reason: a
+  // controller created here and disposed in a `finally` around showDialog
+  // can trigger a framework assertion if a rotation races the route's exit
+  // animation. This method only reacts to the finished result.
   Future<void> _openLogDialog() async {
-    final outputController = TextEditingController();
-    final downtimeController = TextEditingController(text: '0');
-    var logDate = DateTime.now();
-
-    try {
-      await _runLogDialog(outputController, downtimeController, logDate);
-    } finally {
-      outputController.dispose();
-      downtimeController.dispose();
-    }
-  }
-
-  Future<void> _runLogDialog(
-    TextEditingController outputController,
-    TextEditingController downtimeController,
-    DateTime logDate,
-  ) async {
-    var deductMaterials = true;
-    final saved = await showDialog<bool>(
+    final result = await showDialog<_LogProductionResult>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Log production'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Date'),
-                subtitle: Text(
-                  '${logDate.year}-${logDate.month.toString().padLeft(2, '0')}-${logDate.day.toString().padLeft(2, '0')}',
-                ),
-                trailing: const Icon(Icons.calendar_today_outlined),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: logDate,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    setDialogState(() => logDate = picked);
-                  }
-                },
-              ),
-              TextField(
-                controller: outputController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Actual output'),
-              ),
-              TextField(
-                controller: downtimeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Downtime hours'),
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: deductMaterials,
-                onChanged: (v) =>
-                    setDialogState(() => deductMaterials = v ?? true),
-                title: const Text('Deduct raw materials used'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => const _LogProductionDialog(),
     );
-
-    if (saved != true) return;
-    final actualOutput = int.tryParse(outputController.text);
-    if (actualOutput == null) return;
-    final downtimeHours = double.tryParse(downtimeController.text) ?? 0;
+    if (result == null) return;
 
     setState(() => _isLogging = true);
     try {
       await _service.logProduction(
         factoryId: widget.factory.factoryId,
-        logDate: logDate,
-        actualOutput: actualOutput,
-        downtimeHours: downtimeHours,
+        logDate: result.logDate,
+        actualOutput: result.actualOutput,
+        downtimeHours: result.downtimeHours,
       );
-      if (deductMaterials && actualOutput > 0) {
-        await _consumeMaterials(actualOutput, logDate);
+      if (result.deductMaterials && result.actualOutput > 0) {
+        await _consumeMaterials(result.actualOutput, result.logDate);
       }
       _load();
       if (!mounted) return;
@@ -625,6 +550,146 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         ),
         const SizedBox(width: 4),
         Text(label, style: const TextStyle(fontSize: 12)),
+      ],
+    );
+  }
+}
+
+/// Finished input from [_LogProductionDialog] — only ever handed back once
+/// [Form.validate] has already passed, so every field here is guaranteed
+/// parseable and sign-correct.
+class _LogProductionResult {
+  final DateTime logDate;
+  final int actualOutput;
+  final double downtimeHours;
+  final bool deductMaterials;
+
+  const _LogProductionResult({
+    required this.logDate,
+    required this.actualOutput,
+    required this.downtimeHours,
+    required this.deductMaterials,
+  });
+}
+
+/// The "Log production" dialog, extracted into its own [StatefulWidget] so
+/// its controllers live in this State (created and disposed here) rather
+/// than in the caller's method body disposed via a `finally` around
+/// `showDialog` — the same pattern widgets/text_prompt_dialog.dart uses, to
+/// avoid the same class of rotation-during-dialog framework crash.
+class _LogProductionDialog extends StatefulWidget {
+  const _LogProductionDialog();
+
+  @override
+  State<_LogProductionDialog> createState() => _LogProductionDialogState();
+}
+
+class _LogProductionDialogState extends State<_LogProductionDialog> {
+  final _outputController = TextEditingController();
+  final _downtimeController = TextEditingController(text: '0');
+  final _formKey = GlobalKey<FormState>();
+  DateTime _logDate = DateTime.now();
+  bool _deductMaterials = true;
+
+  @override
+  void dispose() {
+    _outputController.dispose();
+    _downtimeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _logDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _logDate = picked);
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(
+      context,
+      _LogProductionResult(
+        logDate: _logDate,
+        actualOutput: int.parse(_outputController.text.trim()),
+        downtimeHours: double.tryParse(_downtimeController.text.trim()) ?? 0,
+        deductMaterials: _deductMaterials,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Log production'),
+      // AlertDialog doesn't cap its own height, so a fixed-content Column
+      // here can overflow in landscape (a short screen with the on-screen
+      // keyboard up leaves even less room) — SingleChildScrollView lets the
+      // dialog's content scroll instead of clipping/asserting.
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Date'),
+                subtitle: Text(
+                  '${_logDate.year}-${_logDate.month.toString().padLeft(2, '0')}-${_logDate.day.toString().padLeft(2, '0')}',
+                ),
+                trailing: const Icon(Icons.calendar_today_outlined),
+                onTap: _pickDate,
+              ),
+              TextFormField(
+                controller: _outputController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Actual output'),
+                validator: (v) {
+                  final parsed = int.tryParse((v ?? '').trim());
+                  if (parsed == null || parsed < 0) {
+                    return 'Enter a non-negative whole number';
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: _downtimeController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(labelText: 'Downtime hours'),
+                validator: (v) {
+                  final trimmed = (v ?? '').trim();
+                  if (trimmed.isEmpty) return null;
+                  final parsed = double.tryParse(trimmed);
+                  if (parsed == null || parsed < 0) {
+                    return 'Enter a non-negative number';
+                  }
+                  return null;
+                },
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _deductMaterials,
+                onChanged: (v) => setState(() => _deductMaterials = v ?? true),
+                title: const Text('Deduct raw materials used'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
       ],
     );
   }
