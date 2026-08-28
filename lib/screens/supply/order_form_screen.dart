@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
-import '../../core/theme.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
@@ -56,6 +55,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   List<RawMaterial> _materials = [];
   List<Supplier> _suppliers = [];
   double _plannedProductionPerDay = 0;
+
+  /// Best-effort preview of the PO number a new order would likely get —
+  /// see [OrderService.getNextPoIdPreview]. Null while editing (the real
+  /// number is already known) or if the preview fetch failed.
+  int? _nextPoIdPreview;
   int? _selectedMaterialId;
   int? _selectedSupplierId;
   DateTime _orderDate = DateTime.now();
@@ -71,16 +75,34 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     _load();
   }
 
+  Future<int?> _fetchNextPoIdPreview() async {
+    try {
+      return await _orderService.getNextPoIdPreview();
+    } catch (e) {
+      // Best-effort only — the form still works fine without a preview,
+      // it just falls back to the generic "auto-generated" text.
+      debugPrint('supply: failed to preview next PO number: $e');
+      return null;
+    }
+  }
+
   Future<void> _load() async {
     final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
-      final overview = await _supplyService.load(widget.factoryId);
+      // Both kicked off together (not awaited yet) so they run concurrently.
+      final overviewFuture = _supplyService.load(widget.factoryId);
+      final previewFuture = _isEditing
+          ? Future<int?>.value(null)
+          : _fetchNextPoIdPreview();
+      final overview = await overviewFuture;
+      final preview = await previewFuture;
       if (!mounted || token != _loadToken) return;
       setState(() {
         _materials = overview.materials;
         _suppliers = overview.suppliers;
         _plannedProductionPerDay = overview.plannedProductionPerDay;
+        _nextPoIdPreview = preview;
 
         final order = widget.order;
         final prefill = widget.prefill;
@@ -312,50 +334,39 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
             children: [
               ResponsiveFormFields(
                 children: [
+                  // The real PO number only exists once Supabase has created
+                  // the row, so a new order just shows a placeholder here
+                  // instead of a guessed/fake number. Once saved, the real
+                  // formatPoNumber(savedOrder.poId) is shown everywhere else
+                  // (list, detail) — never invented client-side.
                   FormBreak(
-                    Card(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.m,
-                          vertical: AppSpacing.s,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.tag,
-                              size: 18,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: AppSpacing.s),
-                            Text(
-                              'PO Number: ',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              _isEditing
-                                  ? formatPoNumber(widget.order!.poId)
-                                  : 'Auto-assigned upon creation (e.g. PO-XXXX)',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: _isEditing
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurfaceVariant,
-                                fontWeight: _isEditing
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
+                    TextFormField(
+                      key: ValueKey(
+                        _isEditing
+                            ? 'po-number-${widget.order!.poId}'
+                            : 'po-number-preview-$_nextPoIdPreview',
+                      ),
+                      initialValue: _isEditing
+                          ? formatPoNumber(widget.order!.poId)
+                          : _nextPoIdPreview != null
+                          ? formatPoNumber(_nextPoIdPreview!)
+                          : 'Auto-generated after creation',
+                      enabled: false,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'PO Number',
+                        helperText: 'System-generated — cannot be edited',
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
                   const FormBreak(SectionHeader(
                     title: 'What to order',
-                    padding: EdgeInsets.only(bottom: 4),
+                    padding: EdgeInsets.only(top: 20, bottom: 4),
                   )),
                   DropdownButtonFormField<int>(
                     initialValue: _selectedMaterialId,

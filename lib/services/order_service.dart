@@ -19,6 +19,23 @@ class OrderService {
         .toList();
   }
 
+  /// Best-effort preview of the PO number a new order would likely get —
+  /// current max `po_id` + 1. This is NOT reserved and NOT guaranteed: a
+  /// concurrent insert from another device can still take it first, so the
+  /// real number only ever comes from the row [createOrder] actually
+  /// returns. Purely a "here's roughly what to expect" preview shown before
+  /// saving. Returns 1 when there are no orders yet.
+  Future<int> getNextPoIdPreview() async {
+    final rows = await _client
+        .from('purchase_orders')
+        .select('po_id')
+        .order('po_id', ascending: false)
+        .limit(1);
+    final list = rows as List;
+    if (list.isEmpty) return 1;
+    return (list.first['po_id'] as int) + 1;
+  }
+
   Future<PurchaseOrder> createOrder(
     PurchaseOrder order, {
     bool isSimulated = false,
