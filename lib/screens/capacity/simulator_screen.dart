@@ -6,7 +6,6 @@ import '../../models/manpower.dart';
 import '../../services/capacity_service.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 
 class SimulatorScreen extends StatefulWidget {
   final int factoryId;
@@ -222,37 +221,15 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
 
         return RefreshIndicator(
           onRefresh: _load,
-          child: ResponsiveTwoPane(
-            portrait: (context) => ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                resultCard,
-                const SizedBox(height: 24),
-                manpowerSection,
-                const SizedBox(height: 16),
-                machinesSection,
-              ],
-            ),
-            landscape: (context) => SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        manpowerSection,
-                        const SizedBox(height: 16),
-                        machinesSection,
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(child: resultCard),
-                ],
-              ),
-            ),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              resultCard,
+              const SizedBox(height: 24),
+              manpowerSection,
+              const SizedBox(height: 16),
+              machinesSection,
+            ],
           ),
         );
     }

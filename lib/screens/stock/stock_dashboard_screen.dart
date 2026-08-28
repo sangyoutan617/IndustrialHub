@@ -20,17 +20,7 @@ import 'stock_trend_screen.dart';
 class StockDashboardScreen extends StatefulWidget {
   final int factoryId;
 
-  /// Optional factory-health banner rendered as the first item in this
-  /// screen's own scrollable list — deliberately not a fixed/pinned sibling
-  /// above it, so it scrolls away with the rest of the content instead of
-  /// permanently occupying screen space.
-  final Widget? bottleneckBanner;
-
-  const StockDashboardScreen({
-    super.key,
-    required this.factoryId,
-    this.bottleneckBanner,
-  });
+  const StockDashboardScreen({super.key, required this.factoryId});
 
   @override
   State<StockDashboardScreen> createState() => _StockDashboardScreenState();
@@ -211,23 +201,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         ? AiInsightCard(buildPrompt: _buildStockPrompt, system: _stockSystem)
         : null;
 
-    return OrientationBuilder(
-      builder: (context, orientation) {
-        if (orientation == Orientation.landscape) {
-          return _buildLandscape(
-            mostUrgent: mostUrgent,
-            criticalItems: criticalItems,
-            overstockItems: overstockItems,
-            aiInsight: aiInsight,
-          );
-        }
-        return _buildPortrait(
-          mostUrgent: mostUrgent,
-          criticalItems: criticalItems,
-          overstockItems: overstockItems,
-          aiInsight: aiInsight,
-        );
-      },
+    // Single scanning column, top to bottom, in every orientation — landscape
+    // gets the same flow with more horizontal room via ResponsiveShell,
+    // rather than being split into two columns.
+    return _buildPortrait(
+      mostUrgent: mostUrgent,
+      criticalItems: criticalItems,
+      overstockItems: overstockItems,
+      aiInsight: aiInsight,
     );
   }
 
@@ -242,10 +223,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          if (widget.bottleneckBanner != null) ...[
-            widget.bottleneckBanner!,
-            const SizedBox(height: AppSpacing.l),
-          ],
           if (_pendingMovements > 0) ...[
             _buildPendingSyncBanner(),
             const SizedBox(height: AppSpacing.l),
@@ -267,69 +244,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           const SizedBox(height: AppSpacing.xl),
           _buildDemandSection(),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLandscape({
-    required ProductCover? mostUrgent,
-    required List<ProductCover> criticalItems,
-    required List<ProductCover> overstockItems,
-    required Widget? aiInsight,
-  }) {
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left: overview story — cover, stats, critical, AI.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.bottleneckBanner != null) ...[
-                    widget.bottleneckBanner!,
-                    const SizedBox(height: AppSpacing.l),
-                  ],
-                  if (_pendingMovements > 0) ...[
-                    _buildPendingSyncBanner(),
-                    const SizedBox(height: AppSpacing.l),
-                  ],
-                  _buildCoverSummaryCard(mostUrgent),
-                  const SizedBox(height: AppSpacing.l),
-                  _buildSummaryStatsRow(),
-                  if (criticalItems.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.l),
-                    _buildCriticalSection(criticalItems),
-                  ],
-                  if (overstockItems.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.l),
-                    _buildOverstockSection(overstockItems),
-                  ],
-                  if (aiInsight != null) ...[
-                    const SizedBox(height: AppSpacing.l),
-                    aiInsight,
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.l),
-            // Right: full products list + demand forecast.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCoverListSection(),
-                  const SizedBox(height: AppSpacing.xl),
-                  _buildDemandSection(),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

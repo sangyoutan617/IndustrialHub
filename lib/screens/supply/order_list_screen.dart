@@ -24,7 +24,6 @@ class OrderListScreen extends StatefulWidget {
 enum _LoadState { loading, error, ready }
 
 const _openStatuses = [
-  PurchaseOrderStatus.pending,
   PurchaseOrderStatus.processing,
   PurchaseOrderStatus.shipped,
 ];
@@ -194,28 +193,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
               else
                 SliverPadding(
                   padding: const EdgeInsets.all(8),
-                  sliver: OrientationBuilder(
-                    builder: (context, orientation) {
-                      if (orientation == Orientation.landscape) {
-                        return SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 8,
-                            childAspectRatio: 2.8,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildOrderCard(filtered[index]),
-                            childCount: filtered.length,
-                          ),
-                        );
-                      }
-                      return SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildOrderCard(filtered[index]),
-                          childCount: filtered.length,
-                        ),
-                      );
-                    },
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _buildOrderCard(filtered[index]),
+                      childCount: filtered.length,
+                    ),
                   ),
                 ),
             ],
@@ -297,13 +279,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   // Maps order status onto the shared AppStatus vocabulary (see
-  // lib/widgets/status.dart): Pending/Processing read as "queued" (info),
-  // Shipped is "in transit, awaiting receipt" (warning — needs attention),
-  // Delivered is the successful terminal state, and Cancelled is a closed
-  // state rather than a failure, so it reads neutral instead of danger.
+  // lib/widgets/status.dart): Processing reads as "queued" (info), Shipped
+  // is "in transit, awaiting receipt" (warning — needs attention), Delivered
+  // is the successful terminal state, and Cancelled is a closed state rather
+  // than a failure, so it reads neutral instead of danger.
   AppStatus _statusFor(String status) {
     switch (status) {
-      case PurchaseOrderStatus.pending:
       case PurchaseOrderStatus.processing:
         return AppStatus.info;
       case PurchaseOrderStatus.shipped:

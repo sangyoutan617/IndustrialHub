@@ -16,7 +16,6 @@ import 'supplier_comparison_screen.dart';
 import 'supplier_form_screen.dart';
 
 const _openStatuses = [
-  PurchaseOrderStatus.pending,
   PurchaseOrderStatus.processing,
   PurchaseOrderStatus.shipped,
 ];
@@ -343,7 +342,6 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
                     : ResponsiveGridList(
                         padding: const EdgeInsets.all(8),
                         itemCount: filtered.length,
-                        landscapeChildAspectRatio: 2.4,
                         itemBuilder: (context, index) {
                           final supplier = filtered[index];
                           final materialName =

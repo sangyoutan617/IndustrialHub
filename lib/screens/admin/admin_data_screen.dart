@@ -3,7 +3,6 @@ import '../../services/admin_data_service.dart';
 import '../../services/seed_service.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 
 enum _LoadState { loading, error, ready }
@@ -143,31 +142,9 @@ class _AdminDataScreenState extends State<AdminDataScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ResponsiveTwoPane(
-        portrait: (context) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            topCard,
-            const SizedBox(height: 16),
-            countsSection,
-          ],
-        ),
-        landscape: (context) => SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: topCard,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: countsSection,
-              ),
-            ],
-          ),
-        ),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [topCard, const SizedBox(height: 16), countsSection],
       ),
     );
   }

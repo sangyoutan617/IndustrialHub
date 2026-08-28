@@ -128,36 +128,11 @@ class _StartupErrorAppState extends State<StartupErrorApp> {
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  /// Switches the app's language from anywhere (e.g. the About screen's
-  /// language picker) and persists the choice. Pass null to follow the
-  /// device locale.
-  static void setLocale(BuildContext context, Locale? locale) {
-    context.findAncestorStateOfType<_MyAppState>()?._setLocale(locale);
-  }
-
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  Locale? _locale;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadLocale();
-  }
-
-  Future<void> _loadLocale() async {
-    final code = await SessionPrefs.getLocaleCode();
-    if (code != null && mounted) setState(() => _locale = Locale(code));
-  }
-
-  void _setLocale(Locale? locale) {
-    setState(() => _locale = locale);
-    SessionPrefs.setLocaleCode(locale?.languageCode);
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -167,8 +142,7 @@ class _MyAppState extends State<MyApp> {
       darkTheme: AppTheme.dark(),
       // Follows the device's light/dark setting.
       themeMode: ThemeMode.system,
-      // Chosen language, or null to follow the device locale.
-      locale: _locale,
+      // Follows the device locale — there's no in-app language picker.
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       // Caps the content width so the app doesn't stretch edge to edge on
