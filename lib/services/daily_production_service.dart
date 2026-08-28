@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/daily_production.dart';
 import 'bottleneck_service.dart';
+import 'data_event_service.dart';
 
 class DailyProductionService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -48,7 +49,12 @@ class DailyProductionService {
         .select()
         .single();
 
-    return DailyProduction.fromJson(row);
+    final result = DailyProduction.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: factoryId,
+      source: DataChangeSource.production,
+    );
+    return result;
   }
 
   Future<List<DailyProduction>> getTrend(int factoryId, {int days = 30}) async {

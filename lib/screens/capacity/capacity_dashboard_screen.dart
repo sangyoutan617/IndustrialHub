@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/factory.dart';
 import '../../services/capacity_service.dart';
+import '../../services/data_event_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -17,17 +18,7 @@ import 'simulator_screen.dart';
 class CapacityDashboardScreen extends StatefulWidget {
   final Factory factory;
 
-  /// Optional factory-health banner rendered as the first item in this
-  /// screen's own scrollable list — deliberately not a fixed/pinned sibling
-  /// above it, so it scrolls away with the rest of the content instead of
-  /// permanently occupying screen space.
-  final Widget? bottleneckBanner;
-
-  const CapacityDashboardScreen({
-    super.key,
-    required this.factory,
-    this.bottleneckBanner,
-  });
+  const CapacityDashboardScreen({super.key, required this.factory});
 
   @override
   State<CapacityDashboardScreen> createState() =>
@@ -45,12 +36,26 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
   void initState() {
     super.initState();
     _load();
+    DataEventService.instance.changeEvent.addListener(_onDataEvent);
   }
 
   @override
   void didUpdateWidget(covariant CapacityDashboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.factory.factoryId != widget.factory.factoryId) _load();
+  }
+
+  @override
+  void dispose() {
+    DataEventService.instance.changeEvent.removeListener(_onDataEvent);
+    super.dispose();
+  }
+
+  void _onDataEvent() {
+    final event = DataEventService.instance.changeEvent.value;
+    if (mounted && event != null && event.factoryId == widget.factory.factoryId) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -128,10 +133,6 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (widget.bottleneckBanner != null) ...[
-            widget.bottleneckBanner!,
-            const SizedBox(height: 16),
-          ],
           _buildCeilingCard(snapshot, isMachineLimiting),
           const SizedBox(height: 16),
           aiInsight,
@@ -147,39 +148,19 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
     required bool isMachineLimiting,
     required Widget aiInsight,
   }) {
+    // Same single vertical flow as portrait, just wider padding — landscape
+    // gives this screen more breathing room, not a left/right split.
     return RefreshIndicator(
       onRefresh: _load,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left: overview story — ceiling, AI.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.bottleneckBanner != null) ...[
-                    widget.bottleneckBanner!,
-                    const SizedBox(height: 16),
-                  ],
-                  _buildCeilingCard(snapshot, isMachineLimiting),
-                  const SizedBox(height: 16),
-                  aiInsight,
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Right: actions — machines/manpower, simulator, benchmark, trend.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _buildActionItems(snapshot),
-              ),
-            ),
-          ],
-        ),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        children: [
+          _buildCeilingCard(snapshot, isMachineLimiting),
+          const SizedBox(height: 16),
+          aiInsight,
+          const SizedBox(height: 16),
+          ..._buildActionItems(snapshot),
+        ],
       ),
     );
   }

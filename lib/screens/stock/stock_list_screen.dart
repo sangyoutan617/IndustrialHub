@@ -212,7 +212,6 @@ class _StockListScreenState extends State<StockListScreen> {
           child: ResponsiveGridList(
             padding: const EdgeInsets.all(8),
             itemCount: _stock.length,
-            landscapeChildAspectRatio: 3.5,
             itemBuilder: (context, index) {
               final stock = _stock[index];
               return Card(

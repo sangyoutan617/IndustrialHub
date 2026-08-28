@@ -10,7 +10,6 @@ import 'package:industrial_hub/services/supply_service.dart';
 RawMaterial _material({
   double currentStock = 100,
   double consumptionPerUnit = 1,
-  double reorderLevel = 0,
   int safetyStockDays = 3,
 }) {
   return RawMaterial(
@@ -20,7 +19,6 @@ RawMaterial _material({
     currentStock: currentStock,
     unit: 'kg',
     consumptionPerUnit: consumptionPerUnit,
-    reorderLevel: reorderLevel,
     safetyStockDays: safetyStockDays,
   );
 }
@@ -47,7 +45,7 @@ PurchaseOrder _order({
   required DateTime orderDate,
   DateTime? expectedDelivery,
   DateTime? deliveredAt,
-  String status = PurchaseOrderStatus.pending,
+  String status = PurchaseOrderStatus.processing,
 }) {
   return PurchaseOrder(
     poId: poId,
@@ -77,6 +75,7 @@ MaterialPlan _plan({required SupplyRisk risk, bool belowReorderLevel = false}) {
     orderByDate: null,
     suggestedQty: null,
     risk: risk,
+    reorderLevel: 0,
     belowReorderLevel: belowReorderLevel,
     dailyBalances: const [],
   );
@@ -390,6 +389,25 @@ void main() {
     });
   });
 
+  group('MrpService.reorderLevelFor', () {
+    test('is 20% of one week\'s planned consumption', () {
+      final level = MrpService.reorderLevelFor(
+        consumptionPerUnit: 2,
+        plannedProductionPerDay: 10,
+      );
+      // weekly consumption = 2 * 10 * 7 = 140; 20% of that = 28.
+      expect(level, 28);
+    });
+
+    test('is zero when there is no planned production', () {
+      final level = MrpService.reorderLevelFor(
+        consumptionPerUnit: 2,
+        plannedProductionPerDay: 0,
+      );
+      expect(level, 0);
+    });
+  });
+
   group('MrpService.suggestedQty', () {
     test('covers lead time + safety stock + review period, net of on-hand '
         'and inbound', () {
@@ -432,8 +450,10 @@ void main() {
   group('MrpService.buildPlan', () {
     test('belowReorderLevel triggers independently of date logic even '
         'with no supplier at all', () {
+      // consumptionPerUnit 1 × plannedProductionPerDay 10 × 7 days × 20%
+      // buffer = a reorder level of 14, well above the 5 on hand here.
       final plan = MrpService.buildPlan(
-        material: _material(currentStock: 5, reorderLevel: 10),
+        material: _material(currentStock: 5),
         suppliersForMaterial: const [],
         ordersForMaterial: const [],
         plannedProductionPerDay: 10,
@@ -647,7 +667,7 @@ void main() {
             orderDate: today,
             expectedDelivery: today.add(const Duration(days: 2)),
             quantity: 400,
-            status: PurchaseOrderStatus.pending,
+            status: PurchaseOrderStatus.processing,
           ),
         ],
         plannedProductionPerDay: 10,
@@ -683,7 +703,7 @@ void main() {
             orderDate: today,
             expectedDelivery: null,
             quantity: 1000,
-            status: PurchaseOrderStatus.pending,
+            status: PurchaseOrderStatus.processing,
           ),
         ],
         plannedProductionPerDay: 1,
@@ -944,11 +964,7 @@ void main() {
       );
     });
 
-    test('pending, processing, and shipped orders are still open', () {
-      expect(
-        _order(orderDate: today, status: PurchaseOrderStatus.pending).isClosed,
-        isFalse,
-      );
+    test('processing and shipped orders are still open', () {
       expect(
         _order(
           orderDate: today,

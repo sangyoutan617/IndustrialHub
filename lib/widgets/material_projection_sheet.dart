@@ -18,7 +18,7 @@ class MaterialProjectionSheet extends StatelessWidget {
         : plan.dailyBalances;
     final primaryColor = Theme.of(context).colorScheme.primary;
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -82,6 +82,7 @@ class MaterialProjectionSheet extends StatelessWidget {
     );
   }
 }
+
 
 /// Opens [MaterialProjectionSheet] as a scroll-controlled modal bottom sheet.
 void showMaterialProjectionSheet(BuildContext context, MaterialPlan plan) {

@@ -6,7 +6,6 @@ import '../../services/supplier_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 
 /// Side-by-side comparison of every supplier available for one material —
 /// quoted vs effective lead time, reliability, and on-time delivery rate —
@@ -97,48 +96,8 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
         }
         
         final cards = _comparisons.map((c) => _buildCard(c)).toList();
-        
-        return ResponsiveTwoPane(
-          portrait: (context) => ListView(
-            padding: const EdgeInsets.all(16),
-            children: cards,
-          ),
-          landscape: (context) {
-            // Split comparisons into two columns
-            final leftCards = <Widget>[];
-            final rightCards = <Widget>[];
-            for (var i = 0; i < cards.length; i++) {
-              if (i % 2 == 0) {
-                leftCards.add(cards[i]);
-              } else {
-                rightCards.add(cards[i]);
-              }
-            }
-            return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      children: leftCards,
-                    ),
-                  ),
-                  if (rightCards.isNotEmpty) ...[
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        children: rightCards,
-                      ),
-                    ),
-                  ] else
-                    const Expanded(child: SizedBox.shrink()),
-                ],
-              ),
-            );
-          },
-        );
+
+        return ListView(padding: const EdgeInsets.all(16), children: cards);
     }
   }
 

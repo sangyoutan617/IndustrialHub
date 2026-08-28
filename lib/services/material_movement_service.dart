@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/raw_material.dart';
 import '../models/raw_material_movement.dart';
+import 'data_event_service.dart';
 import 'mrp_service.dart';
 
 /// Writes the raw-material stock ledger and keeps `raw_materials.current_stock`
@@ -69,6 +70,11 @@ class MaterialMovementService {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('material_id', materialId);
+
+    DataEventService.instance.notifyChanged(
+      factoryId: factoryId,
+      source: DataChangeSource.supply,
+    );
   }
 
   /// Deducts the raw material a production run consumed

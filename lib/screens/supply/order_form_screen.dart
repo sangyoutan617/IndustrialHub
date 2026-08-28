@@ -55,6 +55,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   List<RawMaterial> _materials = [];
   List<Supplier> _suppliers = [];
   double _plannedProductionPerDay = 0;
+
+  /// Best-effort preview of the PO number a new order would likely get —
+  /// see [OrderService.getNextPoIdPreview]. Null while editing (the real
+  /// number is already known) or if the preview fetch failed.
+  int? _nextPoIdPreview;
   int? _selectedMaterialId;
   int? _selectedSupplierId;
   DateTime _orderDate = DateTime.now();
@@ -70,16 +75,34 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     _load();
   }
 
+  Future<int?> _fetchNextPoIdPreview() async {
+    try {
+      return await _orderService.getNextPoIdPreview();
+    } catch (e) {
+      // Best-effort only — the form still works fine without a preview,
+      // it just falls back to the generic "auto-generated" text.
+      debugPrint('supply: failed to preview next PO number: $e');
+      return null;
+    }
+  }
+
   Future<void> _load() async {
     final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
-      final overview = await _supplyService.load(widget.factoryId);
+      // Both kicked off together (not awaited yet) so they run concurrently.
+      final overviewFuture = _supplyService.load(widget.factoryId);
+      final previewFuture = _isEditing
+          ? Future<int?>.value(null)
+          : _fetchNextPoIdPreview();
+      final overview = await overviewFuture;
+      final preview = await previewFuture;
       if (!mounted || token != _loadToken) return;
       setState(() {
         _materials = overview.materials;
         _suppliers = overview.suppliers;
         _plannedProductionPerDay = overview.plannedProductionPerDay;
+        _nextPoIdPreview = preview;
 
         final order = widget.order;
         final prefill = widget.prefill;
@@ -244,19 +267,27 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         orderDate: _orderDate,
         expectedDelivery: _expectedDelivery,
         deliveredAt: widget.order?.deliveredAt,
-        status: widget.order?.status ?? PurchaseOrderStatus.pending,
+        // New orders start Processing, not Pending — Pending only still
+        // exists as a status for orders that already have it.
+        status: widget.order?.status ?? PurchaseOrderStatus.processing,
         isSimulated: false,
-        unitPrice: _priceController.text.trim().isEmpty
-            ? null
-            : double.parse(_priceController.text),
+        unitPrice: double.parse(_priceController.text),
       );
+      PurchaseOrder savedOrder;
       if (_isEditing) {
-        await _orderService.updateOrder(widget.order!.poId, order);
+        savedOrder = await _orderService.updateOrder(
+          widget.order!.poId,
+          order,
+          factoryId: widget.factoryId,
+        );
       } else {
-        await _orderService.createOrder(order);
+        savedOrder = await _orderService.createOrder(
+          order,
+          factoryId: widget.factoryId,
+        );
       }
       if (!mounted) return;
-      Navigator.pop(context, true);
+      Navigator.pop(context, savedOrder);
     } catch (e) {
       debugPrint('supply: failed to save order: $e');
       _showMessage('Could not save order. Please try again.');
@@ -269,7 +300,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Edit purchase order' : 'New purchase order'),
+        title: Text(
+          _isEditing
+              ? 'Edit ${formatPoNumber(widget.order!.poId)}'
+              : 'New purchase order',
+        ),
       ),
       body: SafeArea(child: _buildBody()),
     );
@@ -291,6 +326,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         }
         final supplierOptions = _suppliersForSelectedMaterial;
         final coverageText = _coverageHelperText();
+        final theme = Theme.of(context);
         return Form(
           key: _formKey,
           child: ListView(
@@ -298,9 +334,39 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
             children: [
               ResponsiveFormFields(
                 children: [
+                  // The real PO number only exists once Supabase has created
+                  // the row, so a new order just shows a placeholder here
+                  // instead of a guessed/fake number. Once saved, the real
+                  // formatPoNumber(savedOrder.poId) is shown everywhere else
+                  // (list, detail) — never invented client-side.
+                  FormBreak(
+                    TextFormField(
+                      key: ValueKey(
+                        _isEditing
+                            ? 'po-number-${widget.order!.poId}'
+                            : 'po-number-preview-$_nextPoIdPreview',
+                      ),
+                      initialValue: _isEditing
+                          ? formatPoNumber(widget.order!.poId)
+                          : _nextPoIdPreview != null
+                          ? formatPoNumber(_nextPoIdPreview!)
+                          : 'Auto-generated after creation',
+                      enabled: false,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'PO Number',
+                        helperText: 'System-generated — cannot be edited',
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest,
+                      ),
+                    ),
+                  ),
                   const FormBreak(SectionHeader(
                     title: 'What to order',
-                    padding: EdgeInsets.only(bottom: 4),
+                    padding: EdgeInsets.only(top: 20, bottom: 4),
                   )),
                   DropdownButtonFormField<int>(
                     initialValue: _selectedMaterialId,
@@ -367,13 +433,12 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       decimal: true,
                     ),
                     decoration: InputDecoration(
-                      labelText: 'Unit price (RM, optional)',
+                      labelText: 'Unit price (RM)',
                       helperText: _orderTotalHelperText(),
                     ),
                     onChanged: (_) => setState(() {}),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return null;
-                      final parsed = double.tryParse(v);
+                      final parsed = double.tryParse(v ?? '');
                       if (parsed == null || parsed < 0) {
                         return 'Enter a valid price';
                       }

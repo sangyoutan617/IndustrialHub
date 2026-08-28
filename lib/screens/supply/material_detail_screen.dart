@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
+import '../../models/purchase_order.dart';
 import '../../models/raw_material_movement.dart';
 import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
@@ -12,7 +13,6 @@ import '../../widgets/error_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/material_projection_sheet.dart';
-import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import 'material_form_screen.dart';
 import 'order_form_screen.dart';
@@ -138,7 +138,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     final plan = _plan!;
     final supplier = plan.bestSupplier;
     if (supplier == null) return;
-    final saved = await Navigator.of(context).push<bool>(
+    final saved = await Navigator.of(context).push<dynamic>(
       MaterialPageRoute(
         builder: (_) => OrderFormScreen(
           factoryId: widget.factoryId,
@@ -150,11 +150,12 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
         ),
       ),
     );
-    if (!mounted || saved != true) return;
+    if (!mounted || saved == null) return;
     _load();
+    final poNumber = saved is PurchaseOrder ? ' ${formatPoNumber(saved.poId)}' : '';
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Purchase order created')));
+    ).showSnackBar(SnackBar(content: Text('Purchase order$poNumber created')));
   }
 
   Future<void> _recordUsage() async {
@@ -300,10 +301,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _plan?.material.materialName ?? 'Material',
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: const Text('Stock Inventory', overflow: TextOverflow.ellipsis),
         actions: _state == _LoadState.ready
             ? [
                 IconButton(
@@ -352,23 +350,13 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ResponsiveTwoPane(
-        portrait: (context) => _buildPortrait(
-          plan: plan,
-          material: material,
-          theme: theme,
-          riskStatus: riskStatus,
-          riskLabel: riskLabel,
-          canReorder: canReorder,
-        ),
-        landscape: (context) => _buildLandscape(
-          plan: plan,
-          material: material,
-          theme: theme,
-          riskStatus: riskStatus,
-          riskLabel: riskLabel,
-          canReorder: canReorder,
-        ),
+      child: _buildPortrait(
+        plan: plan,
+        material: material,
+        theme: theme,
+        riskStatus: riskStatus,
+        riskLabel: riskLabel,
+        canReorder: canReorder,
       ),
     );
   }
@@ -416,7 +404,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
               ),
               MetricRow(
                 label: 'Reorder level',
-                value: '${formatNumber(material.reorderLevel)} ${material.unit}',
+                value: '${formatNumber(plan.reorderLevel)} ${material.unit}',
                 status: plan.belowReorderLevel ? AppStatus.danger : null,
                 statusLabel: plan.belowReorderLevel ? 'Below' : null,
               ),
@@ -591,49 +579,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           canReorder: canReorder,
         ),
       ],
-    );
-  }
-
-  Widget _buildLandscape({
-    required MaterialPlan plan,
-    required dynamic material,
-    required ThemeData theme,
-    required AppStatus riskStatus,
-    required String riskLabel,
-    required bool canReorder,
-  }) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.l),
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: _headerAndMetrics(
-                plan: plan,
-                material: material,
-                theme: theme,
-                riskStatus: riskStatus,
-                riskLabel: riskLabel,
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.l),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: _ledgerAndAction(
-                plan: plan,
-                material: material,
-                theme: theme,
-                canReorder: canReorder,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

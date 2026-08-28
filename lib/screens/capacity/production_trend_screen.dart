@@ -7,7 +7,6 @@ import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 
 enum _Granularity { day, rollingWeek, month }
@@ -356,43 +355,17 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ResponsiveTwoPane(
-        portrait: (context) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            headerSection,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          headerSection,
+          const SizedBox(height: 16),
+          chartSection,
+          if (_downtimeRows.isNotEmpty) ...[
             const SizedBox(height: 16),
-            chartSection,
-            if (_downtimeRows.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              downtimeSection,
-            ],
+            downtimeSection,
           ],
-        ),
-        landscape: (context) => SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: chartSection,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  children: [
-                    headerSection,
-                    if (_downtimeRows.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      downtimeSection,
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }

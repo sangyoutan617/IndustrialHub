@@ -1,10 +1,9 @@
 class PurchaseOrderStatus {
-  static const pending = 'Pending';
   static const processing = 'Processing';
   static const shipped = 'Shipped';
   static const delivered = 'Delivered';
   static const cancelled = 'Cancelled';
-  static const all = [pending, processing, shipped, delivered, cancelled];
+  static const all = [processing, shipped, delivered, cancelled];
 }
 
 class PurchaseOrder {

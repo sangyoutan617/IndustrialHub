@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
+import '../../services/data_event_service.dart';
 import '../../services/mrp_service.dart';
 import '../../services/supply_service.dart';
 import '../../widgets/ai_insight_card.dart';
@@ -21,17 +22,7 @@ import 'supply_risk_ui.dart';
 class MaterialListScreen extends StatefulWidget {
   final int factoryId;
 
-  /// Optional factory-health banner rendered as the first item in this
-  /// screen's own scrollable list — deliberately not a fixed/pinned sibling
-  /// above it, so it scrolls away with the rest of the content instead of
-  /// permanently occupying screen space.
-  final Widget? bottleneckBanner;
-
-  const MaterialListScreen({
-    super.key,
-    required this.factoryId,
-    this.bottleneckBanner,
-  });
+  const MaterialListScreen({super.key, required this.factoryId});
 
   @override
   State<MaterialListScreen> createState() => _MaterialListScreenState();
@@ -58,6 +49,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   void initState() {
     super.initState();
     _load();
+    DataEventService.instance.changeEvent.addListener(_onDataEvent);
   }
 
   @override
@@ -68,8 +60,16 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
 
   @override
   void dispose() {
+    DataEventService.instance.changeEvent.removeListener(_onDataEvent);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onDataEvent() {
+    final event = DataEventService.instance.changeEvent.value;
+    if (mounted && event != null && event.factoryId == widget.factoryId) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -225,33 +225,19 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
           )
         : null;
 
-    return OrientationBuilder(
-      builder: (context, orientation) {
-        if (orientation == Orientation.landscape) {
-          return _buildLandscape(
-            overview: overview,
-            plans: plans,
-            criticalCount: criticalCount,
-            attentionCount: attentionCount,
-            healthyCount: healthyCount,
-            noCapacityData: noCapacityData,
-            attentionItems: attentionItems,
-            poCounts: poCounts,
-            aiInsight: aiInsight,
-          );
-        }
-        return _buildPortrait(
-          overview: overview,
-          plans: plans,
-          criticalCount: criticalCount,
-          attentionCount: attentionCount,
-          healthyCount: healthyCount,
-          noCapacityData: noCapacityData,
-          attentionItems: attentionItems,
-          poCounts: poCounts,
-          aiInsight: aiInsight,
-        );
-      },
+    // Single scanning column, top to bottom, in every orientation — landscape
+    // gets the same flow with more horizontal room via ResponsiveShell,
+    // rather than being split into two columns.
+    return _buildPortrait(
+      overview: overview,
+      plans: plans,
+      criticalCount: criticalCount,
+      attentionCount: attentionCount,
+      healthyCount: healthyCount,
+      noCapacityData: noCapacityData,
+      attentionItems: attentionItems,
+      poCounts: poCounts,
+      aiInsight: aiInsight,
     );
   }
 
@@ -271,10 +257,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          if (widget.bottleneckBanner != null) ...[
-            widget.bottleneckBanner!,
-            const SizedBox(height: AppSpacing.l),
-          ],
           if (noCapacityData) ...[
             const InfoBanner(
               status: AppStatus.warning,
@@ -299,82 +281,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
           const SizedBox(height: AppSpacing.s),
           _buildSuppliersRow(),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLandscape({
-    required SupplyOverview overview,
-    required List<MaterialPlan> plans,
-    required int criticalCount,
-    required int attentionCount,
-    required int healthyCount,
-    required bool noCapacityData,
-    required List<MaterialPlan> attentionItems,
-    required Map<String, int> poCounts,
-    required Widget? aiInsight,
-  }) {
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left: overview story — health, attention, AI.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.bottleneckBanner != null) ...[
-                    widget.bottleneckBanner!,
-                    const SizedBox(height: AppSpacing.l),
-                  ],
-                  if (noCapacityData) ...[
-                    const InfoBanner(
-                      status: AppStatus.warning,
-                      message:
-                          'No capacity set up yet — add machines or shifts '
-                          'on the Capacity tab, otherwise stock-out '
-                          'predictions can\'t be calculated and every '
-                          'material will read as safe.',
-                    ),
-                    const SizedBox(height: AppSpacing.l),
-                  ],
-                  _buildHealthCard(
-                    overview,
-                    criticalCount,
-                    attentionCount,
-                    healthyCount,
-                  ),
-                  if (attentionItems.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.l),
-                    _buildAttentionSection(attentionItems),
-                  ],
-                  if (aiInsight != null) ...[
-                    const SizedBox(height: AppSpacing.l),
-                    aiInsight,
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.l),
-            // Right: materials list + purchase orders / suppliers.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildMaterialsSection(plans),
-                  const SizedBox(height: AppSpacing.l),
-                  _buildPurchaseOrdersSection(poCounts),
-                  const SizedBox(height: AppSpacing.s),
-                  _buildSuppliersRow(),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
