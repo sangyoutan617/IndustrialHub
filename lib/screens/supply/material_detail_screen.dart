@@ -160,6 +160,9 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     final material = _plan!.material;
     final qtyController = TextEditingController();
     final noteController = TextEditingController();
+    // Declared outside the StatefulBuilder's builder callback — recreating a
+    // GlobalKey on every setDialogState rebuild would break Form.of lookups.
+    final formKey = GlobalKey<FormState>();
     var type = RawMaterialMovementType.consumption;
 
     final saved = await showDialog<bool>(
@@ -167,43 +170,72 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Record stock movement'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(
-                    value: RawMaterialMovementType.consumption,
-                    label: Text('Used'),
+          // Scrollable so the dialog's content can't overflow a short
+          // landscape screen (or one with the keyboard up) — AlertDialog
+          // doesn't cap its own content height.
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: RawMaterialMovementType.consumption,
+                        label: Text('Used'),
+                      ),
+                      ButtonSegment(
+                        value: RawMaterialMovementType.adjustment,
+                        label: Text('Adjust'),
+                      ),
+                    ],
+                    selected: {type},
+                    onSelectionChanged: (s) {
+                      setDialogState(() => type = s.first);
+                      // Re-validate: switching to "Used" can turn an already
+                      // negative amount invalid, and the reverse un-invalidates.
+                      formKey.currentState?.validate();
+                    },
                   ),
-                  ButtonSegment(
-                    value: RawMaterialMovementType.adjustment,
-                    label: Text('Adjust'),
+                  const SizedBox(height: AppSpacing.m),
+                  TextFormField(
+                    controller: qtyController,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                      signed: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: type == RawMaterialMovementType.consumption
+                          ? 'Quantity used (${material.unit})'
+                          : 'Adjustment: +add / -remove (${material.unit})',
+                    ),
+                    // Closure reads the outer `type`, mutated via
+                    // setDialogState above — Form.validate() at submit time
+                    // always sees its current value.
+                    validator: (v) {
+                      final parsed = double.tryParse((v ?? '').trim());
+                      if (parsed == null || parsed == 0) {
+                        return 'Enter a non-zero amount';
+                      }
+                      if (type == RawMaterialMovementType.consumption &&
+                          parsed < 0) {
+                        return 'Quantity used must be positive';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.m),
+                  TextField(
+                    controller: noteController,
+                    decoration: const InputDecoration(
+                      labelText: 'Note (optional)',
+                    ),
                   ),
                 ],
-                selected: {type},
-                onSelectionChanged: (s) => setDialogState(() => type = s.first),
               ),
-              const SizedBox(height: AppSpacing.m),
-              TextField(
-                controller: qtyController,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: type == RawMaterialMovementType.consumption
-                      ? 'Quantity used (${material.unit})'
-                      : 'Adjustment: +add / -remove (${material.unit})',
-                ),
-              ),
-              const SizedBox(height: AppSpacing.m),
-              TextField(
-                controller: noteController,
-                decoration: const InputDecoration(labelText: 'Note (optional)'),
-              ),
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -211,7 +243,11 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(context, true);
+                }
+              },
               child: const Text('Record'),
             ),
           ],
@@ -219,8 +255,9 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
       ),
     );
     if (saved != true) return;
-    final qty = double.tryParse(qtyController.text.trim());
-    if (qty == null || qty == 0) return;
+    // Form.validate() above already guarantees a parseable, sign-correct
+    // value — this can't be null/zero at this point.
+    final qty = double.parse(qtyController.text.trim());
     try {
       await _movementService.recordMovement(
         materialId: material.materialId,
