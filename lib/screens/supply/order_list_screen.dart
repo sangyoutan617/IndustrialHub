@@ -155,70 +155,73 @@ class _OrderListScreenState extends State<OrderListScreen> {
         final filtered = _filteredOrders;
         return RefreshIndicator(
           onRefresh: _load,
-          child: CustomScrollView(
-            slivers: [
-              // filter chip row
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('All'),
-                        selected: _statusFilter == null,
-                        onSelected: (_) => setState(() => _statusFilter = null),
+          child: OrientationBuilder(
+            builder: (context, orientation) {
+              final isLandscape = orientation == Orientation.landscape;
+              return CustomScrollView(
+                slivers: [
+                  // filter chip row
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Wrap(
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('All'),
+                            selected: _statusFilter == null,
+                            onSelected: (_) => setState(() => _statusFilter = null),
+                          ),
+                          for (final status in PurchaseOrderStatus.all)
+                            ChoiceChip(
+                              label: Text(status),
+                              selected: _statusFilter == status,
+                              onSelected: (_) =>
+                                  setState(() => _statusFilter = status),
+                            ),
+                        ],
                       ),
-                      for (final status in PurchaseOrderStatus.all)
-                        ChoiceChip(
-                          label: Text(status),
-                          selected: _statusFilter == status,
-                          onSelected: (_) =>
-                              setState(() => _statusFilter = status),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              // empty-filter state or grid
-              if (filtered.isEmpty)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: EmptyState(
-                      icon: Icons.filter_alt_off_outlined,
-                      message: 'No orders match this filter.',
                     ),
                   ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.all(8),
-                  sliver: OrientationBuilder(
-                    builder: (context, orientation) {
-                      if (orientation == Orientation.landscape) {
-                        return SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 8,
-                            childAspectRatio: 2.8,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => _buildOrderCard(filtered[index]),
-                            childCount: filtered.length,
-                          ),
-                        );
-                      }
-                      return SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildOrderCard(filtered[index]),
-                          childCount: filtered.length,
+                  // empty-filter state or grid/list
+                  if (filtered.isEmpty)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: EmptyState(
+                          icon: Icons.filter_alt_off_outlined,
+                          message: 'No orders match this filter.',
                         ),
-                      );
-                    },
-                  ),
-                ),
-            ],
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.all(8),
+                      sliver: isLandscape
+                          ? SliverGrid(
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 8,
+                                childAspectRatio: 2.8,
+                              ),
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) =>
+                                    _buildOrderCard(filtered[index]),
+                                childCount: filtered.length,
+                              ),
+                            )
+                          : SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) =>
+                                    _buildOrderCard(filtered[index]),
+                                childCount: filtered.length,
+                              ),
+                            ),
+                    ),
+                ],
+              );
+            },
           ),
         );
     }
