@@ -4,8 +4,8 @@ import '../../core/formatters.dart';
 import '../../models/factory.dart';
 import '../../models/ipi_benchmark.dart';
 import '../../models/msic_code.dart';
-import '../../models/productivity_benchmark.dart';
 import '../../services/capacity_service.dart';
+import '../../services/daily_production_service.dart';
 import '../../services/factory_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
@@ -25,16 +25,16 @@ enum _LoadState { loading, error, needsMsic, ready }
 class _BenchmarkScreenState extends State<BenchmarkScreen> {
   final _capacityService = CapacityService();
   final _factoryService = FactoryService();
+  final _productionService = DailyProductionService();
 
   _LoadState _state = _LoadState.loading;
   late Factory _factory = widget.factory;
 
-  double? _outputPerWorker;
   double _effectiveCapacity = 0;
-  int _totalWorkers = 0;
   MsicCode? _msic;
-  ProductivityBenchmark? _productivity;
   List<IpiBenchmark> _ipiTrend = [];
+  Map<DateTime, double> _monthlyOutput = {};
+  SectorComparison? _comparison;
   bool _isAssigning = false;
 
   @override
@@ -54,24 +54,32 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
 
       final snapshot = await _capacityService.getSnapshot(_factory.factoryId);
       final msic = await _capacityService.getMsicByCode(msicCode);
-      final productivity = msic?.category != null
-          ? await _capacityService.getProductivityBenchmark(msic!.category!)
-          : null;
       final ipiTrend = await _capacityService.getIpiTrend(
         msic?.division ??
             msicCode.substring(0, msicCode.length >= 2 ? 2 : msicCode.length),
       );
 
+      // Only reach back as far as the sector series does — months with no IPI
+      // reading can't take part in the comparison anyway.
+      final monthlyOutput = ipiTrend.isEmpty
+          ? <DateTime, double>{}
+          : await _productionService.getMonthlyAverageOutput(
+              _factory.factoryId,
+              since: DateTime(
+                ipiTrend.first.date.year,
+                ipiTrend.first.date.month,
+              ),
+            );
+
       setState(() {
-        _outputPerWorker = _capacityService.outputPerWorker(snapshot);
         _effectiveCapacity = snapshot.effectiveCapacity;
-        _totalWorkers = snapshot.shifts.fold<int>(
-          0,
-          (sum, s) => sum + s.workerCount,
-        );
         _msic = msic;
-        _productivity = productivity;
         _ipiTrend = ipiTrend;
+        _monthlyOutput = monthlyOutput;
+        _comparison = CapacityService.buildSectorComparison(
+          ipiTrend: ipiTrend,
+          factoryMonthlyOutput: monthlyOutput,
+        );
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -188,7 +196,23 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   }
 
   Widget _buildReady() {
-    final topCard = Card(
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildIndustryCard(),
+          const SizedBox(height: 16),
+          _buildYourFactoryCard(),
+          const SizedBox(height: 16),
+          _buildComparisonCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIndustryCard() {
+    return Card(
       child: ListTile(
         leading: Icon(
           Icons.category_outlined,
@@ -204,28 +228,19 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
         ),
       ),
     );
-    final yourFactoryCard = _buildYourFactoryCard();
-    final productivityCard = _buildProductivityCard();
-    final ipiCard = _buildIpiCard();
+  }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          topCard,
-          const SizedBox(height: 16),
-          yourFactoryCard,
-          const SizedBox(height: 16),
-          productivityCard,
-          const SizedBox(height: 16),
-          ipiCard,
-        ],
-      ),
-    );
+  /// Latest month the factory actually logged production for. This is the same
+  /// figure the comparison chart is built from, so the two cards agree.
+  MapEntry<DateTime, double>? get _latestLoggedMonth {
+    if (_monthlyOutput.isEmpty) return null;
+    final months = _monthlyOutput.keys.toList()..sort();
+    final last = months.last;
+    return MapEntry(last, _monthlyOutput[last]!);
   }
 
   Widget _buildYourFactoryCard() {
+    final latest = _latestLoggedMonth;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -248,17 +263,26 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
+            Text(
+              'Effective capacity',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _statTile('Total workers', '$_totalWorkers')),
+                Expanded(
+                  child: _statTile(
+                    'Actual output',
+                    latest != null
+                        ? '${formatUnits(latest.value)}/day'
+                        : 'Not logged',
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _statTile(
-                    'Output / worker',
-                    _outputPerWorker != null
-                        ? '${formatUnits(_outputPerWorker!)}/day'
-                        : 'n/a',
+                    'Latest month',
+                    latest != null ? formatMonth(latest.key) : 'n/a',
                   ),
                 ),
               ],
@@ -302,45 +326,13 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
     );
   }
 
-  Widget _buildProductivityCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'National labour productivity (DOSM)',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            if (_productivity == null)
-              const Text('No productivity benchmark found for this sector yet.')
-            else ...[
-              Text('Sector: ${_productivity!.sector} (${_productivity!.year})'),
-              if (_productivity!.valueAddedPerWorker != null)
-                Text(
-                  'Value added per worker: RM ${formatNumber(_productivity!.valueAddedPerWorker!)} / year',
-                ),
-              if (_productivity!.valueAddedPerHour != null)
-                Text(
-                  'Value added per hour: RM ${formatNumber(_productivity!.valueAddedPerHour!)}',
-                ),
-              const SizedBox(height: 8),
-              Text(
-                'Shown side-by-side for context — your output is in physical units/day while the '
-                'DOSM figure is value-added (RM) per year, so they are not directly comparable as a '
-                'single percentage without your average selling price per unit.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildComparisonCard() {
+    final comparison = _comparison;
+    final divisionLabel = _ipiTrend.isEmpty
+        ? null
+        : 'Division ${_ipiTrend.first.division}'
+              '${_ipiTrend.first.divisionName != null ? ' — ${_ipiTrend.first.divisionName}' : ''}';
 
-  Widget _buildIpiCard() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -348,64 +340,18 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Industrial Production Index trend (DOSM)',
+              'Your production vs sector',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
+            if (divisionLabel != null) Text(divisionLabel),
+            const SizedBox(height: 12),
             if (_ipiTrend.isEmpty)
               const Text('No IPI data found for this division yet.')
-            else ...[
-              Text(
-                'Division ${_ipiTrend.first.division}${_ipiTrend.first.divisionName != null ? ' — ${_ipiTrend.first.divisionName}' : ''}',
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 160,
-                child: LineChart(
-                  LineChartData(
-                    titlesData: const FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      topTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                    ),
-                    gridData: const FlGridData(show: false),
-                    borderData: FlBorderData(show: false),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: [
-                          for (var i = 0; i < _ipiTrend.length; i++)
-                            FlSpot(i.toDouble(), _ipiTrend[i].productionIndex),
-                        ],
-                        isCurved: true,
-                        dotData: const FlDotData(show: false),
-                        color: Theme.of(context).colorScheme.primary,
-                        barWidth: 3,
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.15),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Latest reading: ${formatNumber(_ipiTrend.last.productionIndex)} '
-                '(${_ipiTrend.length} month${_ipiTrend.length == 1 ? '' : 's'} shown)',
-              ),
-            ],
+            else if (comparison == null)
+              _buildSectorOnly()
+            else
+              _buildComparisonChart(comparison),
             const SizedBox(height: 8),
             Text(
               'Industrial data sourced from Department of Statistics Malaysia (DOSM) via data.gov.my, '
@@ -414,6 +360,155 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Shown when the factory's logged months overlap the sector series in fewer
+  /// than two places. The sector line still says something on its own, so it
+  /// stays — alongside the reason its counterpart is missing.
+  Widget _buildSectorOnly() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 160,
+          child: LineChart(
+            LineChartData(
+              titlesData: _hiddenTitles,
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+              lineBarsData: [
+                _series(
+                  [
+                    for (var i = 0; i < _ipiTrend.length; i++)
+                      FlSpot(i.toDouble(), _ipiTrend[i].productionIndex),
+                  ],
+                  Theme.of(context).colorScheme.tertiary,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Sector index only — log at least two months of production within '
+          'this window to see your factory charted against it.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildComparisonChart(SectorComparison comparison) {
+    final scheme = Theme.of(context).colorScheme;
+    final points = comparison.points;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _legendDot('Your output', scheme.primary),
+            const SizedBox(width: 16),
+            _legendDot('Sector (IPI)', scheme.tertiary),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 180,
+          child: LineChart(
+            LineChartData(
+              titlesData: _hiddenTitles,
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+              // The base month sits at 100 by construction, so this is the
+              // "no change since then" mark both series are read against.
+              extraLinesData: ExtraLinesData(
+                horizontalLines: [
+                  HorizontalLine(
+                    y: 100,
+                    color: scheme.outlineVariant,
+                    strokeWidth: 1,
+                    dashArray: [4, 4],
+                  ),
+                ],
+              ),
+              lineBarsData: [
+                _series(
+                  [
+                    for (var i = 0; i < points.length; i++)
+                      FlSpot(i.toDouble(), points[i].sectorIndex),
+                  ],
+                  scheme.tertiary,
+                ),
+                _series(
+                  [
+                    for (var i = 0; i < points.length; i++)
+                      FlSpot(i.toDouble(), points[i].factoryIndex),
+                  ],
+                  scheme.primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Since ${formatMonth(comparison.baseMonth)}, your output is '
+          '${_signedPercent(comparison.factoryChangePercent)} and the sector is '
+          '${_signedPercent(comparison.sectorChangePercent)}.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Both lines are rebased to 100 at ${formatMonth(comparison.baseMonth)} '
+          'because DOSM publishes IPI as an index, not a unit count. That makes '
+          'the growth rates comparable — the levels themselves are in different '
+          'units and are not.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  String _signedPercent(double change) =>
+      '${change >= 0 ? '+' : ''}${formatPercent(change)}';
+
+  Widget _legendDot(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+
+  static const _hiddenTitles = FlTitlesData(
+    leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  );
+
+  LineChartBarData _series(List<FlSpot> spots, Color color) {
+    return LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      dotData: const FlDotData(show: false),
+      color: color,
+      barWidth: 3,
+      belowBarData: BarAreaData(
+        show: true,
+        color: color.withValues(alpha: 0.15),
       ),
     );
   }

@@ -37,6 +37,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   _LoadState _state = _LoadState.loading;
   List<ProductCover> _covers = [];
   List<DemandForecast> _forecasts = [];
+  List<UnmatchedForecast> _unmatchedForecasts = [];
   int _pendingMovements = 0;
 
   @override
@@ -90,6 +91,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
       setState(() {
         _covers = overview.covers;
         _forecasts = overview.forecasts;
+        _unmatchedForecasts = overview.unmatchedForecasts;
         _pendingMovements = pending;
         _state = _LoadState.ready;
       });
@@ -104,9 +106,8 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.close, color: AppColors.danger),
-                onPressed: () => ScaffoldMessenger.of(
-                  context,
-                ).hideCurrentMaterialBanner(),
+                onPressed: () =>
+                    ScaffoldMessenger.of(context).hideCurrentMaterialBanner(),
               ),
             ],
           ),
@@ -260,9 +261,16 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             _buildPendingSyncBanner(),
             const SizedBox(height: AppSpacing.l),
           ],
+          if (_unmatchedForecasts.isNotEmpty) ...[
+            _buildUnmatchedForecastBanner(),
+            const SizedBox(height: AppSpacing.l),
+          ],
           _buildCoverSummaryCard(mostUrgent),
           const SizedBox(height: AppSpacing.l),
-          if (aiInsight != null) ...[aiInsight, const SizedBox(height: AppSpacing.l)],
+          if (aiInsight != null) ...[
+            aiInsight,
+            const SizedBox(height: AppSpacing.l),
+          ],
           _buildSummaryStatsRow(),
           const SizedBox(height: AppSpacing.l),
           if (criticalItems.isNotEmpty) ...[
@@ -276,6 +284,87 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           _buildCoverListSection(),
           const SizedBox(height: AppSpacing.xl),
           _buildDemandSection(),
+        ],
+      ),
+    );
+  }
+
+  /// Demand forecasts in effect today that matched no product.
+  ///
+  /// Days-of-cover joins demand to stock on the product name, with no
+  /// foreign key behind it — so a forecast whose name doesn't match counts
+  /// toward nothing, and the product it was meant for reads as "No demand
+  /// set". That used to be indistinguishable from genuinely having no
+  /// forecast; this is what makes it visible.
+  Widget _buildUnmatchedForecastBanner() {
+    final theme = Theme.of(context);
+    final count = _unmatchedForecasts.length;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.m),
+      decoration: BoxDecoration(
+        color: AppColors.warningLight,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.warning),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.link_off_rounded,
+                size: 18,
+                color: AppColors.warning,
+              ),
+              const SizedBox(width: AppSpacing.s),
+              Expanded(
+                child: Text(
+                  count == 1
+                      ? '1 demand forecast matches no product'
+                      : '$count demand forecasts match no product',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: AppColors.warning,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'These are not counted in days of cover. Rename either side so '
+            'the names match.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: AppSpacing.s),
+          for (final unmatched in _unmatchedForecasts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '"${unmatched.forecast.productName}"',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' · ${unmatched.forecast.requiredPerDay}/day',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    if (unmatched.closestProductName != null)
+                      TextSpan(
+                        text:
+                            '  — did you mean "${unmatched.closestProductName}"?',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -457,7 +546,11 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     return Row(
       children: [
         Expanded(
-          child: _summaryStat('Products', _covers.length.toString(), scheme.primary),
+          child: _summaryStat(
+            'Products',
+            _covers.length.toString(),
+            scheme.primary,
+          ),
         ),
         Expanded(
           child: _summaryStat(
@@ -490,7 +583,11 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: AppStatus.danger.color, size: 20),
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: AppStatus.danger.color,
+                  size: 20,
+                ),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   'Critical products',
@@ -547,7 +644,11 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.inventory_2_outlined, color: AppStatus.info.color, size: 20),
+                Icon(
+                  Icons.inventory_2_outlined,
+                  color: AppStatus.info.color,
+                  size: 20,
+                ),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   'Overstocked — capital tied up',
@@ -594,11 +695,19 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
 
   Widget _buildCoverListSection() {
     if (_covers.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
+      // Carries its own route to the Finished Stock list. The "Log stock
+      // movement" button below is the only other way there, and it renders
+      // in the non-empty branch — so without this, a factory with no
+      // products had nothing on this screen that could create its first one.
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
         child: EmptyState(
           icon: Icons.inventory_2_outlined,
-          message: 'No products yet. Add one from Finished Stock above.',
+          title: 'No products yet',
+          subtitle:
+              'Add a finished-goods product to start tracking days of cover.',
+          actionLabel: 'Open Finished Stock',
+          onAction: _openStockList,
         ),
       );
     }
@@ -783,7 +892,9 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     // Zero stock gets a stronger treatment than the "Low stock" chip alone —
     // the whole card goes solid red, not just a tinted background.
     final isOutOfStock = cover.stock.currentQuantity == 0;
-    final primaryTextColor = isOutOfStock ? Colors.white : theme.colorScheme.onSurface;
+    final primaryTextColor = isOutOfStock
+        ? Colors.white
+        : theme.colorScheme.onSurface;
     final secondaryTextColor = isOutOfStock
         ? Colors.white.withValues(alpha: 0.85)
         : theme.colorScheme.onSurfaceVariant;
@@ -844,9 +955,11 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
-                  value: cover.requiredPerDay != null && cover.requiredPerDay! > 0
+                  value:
+                      cover.requiredPerDay != null && cover.requiredPerDay! > 0
                       ? (cover.stock.currentQuantity /
-                                (cover.requiredPerDay! * overstockDaysThreshold))
+                                (cover.requiredPerDay! *
+                                    overstockDaysThreshold))
                             .clamp(0.0, 1.0)
                       : 0,
                   minHeight: 6,

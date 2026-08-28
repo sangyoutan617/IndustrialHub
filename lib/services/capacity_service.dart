@@ -43,6 +43,138 @@ class HiringGap {
   });
 }
 
+/// One month of the factory-vs-sector comparison. DOSM publishes IPI as an
+/// index rather than a unit count, so the factory's own output is rebased
+/// onto the same 100-at-the-base-month footing. What the two series make
+/// comparable is how each has *moved* since that month — never the levels
+/// themselves, which are in different units entirely.
+class SectorComparisonPoint {
+  final DateTime month;
+  final double factoryIndex;
+  final double sectorIndex;
+
+  const SectorComparisonPoint({
+    required this.month,
+    required this.factoryIndex,
+    required this.sectorIndex,
+  });
+}
+
+class SectorComparison {
+  final List<SectorComparisonPoint> points;
+
+  const SectorComparison(this.points);
+
+  DateTime get baseMonth => points.first.month;
+  DateTime get latestMonth => points.last.month;
+
+  /// Percent change since the base month, for each series. Both are read off
+  /// the rebased index, so they answer "who grew faster", not "who is bigger".
+  double get factoryChangePercent => points.last.factoryIndex - 100;
+  double get sectorChangePercent => points.last.sectorIndex - 100;
+}
+
+/// The per-machine and per-worker rates the what-if simulator extrapolates
+/// from, together with the field values that mean "nothing changed yet".
+///
+/// The simulator can't just call [CapacityService.computeMachineCapacity]:
+/// that sums the machines that exist, while the simulator has to price a
+/// machine count that doesn't exist yet. So it needs a per-machine rate —
+/// but derived so the untouched baseline reproduces the real ceiling
+/// instead of a number the Capacity dashboard disagrees with.
+class SimulatorBaseline {
+  /// Mean full-uptime output of one active machine, i.e. mean(rated × hours).
+  ///
+  /// The mean of the *product*, not the product of the means. Multiplying
+  /// mean(rated) by mean(hours) silently drops the covariance between the
+  /// two, which understates any fleet where the faster machines also run the
+  /// longer days.
+  final double machineNameplate;
+
+  /// Worker-hour-weighted output rate, so a shift that supplies more
+  /// worker-hours moves the rate proportionally instead of counting once.
+  final double outputPerWorkerHour;
+
+  final int activeMachines;
+  final int uptimePercent;
+  final int workers;
+  final int shiftHours;
+
+  const SimulatorBaseline({
+    required this.machineNameplate,
+    required this.outputPerWorkerHour,
+    required this.activeMachines,
+    required this.uptimePercent,
+    required this.workers,
+    required this.shiftHours,
+  });
+
+  /// Both rates are weighted so that, at the returned field values, the
+  /// simulator's own arithmetic reproduces [CapacityService.computeMachineCapacity]
+  /// and [CapacityService.computeManpowerCapacity] — up to the rounding
+  /// forced by the simulator's whole-number-only inputs.
+  static SimulatorBaseline from(CapacitySnapshot snapshot) {
+    final active = snapshot.machines.where((m) => m.isActive).toList();
+    // Inactive machines must not drag the rate — but with nothing active at
+    // all, an average over every machine is still the best available guess
+    // at what one machine is worth.
+    final basis = active.isNotEmpty ? active : snapshot.machines;
+
+    final nameplateTotal = basis.fold<double>(
+      0,
+      (sum, m) => sum + m.ratedOutputPerHour * m.operatingHoursPerDay,
+    );
+    final machineNameplate = basis.isEmpty
+        ? 0.0
+        : nameplateTotal / basis.length;
+
+    // Capacity-weighted, so nameplateTotal × uptime/100 lands back on
+    // Σ(rated × hours × uptime/100) rather than on a plain per-machine mean
+    // that ignores how much capacity each machine's uptime applies to.
+    final uptimePercent = nameplateTotal > 0
+        ? basis.fold<double>(
+                0,
+                (sum, m) =>
+                    sum +
+                    m.ratedOutputPerHour *
+                        m.operatingHoursPerDay *
+                        m.uptimePercent,
+              ) /
+              nameplateTotal
+        : 100.0;
+
+    final totalWorkers = snapshot.shifts.fold<int>(
+      0,
+      (sum, s) => sum + s.workerCount,
+    );
+    final workerHours = snapshot.shifts.fold<double>(
+      0,
+      (sum, s) => sum + s.workerCount * s.shiftHours,
+    );
+    final outputPerWorkerHour = workerHours > 0
+        ? CapacityService.computeManpowerCapacity(snapshot.shifts) / workerHours
+        : _mean(snapshot.shifts.map((s) => s.outputPerWorkerHour));
+    final shiftHours = totalWorkers > 0
+        ? workerHours / totalWorkers
+        : _mean(snapshot.shifts.map((s) => s.shiftHours));
+
+    return SimulatorBaseline(
+      machineNameplate: machineNameplate,
+      outputPerWorkerHour: outputPerWorkerHour,
+      activeMachines: active.length,
+      uptimePercent: uptimePercent.round().clamp(0, 100),
+      workers: totalWorkers,
+      shiftHours: shiftHours.round(),
+    );
+  }
+
+  static double _mean(Iterable<double> values) {
+    final list = values.toList();
+    if (list.isEmpty) return 0;
+    return list.reduce((a, b) => a + b) / list.length;
+  }
+}
+
 class CapacityService {
   final MachineService _machineService = MachineService();
   final ManpowerService _manpowerService = ManpowerService();
@@ -135,6 +267,42 @@ class CapacityService {
     );
     if (totalWorkers == 0) return null;
     return snapshot.effectiveCapacity / totalWorkers;
+  }
+
+  /// Puts factory output and its sector's IPI onto one chart by rebasing both
+  /// to 100 at the first month they share. Only months present in *both*
+  /// series are kept, so a gap in the factory's log shortens the comparison
+  /// rather than reading as a collapse in output.
+  ///
+  /// Returns null when the overlap is under two months (a single point is a
+  /// dot, not a trend) or when a base value is non-positive and there is
+  /// nothing to divide by.
+  static SectorComparison? buildSectorComparison({
+    required List<IpiBenchmark> ipiTrend,
+    required Map<DateTime, double> factoryMonthlyOutput,
+  }) {
+    final months = <DateTime>[];
+    final sector = <double>[];
+    final factory = <double>[];
+    for (final reading in ipiTrend) {
+      final month = DateTime(reading.date.year, reading.date.month);
+      final output = factoryMonthlyOutput[month];
+      if (output == null) continue;
+      months.add(month);
+      sector.add(reading.productionIndex);
+      factory.add(output);
+    }
+    if (months.length < 2) return null;
+    if (factory.first <= 0 || sector.first <= 0) return null;
+
+    return SectorComparison([
+      for (var i = 0; i < months.length; i++)
+        SectorComparisonPoint(
+          month: months[i],
+          factoryIndex: factory[i] / factory.first * 100,
+          sectorIndex: sector[i] / sector.first * 100,
+        ),
+    ]);
   }
 
   Future<List<MsicCode>> getMsicCodes() async {
