@@ -6,6 +6,7 @@ import '../../widgets/confirm_dialog.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import '../../widgets/stock_movement_history_sheet.dart';
 import '../../widgets/text_prompt_dialog.dart';
@@ -201,81 +202,139 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
     final theme = Theme.of(context);
     final stock = cover.stock;
 
+    final metricsPanel = Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.l,
+          vertical: AppSpacing.s,
+        ),
+        child: Column(
+          children: [
+            MetricRow(
+              label: 'Current stock',
+              value: formatUnits(stock.currentQuantity),
+            ),
+            MetricRow(
+              label: 'Demand',
+              value: cover.requiredPerDay != null
+                  ? '${formatNumber(cover.requiredPerDay!)}/day'
+                  : 'Not set',
+            ),
+            MetricRow(
+              label: 'Days of cover',
+              value: cover.daysOfCover != null
+                  ? formatDays(cover.daysOfCover!)
+                  : '—',
+              status: cover.needsAttention ? AppStatus.danger : null,
+              statusLabel: cover.needsAttention ? 'Low' : null,
+            ),
+            MetricRow(
+              label: 'Predicted stock-out',
+              value: cover.stockOutDate != null
+                  ? formatDate(cover.stockOutDate!)
+                  : 'Not projected',
+            ),
+          ],
+        ),
+      ),
+    );
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        children: [
-          Row(
+      child: ResponsiveTwoPane(
+        portrait: (context) => ListView(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    stock.productName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ),
+                StatusChip(label: cover.status, status: cover.appStatus),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.l),
+            metricsPanel,
+            const SizedBox(height: AppSpacing.l),
+            const SectionHeader(title: 'Actions'),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _recordMovement,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Record stock movement'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.s),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _viewMovements,
+                icon: const Icon(Icons.history, size: 18),
+                label: const Text('View movement history'),
+              ),
+            ),
+          ],
+        ),
+        landscape: (context) => SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  stock.productName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            stock.productName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleLarge,
+                          ),
+                        ),
+                        StatusChip(
+                          label: cover.status,
+                          status: cover.appStatus,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.l),
+                    metricsPanel,
+                  ],
                 ),
               ),
-              StatusChip(label: cover.status, status: cover.appStatus),
+              const SizedBox(width: AppSpacing.l),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SectionHeader(title: 'Actions'),
+                    FilledButton.icon(
+                      onPressed: _recordMovement,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Record stock movement'),
+                    ),
+                    const SizedBox(height: AppSpacing.s),
+                    OutlinedButton.icon(
+                      onPressed: _viewMovements,
+                      icon: const Icon(Icons.history, size: 18),
+                      label: const Text('View movement history'),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: AppSpacing.l),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.l,
-                vertical: AppSpacing.s,
-              ),
-              child: Column(
-                children: [
-                  MetricRow(
-                    label: 'Current stock',
-                    value: formatUnits(stock.currentQuantity),
-                  ),
-                  MetricRow(
-                    label: 'Demand',
-                    value: cover.requiredPerDay != null
-                        ? '${formatNumber(cover.requiredPerDay!)}/day'
-                        : 'Not set',
-                  ),
-                  MetricRow(
-                    label: 'Days of cover',
-                    value: cover.daysOfCover != null
-                        ? formatDays(cover.daysOfCover!)
-                        : '—',
-                    status: cover.needsAttention ? AppStatus.danger : null,
-                    statusLabel: cover.needsAttention ? 'Low' : null,
-                  ),
-                  MetricRow(
-                    label: 'Predicted stock-out',
-                    value: cover.stockOutDate != null
-                        ? formatDate(cover.stockOutDate!)
-                        : 'Not projected',
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.l),
-          const SectionHeader(title: 'Actions'),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _recordMovement,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Record stock movement'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.s),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _viewMovements,
-              icon: const Icon(Icons.history, size: 18),
-              label: const Text('View movement history'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

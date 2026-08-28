@@ -6,6 +6,7 @@ import '../../services/stock_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_two_pane.dart';
 
 /// Factory-wide stock activity as a calendar heatmap, not a line chart —
 /// deliberately distinct from Capacity's trend and IPI charts. Plain
@@ -117,48 +118,80 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
       );
     }
 
+    final infoSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Last $_weeksShown weeks',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        Text(
+          '${formatDate(start)} – ${formatDate(today)}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.l),
+        Row(
+          children: [
+            Expanded(child: _statTile('Units moved', formatNumber(totalMoved))),
+            const SizedBox(width: AppSpacing.m),
+            Expanded(
+              child: _statTile(
+                'Busiest day',
+                busiest != null && busiest.value > 0
+                    ? formatDate(busiest.key)
+                    : '—',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.l),
+        Text(
+          'Each cell is one day — darker means more units moved in or out '
+          'that day (production, shipments, damage, returns and '
+          'adjustments combined). Tap a day for its total.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+
+    final heatmapSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeatmap(days, totals, maxVal),
+        const SizedBox(height: AppSpacing.m),
+        _buildLegend(),
+      ],
+    );
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        children: [
-          Text(
-            'Last $_weeksShown weeks',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          Text(
-            '${formatDate(start)} – ${formatDate(today)}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: AppSpacing.l),
-          Row(
+      child: ResponsiveTwoPane(
+        portrait: (context) => ListView(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          children: [
+            infoSection,
+            const SizedBox(height: AppSpacing.xl),
+            heatmapSection,
+          ],
+        ),
+        landscape: (context) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(AppSpacing.l),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _statTile('Units moved', formatNumber(totalMoved))),
-              const SizedBox(width: AppSpacing.m),
               Expanded(
-                child: _statTile(
-                  'Busiest day',
-                  busiest != null && busiest.value > 0
-                      ? formatDate(busiest.key)
-                      : '—',
-                ),
+                child: heatmapSection,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: infoSection,
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xl),
-          _buildHeatmap(days, totals, maxVal),
-          const SizedBox(height: AppSpacing.m),
-          _buildLegend(),
-          const SizedBox(height: AppSpacing.l),
-          Text(
-            'Each cell is one day — darker means more units moved in or out '
-            'that day (production, shipments, damage, returns and '
-            'adjustments combined). Tap a day for its total.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ),
-        ],
+        ),
       ),
     );
   }

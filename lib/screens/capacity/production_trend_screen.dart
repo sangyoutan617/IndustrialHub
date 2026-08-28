@@ -7,6 +7,7 @@ import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 
 enum _Granularity { day, rollingWeek, month }
@@ -313,46 +314,85 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 
   Widget _buildReady() {
     final points = _points;
+    
+    final headerSection = Column(
+      children: [
+        Center(
+          child: SegmentedButton<_Granularity>(
+            segments: const [
+              ButtonSegment(value: _Granularity.day, label: Text('Day')),
+              ButtonSegment(
+                value: _Granularity.rollingWeek,
+                label: Text('7-day avg'),
+              ),
+              ButtonSegment(value: _Granularity.month, label: Text('Month')),
+            ],
+            selected: {_granularity},
+            onSelectionChanged: (selection) =>
+                _setGranularity(selection.first),
+          ),
+        ),
+        if (_summaryLine != null) ...[
+          const SizedBox(height: 16),
+          InfoBanner(message: _summaryLine!, status: AppStatus.warning),
+        ],
+      ],
+    );
+
+    final chartSection = points.isEmpty
+        ? const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: EmptyState(
+              icon: Icons.show_chart,
+              message:
+                  'No production logged yet. Use "Log production" to start tracking output against your daily ceiling.',
+            ),
+          )
+        : _buildChartCard(points);
+
+    final downtimeSection = _downtimeRows.isNotEmpty
+        ? _buildDowntimeCard()
+        : const SizedBox.shrink();
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Center(
-            child: SegmentedButton<_Granularity>(
-              segments: const [
-                ButtonSegment(value: _Granularity.day, label: Text('Day')),
-                ButtonSegment(
-                  value: _Granularity.rollingWeek,
-                  label: Text('7-day avg'),
-                ),
-                ButtonSegment(value: _Granularity.month, label: Text('Month')),
-              ],
-              selected: {_granularity},
-              onSelectionChanged: (selection) =>
-                  _setGranularity(selection.first),
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (_summaryLine != null)
-            InfoBanner(message: _summaryLine!, status: AppStatus.warning),
-          const SizedBox(height: 16),
-          if (points.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: EmptyState(
-                icon: Icons.show_chart,
-                message:
-                    'No production logged yet. Use "Log production" to start tracking output against your daily ceiling.',
-              ),
-            )
-          else
-            _buildChartCard(points),
-          if (_downtimeRows.isNotEmpty) ...[
+      child: ResponsiveTwoPane(
+        portrait: (context) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            headerSection,
             const SizedBox(height: 16),
-            _buildDowntimeCard(),
+            chartSection,
+            if (_downtimeRows.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              downtimeSection,
+            ],
           ],
-        ],
+        ),
+        landscape: (context) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: chartSection,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    headerSection,
+                    if (_downtimeRows.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      downtimeSection,
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

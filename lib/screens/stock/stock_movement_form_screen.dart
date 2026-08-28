@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../models/stock_movement.dart';
 import '../../services/stock_service.dart';
+import '../../widgets/responsive_form_fields.dart';
 
 class StockMovementFormScreen extends StatefulWidget {
   final int stockId;
@@ -111,65 +112,71 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.l),
             children: [
-              DropdownButtonFormField<String>(
-                initialValue: _movementType,
-                decoration: const InputDecoration(labelText: 'Movement type'),
-                items: [
-                  for (final type in StockMovementType.all)
-                    DropdownMenuItem(
-                      value: type,
-                      child: Text(_typeLabels[type]!),
+              ResponsiveFormFields(
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: _movementType,
+                    decoration: const InputDecoration(labelText: 'Movement type'),
+                    items: [
+                      for (final type in StockMovementType.all)
+                        DropdownMenuItem(
+                          value: type,
+                          child: Text(_typeLabels[type]!),
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _movementType = value ?? _movementType),
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  TextFormField(
+                    controller: _quantityController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      signed: true,
                     ),
+                    decoration: InputDecoration(
+                      labelText: 'Quantity',
+                      helperText: _quantityHint,
+                    ),
+                    validator: (v) {
+                      final parsed = int.tryParse(v ?? '');
+                      if (parsed == null) return 'Enter a whole number';
+                      if (parsed == 0) return 'Must not be zero';
+                      if (_movementType != StockMovementType.adjustment &&
+                          parsed < 0) {
+                        return 'Enter a positive amount';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  FormBreak(ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Date'),
+                    subtitle: Text(
+                      '${_movementDate.year}-${_movementDate.month.toString().padLeft(2, '0')}-${_movementDate.day.toString().padLeft(2, '0')}',
+                    ),
+                    trailing: const Icon(Icons.calendar_today_outlined),
+                    onTap: _pickDate,
+                  )),
+                  const SizedBox(height: AppSpacing.l),
+                  TextFormField(
+                    controller: _noteController,
+                    decoration: const InputDecoration(labelText: 'Note (optional)'),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  FormBreak(
+                    FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
+                  ),
                 ],
-                onChanged: (value) =>
-                    setState(() => _movementType = value ?? _movementType),
-              ),
-              const SizedBox(height: AppSpacing.l),
-              TextFormField(
-                controller: _quantityController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Quantity',
-                  helperText: _quantityHint,
-                ),
-                validator: (v) {
-                  final parsed = int.tryParse(v ?? '');
-                  if (parsed == null) return 'Enter a whole number';
-                  if (parsed == 0) return 'Must not be zero';
-                  if (_movementType != StockMovementType.adjustment &&
-                      parsed < 0) {
-                    return 'Enter a positive amount';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.l),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Date'),
-                subtitle: Text(
-                  '${_movementDate.year}-${_movementDate.month.toString().padLeft(2, '0')}-${_movementDate.day.toString().padLeft(2, '0')}',
-                ),
-                trailing: const Icon(Icons.calendar_today_outlined),
-                onTap: _pickDate,
-              ),
-              const SizedBox(height: AppSpacing.l),
-              TextFormField(
-                controller: _noteController,
-                decoration: const InputDecoration(labelText: 'Note (optional)'),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
               ),
             ],
           ),
