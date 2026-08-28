@@ -140,36 +140,58 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
                 unit: '/day',
               ),
               const SizedBox(height: 8),
-              for (final shift in _shifts)
-                Card(
-                  child: ListTile(
-                    title: Text(
-                      shift.shiftName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      '${shift.workerCount} workers × ${shift.shiftHours}h × '
-                      '${shift.outputPerWorkerHour}/worker-hour',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _openForm(shift: shift),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _delete(shift),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              OrientationBuilder(
+                builder: (context, orientation) {
+                  if (orientation == Orientation.landscape) {
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 8,
+                        childAspectRatio: 3.0,
+                      ),
+                      itemCount: _shifts.length,
+                      itemBuilder: (context, index) => _buildShiftCard(_shifts[index]),
+                    );
+                  }
+                  return Column(
+                    children: [for (final shift in _shifts) _buildShiftCard(shift)],
+                  );
+                },
+              ),
             ],
           ),
         );
     }
+  }
+
+  Widget _buildShiftCard(Manpower shift) {
+    return Card(
+      child: ListTile(
+        title: Text(
+          shift.shiftName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          '${shift.workerCount} workers × ${shift.shiftHours}h × '
+          '${shift.outputPerWorkerHour}/worker-hour',
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _openForm(shift: shift),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _delete(shift),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -8,6 +8,7 @@ import '../../services/bottleneck_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import 'admin_factory_detail_screen.dart';
 
@@ -104,17 +105,45 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   }
 
   Widget _buildReady(CrossFactoryStats stats) {
+    final benchmarkCard = _buildBenchmarkCard(stats);
+    final chartCard = _buildChartCard(stats);
+    final tableCard = _buildTableCard(stats);
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        children: [
-          _buildBenchmarkCard(stats),
-          const SizedBox(height: AppSpacing.l),
-          _buildChartCard(stats),
-          const SizedBox(height: AppSpacing.l),
-          _buildTableCard(stats),
-        ],
+      child: ResponsiveTwoPane(
+        portrait: (context) => ListView(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          children: [
+            benchmarkCard,
+            const SizedBox(height: AppSpacing.l),
+            chartCard,
+            const SizedBox(height: AppSpacing.l),
+            tableCard,
+          ],
+        ),
+        landscape: (context) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(AppSpacing.l),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    benchmarkCard,
+                    const SizedBox(height: AppSpacing.l),
+                    chartCard,
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: tableCard,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

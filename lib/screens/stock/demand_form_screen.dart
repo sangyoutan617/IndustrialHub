@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../models/demand_forecast.dart';
 import '../../services/demand_service.dart';
+import '../../widgets/responsive_form_fields.dart';
 
 class DemandFormScreen extends StatefulWidget {
   final int factoryId;
@@ -139,83 +140,89 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.l),
             children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Product name',
-                  helperText:
-                      'Match the product name used in Finished Stock to link them',
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: AppSpacing.l),
-              TextFormField(
-                controller: _requiredController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Required units per day',
-                  helperText:
-                      'A number you set, or derive one from shipment history below',
-                ),
-                validator: (v) {
-                  final parsed = int.tryParse(v ?? '');
-                  if (parsed == null || parsed < 0) {
-                    return 'Enter a non-negative whole number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppSpacing.s),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: _isSuggesting ? null : _suggestFromHistory,
-                  icon: _isSuggesting
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.auto_graph, size: 18),
-                  label: const Text('Suggest from shipment history'),
-                ),
-              ),
-              if (_suggestError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xs),
-                  child: Text(
-                    _suggestError!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.error,
+              ResponsiveFormFields(
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Product name',
+                      helperText:
+                          'Match the product name used in Finished Stock to link them',
+                    ),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  TextFormField(
+                    controller: _requiredController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Required units per day',
+                      helperText:
+                          'A number you set, or derive one from shipment history below',
+                    ),
+                    validator: (v) {
+                      final parsed = int.tryParse(v ?? '');
+                      if (parsed == null || parsed < 0) {
+                        return 'Enter a non-negative whole number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.s),
+                  FormBreak(Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: _isSuggesting ? null : _suggestFromHistory,
+                      icon: _isSuggesting
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_graph, size: 18),
+                      label: const Text('Suggest from shipment history'),
+                    ),
+                  )),
+                  if (_suggestError != null)
+                    FormBreak(Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xs),
+                      child: Text(
+                        _suggestError!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    )),
+                  const SizedBox(height: AppSpacing.l),
+                  FormBreak(ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Period start (optional)'),
+                    subtitle: Text(_formatDate(_periodStart)),
+                    trailing: const Icon(Icons.calendar_today_outlined),
+                    onTap: () => _pickDate(isStart: true),
+                  )),
+                  FormBreak(ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Period end (optional)'),
+                    subtitle: Text(_formatDate(_periodEnd)),
+                    trailing: const Icon(Icons.calendar_today_outlined),
+                    onTap: () => _pickDate(isStart: false),
+                  )),
+                  const SizedBox(height: AppSpacing.xl),
+                  FormBreak(
+                    FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
                     ),
                   ),
-                ),
-              const SizedBox(height: AppSpacing.l),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Period start (optional)'),
-                subtitle: Text(_formatDate(_periodStart)),
-                trailing: const Icon(Icons.calendar_today_outlined),
-                onTap: () => _pickDate(isStart: true),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Period end (optional)'),
-                subtitle: Text(_formatDate(_periodEnd)),
-                trailing: const Icon(Icons.calendar_today_outlined),
-                onTap: () => _pickDate(isStart: false),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
+                ],
               ),
             ],
           ),

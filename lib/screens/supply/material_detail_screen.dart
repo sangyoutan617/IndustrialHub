@@ -12,6 +12,7 @@ import '../../widgets/error_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/material_projection_sheet.dart';
+import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import 'material_form_screen.dart';
 import 'order_form_screen.dart';
@@ -351,187 +352,283 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.l),
+      child: ResponsiveTwoPane(
+        portrait: (context) => _buildPortrait(
+          plan: plan,
+          material: material,
+          theme: theme,
+          riskStatus: riskStatus,
+          riskLabel: riskLabel,
+          canReorder: canReorder,
+        ),
+        landscape: (context) => _buildLandscape(
+          plan: plan,
+          material: material,
+          theme: theme,
+          riskStatus: riskStatus,
+          riskLabel: riskLabel,
+          canReorder: canReorder,
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _headerAndMetrics({
+    required MaterialPlan plan,
+    required dynamic material,
+    required ThemeData theme,
+    required AppStatus riskStatus,
+    required String riskLabel,
+  }) {
+    return [
+      Row(
         children: [
-          // Header — the one-line verdict, largest and first.
-          Row(
+          Expanded(
+            child: Text(
+              material.materialName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge,
+            ),
+          ),
+          StatusChip(label: riskLabel, status: riskStatus),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.xs),
+      Text(
+        _riskExplanation(plan),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.l),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.l,
+            vertical: AppSpacing.s,
+          ),
+          child: Column(
             children: [
-              Expanded(
-                child: Text(
-                  material.materialName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge,
-                ),
+              MetricRow(
+                label: 'Current stock',
+                value: '${formatNumber(material.currentStock)} ${material.unit}',
               ),
-              StatusChip(label: riskLabel, status: riskStatus),
+              MetricRow(
+                label: 'Reorder level',
+                value: '${formatNumber(material.reorderLevel)} ${material.unit}',
+                status: plan.belowReorderLevel ? AppStatus.danger : null,
+                statusLabel: plan.belowReorderLevel ? 'Below' : null,
+              ),
+              MetricRow(
+                label: 'Days of cover',
+                value: plan.daysOfCover != null
+                    ? formatDays(plan.daysOfCover!)
+                    : '${MrpService.defaultHorizonDays}+ days',
+              ),
+              MetricRow(
+                label: 'Expected stock-out',
+                value: plan.stockOutDate != null
+                    ? formatDate(plan.stockOutDate!)
+                    : 'Not projected',
+              ),
+              MetricRow(
+                label: 'Latest safe order date',
+                value: plan.orderByDate != null
+                    ? formatDate(plan.orderByDate!)
+                    : '—',
+              ),
+              MetricRow(
+                label: 'Burn rate',
+                value:
+                    '${formatNumber(plan.burnRatePerDay)} ${material.unit}/day',
+              ),
+              if (plan.inboundTotal > 0)
+                MetricRow(
+                  label: 'Inbound (open orders)',
+                  value:
+                      '${formatNumber(plan.inboundTotal)} ${material.unit}',
+                  status: plan.overdueOrderCount > 0
+                      ? AppStatus.warning
+                      : null,
+                  statusLabel: plan.overdueOrderCount > 0
+                      ? '${plan.overdueOrderCount} overdue'
+                      : null,
+                ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            _riskExplanation(plan),
-            style: theme.textTheme.bodyMedium?.copyWith(
+        ),
+      ),
+      const SizedBox(height: AppSpacing.s),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () => showMaterialProjectionSheet(context, plan),
+          icon: const Icon(Icons.show_chart, size: 18),
+          label: const Text('View 30-day trend'),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _ledgerAndAction({
+    required MaterialPlan plan,
+    required dynamic material,
+    required ThemeData theme,
+    required bool canReorder,
+  }) {
+    return [
+      const SectionHeader(title: 'Stock ledger'),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: _recordUsage,
+          icon: const Icon(Icons.edit_note, size: 18),
+          label: const Text('Record usage / adjust stock'),
+        ),
+      ),
+      const SizedBox(height: AppSpacing.s),
+      if (_movements.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+          child: Text(
+            'No stock movements recorded yet.',
+            style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: AppSpacing.l),
-
-          // Every figure MrpService already computed, one line each.
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.l,
-                vertical: AppSpacing.s,
-              ),
-              child: Column(
-                children: [
-                  MetricRow(
-                    label: 'Current stock',
-                    value:
-                        '${formatNumber(material.currentStock)} ${material.unit}',
-                  ),
-                  MetricRow(
-                    label: 'Reorder level',
-                    value:
-                        '${formatNumber(material.reorderLevel)} ${material.unit}',
-                    status: plan.belowReorderLevel ? AppStatus.danger : null,
-                    statusLabel: plan.belowReorderLevel ? 'Below' : null,
-                  ),
-                  MetricRow(
-                    label: 'Days of cover',
-                    value: plan.daysOfCover != null
-                        ? formatDays(plan.daysOfCover!)
-                        : '${MrpService.defaultHorizonDays}+ days',
-                  ),
-                  MetricRow(
-                    label: 'Expected stock-out',
-                    value: plan.stockOutDate != null
-                        ? formatDate(plan.stockOutDate!)
-                        : 'Not projected',
-                  ),
-                  MetricRow(
-                    label: 'Latest safe order date',
-                    value: plan.orderByDate != null
-                        ? formatDate(plan.orderByDate!)
-                        : '—',
-                  ),
-                  MetricRow(
-                    label: 'Burn rate',
-                    value:
-                        '${formatNumber(plan.burnRatePerDay)} ${material.unit}/day',
-                  ),
-                  if (plan.inboundTotal > 0)
-                    MetricRow(
-                      label: 'Inbound (open orders)',
-                      value:
-                          '${formatNumber(plan.inboundTotal)} ${material.unit}',
-                      status: plan.overdueOrderCount > 0
-                          ? AppStatus.warning
-                          : null,
-                      statusLabel: plan.overdueOrderCount > 0
-                          ? '${plan.overdueOrderCount} overdue'
-                          : null,
-                    ),
-                ],
-              ),
-            ),
+        )
+      else
+        Card(
+          child: Column(
+            children: [
+              for (final m in _movements.take(8))
+                _ledgerTile(m, material.unit, theme),
+            ],
           ),
-          const SizedBox(height: AppSpacing.s),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => showMaterialProjectionSheet(context, plan),
-              icon: const Icon(Icons.show_chart, size: 18),
-              label: const Text('View 30-day trend'),
-            ),
-          ),
-
-          // Raw-material stock ledger — consumption/receipt/adjustment history,
-          // plus the entry point that actually depletes raw stock.
-          const SectionHeader(title: 'Stock ledger'),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: _recordUsage,
-              icon: const Icon(Icons.edit_note, size: 18),
-              label: const Text('Record usage / adjust stock'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.s),
-          if (_movements.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
-              child: Text(
-                'No stock movements recorded yet.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+        ),
+      const SectionHeader(title: 'Recommended action'),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (plan.bestSupplier != null) ...[
+                MetricRow(
+                  label: 'Recommended supplier',
+                  value: plan.bestSupplier!.supplierName,
                 ),
-              ),
-            )
-          else
-            Card(
-              child: Column(
+                MetricRow(
+                  label: 'Effective lead time',
+                  value: '${plan.effectiveLeadDays} days',
+                ),
+                MetricRow(
+                  label: 'Suggested order quantity',
+                  value: plan.suggestedQty != null && plan.suggestedQty! > 0
+                      ? '${formatNumber(plan.suggestedQty!)} ${material.unit}'
+                      : 'None needed',
+                ),
+              ] else
+                Text(
+                  'No supplier is linked to this material yet — add one to '
+                  'get a reorder recommendation.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppStatus.neutral.color,
+                  ),
+                ),
+              const SizedBox(height: AppSpacing.m),
+              Row(
                 children: [
-                  for (final m in _movements.take(8))
-                    _ledgerTile(m, material.unit, theme),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _openComparison,
+                      child: const Text('Compare suppliers'),
+                    ),
+                  ),
+                  if (canReorder &&
+                      plan.suggestedQty != null &&
+                      plan.suggestedQty! > 0) ...[
+                    const SizedBox(width: AppSpacing.s),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _openReorderForm,
+                        child: const Text('Create purchase order'),
+                      ),
+                    ),
+                  ],
                 ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildPortrait({
+    required MaterialPlan plan,
+    required dynamic material,
+    required ThemeData theme,
+    required AppStatus riskStatus,
+    required String riskLabel,
+    required bool canReorder,
+  }) {
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.l),
+      children: [
+        ..._headerAndMetrics(
+          plan: plan,
+          material: material,
+          theme: theme,
+          riskStatus: riskStatus,
+          riskLabel: riskLabel,
+        ),
+        ..._ledgerAndAction(
+          plan: plan,
+          material: material,
+          theme: theme,
+          canReorder: canReorder,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLandscape({
+    required MaterialPlan plan,
+    required dynamic material,
+    required ThemeData theme,
+    required AppStatus riskStatus,
+    required String riskLabel,
+    required bool canReorder,
+  }) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.l),
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _headerAndMetrics(
+                plan: plan,
+                material: material,
+                theme: theme,
+                riskStatus: riskStatus,
+                riskLabel: riskLabel,
               ),
             ),
-
-          const SectionHeader(title: 'Recommended action'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.l),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (plan.bestSupplier != null) ...[
-                    MetricRow(
-                      label: 'Recommended supplier',
-                      value: plan.bestSupplier!.supplierName,
-                    ),
-                    MetricRow(
-                      label: 'Effective lead time',
-                      value: '${plan.effectiveLeadDays} days',
-                    ),
-                    MetricRow(
-                      label: 'Suggested order quantity',
-                      value: plan.suggestedQty != null && plan.suggestedQty! > 0
-                          ? '${formatNumber(plan.suggestedQty!)} ${material.unit}'
-                          : 'None needed',
-                    ),
-                  ] else
-                    Text(
-                      'No supplier is linked to this material yet — add one to '
-                      'get a reorder recommendation.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppStatus.neutral.color,
-                      ),
-                    ),
-                  const SizedBox(height: AppSpacing.m),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _openComparison,
-                          child: const Text('Compare suppliers'),
-                        ),
-                      ),
-                      if (canReorder &&
-                          plan.suggestedQty != null &&
-                          plan.suggestedQty! > 0) ...[
-                        const SizedBox(width: AppSpacing.s),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: _openReorderForm,
-                            child: const Text('Create purchase order'),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
+          ),
+          const SizedBox(width: AppSpacing.l),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _ledgerAndAction(
+                plan: plan,
+                material: material,
+                theme: theme,
+                canReorder: canReorder,
               ),
             ),
           ),

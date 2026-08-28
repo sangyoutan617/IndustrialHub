@@ -5,6 +5,7 @@ import '../../models/manpower.dart';
 import '../../services/capacity_service.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
+import '../../widgets/responsive_two_pane.dart';
 
 class SimulatorScreen extends StatefulWidget {
   final int factoryId;
@@ -137,49 +138,87 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
           onRetry: _load,
         );
       case _LoadState.ready:
+        final resultCard = _buildResultCard();
+        final manpowerSection = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Manpower', style: Theme.of(context).textTheme.titleMedium),
+            _buildSlider(
+              label: 'Workers',
+              value: _workers,
+              min: 0,
+              max: (_workers < 100 ? 100 : _workers * 2),
+              display: _workers.toStringAsFixed(0),
+              onChanged: (v) => _onSliderChanged(() => _workers = v),
+            ),
+            _buildSlider(
+              label: 'Shift hours',
+              value: _shiftHours,
+              min: 0,
+              max: 24,
+              display: '${_shiftHours.toStringAsFixed(1)} h',
+              onChanged: (v) => _onSliderChanged(() => _shiftHours = v),
+            ),
+          ],
+        );
+        final machinesSection = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Machines', style: Theme.of(context).textTheme.titleMedium),
+            _buildSlider(
+              label: 'Active machines',
+              value: _activeMachines,
+              min: 0,
+              max: (_machines.isEmpty ? 10 : _machines.length.toDouble()),
+              display: _activeMachines.toStringAsFixed(0),
+              onChanged: (v) => _onSliderChanged(() => _activeMachines = v),
+            ),
+            _buildSlider(
+              label: 'Uptime %',
+              value: _uptimePercent,
+              min: 0,
+              max: 100,
+              display: formatPercent(_uptimePercent),
+              onChanged: (v) => _onSliderChanged(() => _uptimePercent = v),
+            ),
+          ],
+        );
+        
         return RefreshIndicator(
           onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildResultCard(),
-              const SizedBox(height: 24),
-              Text('Manpower', style: Theme.of(context).textTheme.titleMedium),
-              _buildSlider(
-                label: 'Workers',
-                value: _workers,
-                min: 0,
-                max: (_workers < 100 ? 100 : _workers * 2),
-                display: _workers.toStringAsFixed(0),
-                onChanged: (v) => _onSliderChanged(() => _workers = v),
+          child: ResponsiveTwoPane(
+            portrait: (context) => ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                resultCard,
+                const SizedBox(height: 24),
+                manpowerSection,
+                const SizedBox(height: 16),
+                machinesSection,
+              ],
+            ),
+            landscape: (context) => SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        manpowerSection,
+                        const SizedBox(height: 16),
+                        machinesSection,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: resultCard,
+                  ),
+                ],
               ),
-              _buildSlider(
-                label: 'Shift hours',
-                value: _shiftHours,
-                min: 0,
-                max: 24,
-                display: '${_shiftHours.toStringAsFixed(1)} h',
-                onChanged: (v) => _onSliderChanged(() => _shiftHours = v),
-              ),
-              const SizedBox(height: 16),
-              Text('Machines', style: Theme.of(context).textTheme.titleMedium),
-              _buildSlider(
-                label: 'Active machines',
-                value: _activeMachines,
-                min: 0,
-                max: (_machines.isEmpty ? 10 : _machines.length.toDouble()),
-                display: _activeMachines.toStringAsFixed(0),
-                onChanged: (v) => _onSliderChanged(() => _activeMachines = v),
-              ),
-              _buildSlider(
-                label: 'Uptime %',
-                value: _uptimePercent,
-                min: 0,
-                max: 100,
-                display: formatPercent(_uptimePercent),
-                onChanged: (v) => _onSliderChanged(() => _uptimePercent = v),
-              ),
-            ],
+            ),
           ),
         );
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/raw_material.dart';
 import '../../services/material_service.dart';
 import '../../widgets/kpi_card.dart';
+import '../../widgets/responsive_form_fields.dart';
 
 class MaterialFormScreen extends StatefulWidget {
   final int factoryId;
@@ -118,98 +119,108 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const SectionHeader(
-                title: 'Material details',
-                padding: EdgeInsets.only(bottom: 4),
-              ),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Material name'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _stockController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Current stock'),
-                validator: (v) => _requiredNumber(v, min: 0),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _unitController,
-                decoration: const InputDecoration(
-                  labelText: 'Unit',
-                  helperText: 'e.g. kg, litres, rolls',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _unitCostController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Unit cost (RM, optional)',
-                  helperText: 'Cost per ${_unitController.text.trim().isEmpty ? 'unit' : _unitController.text.trim()} — used for inventory value',
-                ),
-                validator: (v) => _optionalNumber(v, min: 0),
-              ),
-              const SectionHeader(
-                title: 'Consumption & reorder settings',
-                padding: EdgeInsets.only(top: 20, bottom: 4),
-              ),
-              TextFormField(
-                controller: _consumptionController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Consumption per product unit',
-                  helperText:
-                      'How much of this material one produced unit uses',
-                ),
-                validator: (v) => _requiredNumber(v, min: 0),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _reorderController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Reorder level'),
-                validator: (v) => _requiredNumber(v, min: 0),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _safetyStockController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Safety stock (days)',
-                  helperText:
-                      'Extra buffer kept on top of supplier lead time when '
-                      'deciding the latest safe reorder date',
-                ),
-                validator: (v) {
-                  final parsed = int.tryParse(v ?? '');
-                  if (parsed == null || parsed < 0) {
-                    return 'Enter a non-negative whole number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
+              ResponsiveFormFields(
+                children: [
+                  const FormBreak(
+                    SectionHeader(
+                      title: 'Material details',
+                      padding: EdgeInsets.only(bottom: 4),
+                    ),
+                  ),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Material name'),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _stockController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(labelText: 'Current stock'),
+                    validator: (v) => _requiredNumber(v, min: 0),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _unitController,
+                    decoration: const InputDecoration(
+                      labelText: 'Unit',
+                      helperText: 'e.g. kg, litres, rolls',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _unitCostController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Unit cost (RM, optional)',
+                      helperText: 'Cost per ${_unitController.text.trim().isEmpty ? 'unit' : _unitController.text.trim()} — used for inventory value',
+                    ),
+                    validator: (v) => _optionalNumber(v, min: 0),
+                  ),
+                  const FormBreak(
+                    SectionHeader(
+                      title: 'Consumption & reorder settings',
+                      padding: EdgeInsets.only(top: 20, bottom: 4),
+                    ),
+                  ),
+                  TextFormField(
+                    controller: _consumptionController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Consumption per product unit',
+                      helperText:
+                          'How much of this material one produced unit uses',
+                    ),
+                    validator: (v) => _requiredNumber(v, min: 0),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _reorderController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(labelText: 'Reorder level'),
+                    validator: (v) => _requiredNumber(v, min: 0),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _safetyStockController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Safety stock (days)',
+                      helperText:
+                          'Extra buffer kept on top of supplier lead time when '
+                          'deciding the latest safe reorder date',
+                    ),
+                    validator: (v) {
+                      final parsed = int.tryParse(v ?? '');
+                      if (parsed == null || parsed < 0) {
+                        return 'Enter a non-negative whole number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  FormBreak(
+                    FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

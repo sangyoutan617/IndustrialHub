@@ -3,6 +3,7 @@ import '../../core/theme.dart';
 import '../../models/machine.dart';
 import '../../services/machine_service.dart';
 import '../../widgets/kpi_card.dart';
+import '../../widgets/responsive_form_fields.dart';
 
 class MachineFormScreen extends StatefulWidget {
   final int factoryId;
@@ -94,67 +95,73 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Machine name'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              const SectionHeader(title: 'Machine details'),
-              TextFormField(
-                controller: _ratedController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Rated output (units/hour)',
-                ),
-                validator: (v) => _requiredNumber(v, min: 0),
-              ),
-              const SizedBox(height: AppSpacing.l),
-              TextFormField(
-                controller: _hoursController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Operating hours per day',
-                ),
-                validator: (v) => _requiredNumber(v, min: 0, max: 24),
-              ),
-              const SizedBox(height: AppSpacing.l),
-              TextFormField(
-                controller: _uptimeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Uptime %'),
-                validator: (v) => _requiredNumber(v, min: 0, max: 100),
-              ),
-              const SizedBox(height: AppSpacing.l),
-              DropdownButtonFormField<String>(
-                initialValue: _status,
-                decoration: const InputDecoration(labelText: 'Status'),
-                items: const [
-                  DropdownMenuItem(value: 'Active', child: Text('Active')),
-                  DropdownMenuItem(
-                    value: 'Under Maintenance',
-                    child: Text('Under Maintenance'),
+              ResponsiveFormFields(
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Machine name'),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const FormBreak(SectionHeader(title: 'Machine details')),
+                  TextFormField(
+                    controller: _ratedController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Rated output (units/hour)',
+                    ),
+                    validator: (v) => _requiredNumber(v, min: 0),
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  TextFormField(
+                    controller: _hoursController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Operating hours per day',
+                    ),
+                    validator: (v) => _requiredNumber(v, min: 0, max: 24),
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  TextFormField(
+                    controller: _uptimeController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(labelText: 'Uptime %'),
+                    validator: (v) => _requiredNumber(v, min: 0, max: 100),
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+                  DropdownButtonFormField<String>(
+                    initialValue: _status,
+                    decoration: const InputDecoration(labelText: 'Status'),
+                    items: const [
+                      DropdownMenuItem(value: 'Active', child: Text('Active')),
+                      DropdownMenuItem(
+                        value: 'Under Maintenance',
+                        child: Text('Under Maintenance'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _status = value ?? 'Active'),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  FormBreak(
+                    FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
                   ),
                 ],
-                onChanged: (value) =>
-                    setState(() => _status = value ?? 'Active'),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
               ),
             ],
           ),
