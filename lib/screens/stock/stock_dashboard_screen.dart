@@ -1,9 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/demand_forecast.dart';
+import '../../services/data_event_service.dart';
 import '../../services/demand_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/stock_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../../widgets/confirm_dialog.dart';
@@ -20,17 +22,7 @@ import 'stock_trend_screen.dart';
 class StockDashboardScreen extends StatefulWidget {
   final int factoryId;
 
-  /// Optional factory-health banner rendered as the first item in this
-  /// screen's own scrollable list — deliberately not a fixed/pinned sibling
-  /// above it, so it scrolls away with the rest of the content instead of
-  /// permanently occupying screen space.
-  final Widget? bottleneckBanner;
-
-  const StockDashboardScreen({
-    super.key,
-    required this.factoryId,
-    this.bottleneckBanner,
-  });
+  const StockDashboardScreen({super.key, required this.factoryId});
 
   @override
   State<StockDashboardScreen> createState() => _StockDashboardScreenState();
@@ -51,6 +43,29 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   void initState() {
     super.initState();
     _load();
+    NotificationService.instance.lastDelivery.addListener(_onDeliveryEvent);
+    DataEventService.instance.changeEvent.addListener(_onDataEvent);
+  }
+
+  @override
+  void dispose() {
+    NotificationService.instance.lastDelivery.removeListener(_onDeliveryEvent);
+    DataEventService.instance.changeEvent.removeListener(_onDataEvent);
+    super.dispose();
+  }
+
+  void _onDeliveryEvent() {
+    if (mounted) {
+      _load();
+      setState(() {});
+    }
+  }
+
+  void _onDataEvent() {
+    final event = DataEventService.instance.changeEvent.value;
+    if (mounted && event != null && event.factoryId == widget.factoryId) {
+      _load();
+    }
   }
 
   @override
@@ -211,23 +226,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         ? AiInsightCard(buildPrompt: _buildStockPrompt, system: _stockSystem)
         : null;
 
-    return OrientationBuilder(
-      builder: (context, orientation) {
-        if (orientation == Orientation.landscape) {
-          return _buildLandscape(
-            mostUrgent: mostUrgent,
-            criticalItems: criticalItems,
-            overstockItems: overstockItems,
-            aiInsight: aiInsight,
-          );
-        }
-        return _buildPortrait(
-          mostUrgent: mostUrgent,
-          criticalItems: criticalItems,
-          overstockItems: overstockItems,
-          aiInsight: aiInsight,
-        );
-      },
+    // Single scanning column, top to bottom, in every orientation — landscape
+    // gets the same flow with more horizontal room via ResponsiveShell,
+    // rather than being split into two columns.
+    return _buildPortrait(
+      mostUrgent: mostUrgent,
+      criticalItems: criticalItems,
+      overstockItems: overstockItems,
+      aiInsight: aiInsight,
     );
   }
 
@@ -237,13 +243,17 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     required List<ProductCover> overstockItems,
     required Widget? aiInsight,
   }) {
+    final delivery = NotificationService.instance.lastDelivery.value;
+    final showDeliveryBanner =
+        delivery != null && delivery.factoryId == widget.factoryId;
+
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          if (widget.bottleneckBanner != null) ...[
-            widget.bottleneckBanner!,
+          if (showDeliveryBanner) ...[
+            _buildDeliveryBanner(delivery),
             const SizedBox(height: AppSpacing.l),
           ],
           if (_pendingMovements > 0) ...[
@@ -271,65 +281,72 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     );
   }
 
-  Widget _buildLandscape({
-    required ProductCover? mostUrgent,
-    required List<ProductCover> criticalItems,
-    required List<ProductCover> overstockItems,
-    required Widget? aiInsight,
-  }) {
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left: overview story — cover, stats, critical, AI.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.bottleneckBanner != null) ...[
-                    widget.bottleneckBanner!,
-                    const SizedBox(height: AppSpacing.l),
-                  ],
-                  if (_pendingMovements > 0) ...[
-                    _buildPendingSyncBanner(),
-                    const SizedBox(height: AppSpacing.l),
-                  ],
-                  _buildCoverSummaryCard(mostUrgent),
-                  const SizedBox(height: AppSpacing.l),
-                  _buildSummaryStatsRow(),
-                  if (criticalItems.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.l),
-                    _buildCriticalSection(criticalItems),
-                  ],
-                  if (overstockItems.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.l),
-                    _buildOverstockSection(overstockItems),
-                  ],
-                  if (aiInsight != null) ...[
-                    const SizedBox(height: AppSpacing.l),
-                    aiInsight,
-                  ],
-                ],
-              ),
+  Widget _buildDeliveryBanner(MaterialDeliveryEvent delivery) {
+    final theme = Theme.of(context);
+    final formattedQty = formatUnits(delivery.quantity);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.m,
+        vertical: AppSpacing.s,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.successLight,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.mark_email_read_outlined,
+            color: AppColors.success,
+            size: 22,
+          ),
+          const SizedBox(width: AppSpacing.m),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Raw Material Delivered',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.success,
+                  ),
+                ),
+                Text(
+                  '$formattedQty of ${delivery.materialName} arrived in stock. Tap to update projections.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.l),
-            // Right: full products list + demand forecast.
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCoverListSection(),
-                  const SizedBox(height: AppSpacing.xl),
-                  _buildDemandSection(),
-                ],
-              ),
+          ),
+          FilledButton.tonal(
+            onPressed: () {
+              _load();
+              NotificationService.instance.clearDeliveryAlert();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Stock data refreshed with latest materials'),
+                ),
+              );
+            },
+            style: FilledButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
             ),
-          ],
-        ),
+            child: const Text('Update'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16, color: AppColors.success),
+            tooltip: 'Dismiss',
+            onPressed: () {
+              NotificationService.instance.clearDeliveryAlert();
+            },
+          ),
+        ],
       ),
     );
   }

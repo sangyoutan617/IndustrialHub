@@ -16,7 +16,6 @@ RawMaterial _material({
     currentStock: stock,
     unit: 'kg',
     consumptionPerUnit: 1,
-    reorderLevel: 10,
     unitCost: unitCost,
   );
 }
@@ -34,7 +33,7 @@ PurchaseOrder _order({
     materialId: 1,
     quantity: quantity,
     orderDate: orderDate ?? DateTime(2026, 1, 1),
-    status: PurchaseOrderStatus.pending,
+    status: PurchaseOrderStatus.processing,
     isSimulated: false,
     unitPrice: unitPrice,
   );

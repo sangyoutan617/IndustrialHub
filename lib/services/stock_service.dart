@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/finished_stock.dart';
 import '../models/stock_movement.dart';
+import 'data_event_service.dart';
 import 'stock_offline_queue_service.dart';
 
 class StockService {
@@ -32,13 +33,22 @@ class StockService {
         })
         .select()
         .single();
-    return FinishedStock.fromJson(row);
+    final result = FinishedStock.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: factoryId,
+      source: DataChangeSource.stock,
+    );
+    return result;
   }
 
   /// Renames a finished-goods product. Demand is matched to stock by product
   /// name (see loadStockOverview), so fixing a typo here also repairs the
   /// days-of-cover calculation that a mismatched name silently broke.
-  Future<FinishedStock> updateStock(int stockId, String productName) async {
+  Future<FinishedStock> updateStock(
+    int stockId,
+    String productName, {
+    int? factoryId,
+  }) async {
     final row = await _client
         .from('finished_stock')
         .update({
@@ -48,11 +58,24 @@ class StockService {
         .eq('stock_id', stockId)
         .select()
         .single();
-    return FinishedStock.fromJson(row);
+    final result = FinishedStock.fromJson(row);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.stock,
+      );
+    }
+    return result;
   }
 
-  Future<void> deleteStock(int stockId) async {
+  Future<void> deleteStock(int stockId, {int? factoryId}) async {
     await _client.from('finished_stock').delete().eq('stock_id', stockId);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.stock,
+      );
+    }
   }
 
   Future<List<StockMovement>> getMovements(int stockId) async {
@@ -86,13 +109,15 @@ class StockService {
     required DateTime movementDate,
     String? note,
     bool isSimulated = false,
+    int? factoryId,
   }) async {
     final current = await _client
         .from('finished_stock')
-        .select('current_quantity')
+        .select('current_quantity, factory_id')
         .eq('stock_id', stockId)
         .single();
     final currentQuantity = current['current_quantity'] as int;
+    final fId = factoryId ?? current['factory_id'] as int?;
 
     final delta = switch (movementType) {
       StockMovementType.productionIn => quantity.abs(),
@@ -122,6 +147,13 @@ class StockService {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('stock_id', stockId);
+
+    if (fId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: fId,
+        source: DataChangeSource.stock,
+      );
+    }
   }
 
   // Queues locally first (always succeeds), then tries Supabase right away.

@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/raw_material.dart';
+import 'data_event_service.dart';
 import 'supply_exceptions.dart';
 
 class MaterialService {
@@ -22,7 +23,12 @@ class MaterialService {
         .insert(material.toInsertJson(material.factoryId))
         .select()
         .single();
-    return RawMaterial.fromJson(row);
+    final result = RawMaterial.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: material.factoryId,
+      source: DataChangeSource.supply,
+    );
+    return result;
   }
 
   Future<RawMaterial> updateMaterial(
@@ -38,10 +44,15 @@ class MaterialService {
         .eq('material_id', materialId)
         .select()
         .single();
-    return RawMaterial.fromJson(row);
+    final result = RawMaterial.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: material.factoryId,
+      source: DataChangeSource.supply,
+    );
+    return result;
   }
 
-  Future<void> deleteMaterial(int materialId) async {
+  Future<void> deleteMaterial(int materialId, {int? factoryId}) async {
     final linkedSuppliers = await _client
         .from('suppliers')
         .select('supplier_id')
@@ -73,6 +84,12 @@ class MaterialService {
           .from('raw_materials')
           .delete()
           .eq('material_id', materialId);
+      if (factoryId != null) {
+        DataEventService.instance.notifyChanged(
+          factoryId: factoryId,
+          source: DataChangeSource.supply,
+        );
+      }
     } on PostgrestException catch (e) {
       if (e.code == '23503') {
         throw const SupplyInUseException(

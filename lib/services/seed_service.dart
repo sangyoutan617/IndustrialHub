@@ -112,12 +112,12 @@ class SeedService {
 
   Future<List<RawMaterial>> _seedMaterials(int factoryId) async {
     final specs = [
-      ('Plastic Resin', 20000.0, 'kg', 3.0, 2000.0, 4.5),
-      ('Colorant', 800.0, 'litres', 0.5, 100.0, 12.0),
-      ('Packaging Boxes', 10000.0, 'boxes', 1.0, 1000.0, 0.8),
+      ('Plastic Resin', 20000.0, 'kg', 3.0, 4.5),
+      ('Colorant', 800.0, 'litres', 0.5, 12.0),
+      ('Packaging Boxes', 10000.0, 'boxes', 1.0, 0.8),
     ];
     final created = <RawMaterial>[];
-    for (final (name, stock, unit, consumption, reorder, unitCost) in specs) {
+    for (final (name, stock, unit, consumption, unitCost) in specs) {
       created.add(
         await _materialService.createMaterial(
           RawMaterial(
@@ -127,7 +127,6 @@ class SeedService {
             currentStock: stock,
             unit: unit,
             consumptionPerUnit: consumption,
-            reorderLevel: reorder,
             unitCost: unitCost,
           ),
         ),
@@ -246,7 +245,7 @@ class SeedService {
         quantity: 1000,
         orderDate: now,
         expectedDelivery: now.add(const Duration(days: 3)),
-        status: PurchaseOrderStatus.pending,
+        status: PurchaseOrderStatus.processing,
         isSimulated: true,
         unitPrice: 12.5,
       ),

@@ -6,7 +6,6 @@ import '../../services/stock_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 
 /// Factory-wide stock activity as a calendar heatmap, not a line chart —
 /// deliberately distinct from Capacity's trend and IPI charts. Plain
@@ -167,31 +166,13 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ResponsiveTwoPane(
-        portrait: (context) => ListView(
-          padding: const EdgeInsets.all(AppSpacing.l),
-          children: [
-            infoSection,
-            const SizedBox(height: AppSpacing.xl),
-            heatmapSection,
-          ],
-        ),
-        landscape: (context) => SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(AppSpacing.l),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: heatmapSection,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: infoSection,
-              ),
-            ],
-          ),
-        ),
+      child: ListView(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        children: [
+          infoSection,
+          const SizedBox(height: AppSpacing.xl),
+          heatmapSection,
+        ],
       ),
     );
   }

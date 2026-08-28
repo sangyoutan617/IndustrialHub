@@ -24,7 +24,6 @@ class OrderListScreen extends StatefulWidget {
 enum _LoadState { loading, error, ready }
 
 const _openStatuses = [
-  PurchaseOrderStatus.pending,
   PurchaseOrderStatus.processing,
   PurchaseOrderStatus.shipped,
 ];
@@ -81,21 +80,43 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _openForm({PurchaseOrder? order}) async {
-    final saved = await Navigator.of(context).push<bool>(
+    final saved = await Navigator.of(context).push<dynamic>(
       MaterialPageRoute(
         builder: (_) =>
             OrderFormScreen(factoryId: widget.factoryId, order: order),
       ),
     );
-    if (!mounted) return;
-    if (saved == true) {
-      _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(order == null ? 'Order added' : 'Order updated'),
+    if (!mounted || saved == null) return;
+    _load();
+    // Brand-new order (this method is never called with an existing one —
+    // editing goes through _openDetail's own flow): jump straight into its
+    // detail screen so the user sees the real, Supabase-generated PO number
+    // immediately, on the exact same screen "View purchase order" uses.
+    if (order == null && saved is PurchaseOrder) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PurchaseOrderDetailScreen(
+            factoryId: widget.factoryId,
+            order: saved,
+            materialName:
+                _materialNames[saved.materialId] ?? 'Unknown material',
+            supplierName:
+                _supplierNames[saved.supplierId] ?? 'Unknown supplier',
+          ),
         ),
       );
+      if (!mounted) return;
+      _load();
+      return;
     }
+    final poNumber = saved is PurchaseOrder ? ' ${formatPoNumber(saved.poId)}' : '';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          order == null ? 'Purchase order$poNumber created' : 'Purchase order$poNumber updated',
+        ),
+      ),
+    );
   }
 
   Future<void> _openDetail(PurchaseOrder order) async {
@@ -300,13 +321,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   // Maps order status onto the shared AppStatus vocabulary (see
-  // lib/widgets/status.dart): Pending/Processing read as "queued" (info),
-  // Shipped is "in transit, awaiting receipt" (warning — needs attention),
-  // Delivered is the successful terminal state, and Cancelled is a closed
-  // state rather than a failure, so it reads neutral instead of danger.
+  // lib/widgets/status.dart): Processing reads as "queued" (info), Shipped
+  // is "in transit, awaiting receipt" (warning — needs attention), Delivered
+  // is the successful terminal state, and Cancelled is a closed state rather
+  // than a failure, so it reads neutral instead of danger.
   AppStatus _statusFor(String status) {
     switch (status) {
-      case PurchaseOrderStatus.pending:
       case PurchaseOrderStatus.processing:
         return AppStatus.info;
       case PurchaseOrderStatus.shipped:

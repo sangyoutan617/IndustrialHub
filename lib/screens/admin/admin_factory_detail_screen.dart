@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../models/factory.dart';
-import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
 import '../../services/bottleneck_service.dart';
-import '../../services/material_service.dart';
 import '../../services/mrp_service.dart';
 import '../../services/supplier_service.dart';
+import '../../services/supply_service.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
-import '../../widgets/responsive_two_pane.dart';
 import '../../widgets/status.dart';
 import '../supply/order_form_screen.dart';
 
@@ -32,13 +30,13 @@ class AdminFactoryDetailScreen extends StatefulWidget {
 enum _LoadState { loading, error, ready }
 
 class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
-  final _materialService = MaterialService();
+  final _supplyService = SupplyService();
   final _bottleneckService = BottleneckService();
   final _supplierService = SupplierService();
 
   _LoadState _state = _LoadState.loading;
   BottleneckResult? _bottleneck;
-  List<RawMaterial> _lowStockMaterials = [];
+  List<MaterialPlan> _lowStockPlans = [];
 
   @override
   void initState() {
@@ -52,16 +50,14 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
       final bottleneck = await _bottleneckService.computeForFactory(
         widget.factory.factoryId,
       );
-      final materials = await _materialService.getMaterials(
-        widget.factory.factoryId,
-      );
-      final lowStock = materials
-          .where((m) => m.currentStock < m.reorderLevel)
+      final overview = await _supplyService.load(widget.factory.factoryId);
+      final lowStock = overview.plans
+          .where((p) => p.belowReorderLevel)
           .toList();
 
       setState(() {
         _bottleneck = bottleneck;
-        _lowStockMaterials = lowStock;
+        _lowStockPlans = lowStock;
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -69,7 +65,8 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
     }
   }
 
-  Future<void> _raisePurchaseOrder(RawMaterial material) async {
+  Future<void> _raisePurchaseOrder(MaterialPlan plan) async {
+    final material = plan.material;
     List<Supplier> suppliers;
     try {
       suppliers = await _supplierService.getSuppliersForMaterials([
@@ -107,7 +104,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
           prefill: OrderFormPrefill(
             materialId: material.materialId,
             supplierId: supplier.supplierId,
-            quantity: material.reorderLevel - material.currentStock,
+            quantity: plan.reorderLevel - material.currentStock,
           ),
         ),
       ),
@@ -190,20 +187,20 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
           ),
           const SizedBox(height: 8),
         ],
-        for (final material in _lowStockMaterials) ...[
+        for (final plan in _lowStockPlans) ...[
           InfoBanner(
             status: AppStatus.danger,
             title:
-                '${material.materialName}: ${formatWhole(material.currentStock)} ${material.unit} in stock',
+                '${plan.material.materialName}: ${formatWhole(plan.material.currentStock)} ${plan.material.unit} in stock',
             message:
-                'Reorder level: ${formatWhole(material.reorderLevel)} ${material.unit}',
+                'Reorder level: ${formatWhole(plan.reorderLevel)} ${plan.material.unit}',
             actionLabel: 'Raise PO',
-            onAction: () => _raisePurchaseOrder(material),
+            onAction: () => _raisePurchaseOrder(plan),
           ),
           const SizedBox(height: 8),
         ],
         if ((!bottleneck.hasData || bottleneck.canMeetDemand) &&
-            _lowStockMaterials.isEmpty)
+            _lowStockPlans.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
@@ -216,40 +213,17 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ResponsiveTwoPane(
-        portrait: (context) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            infoCard,
-            bottleneckBanner,
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: alertsSection,
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-        landscape: (context) => SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    infoCard,
-                    bottleneckBanner,
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: alertsSection,
-              ),
-            ],
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          infoCard,
+          bottleneckBanner,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: alertsSection,
           ),
-        ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/purchase_order.dart';
+import 'data_event_service.dart';
 
 class OrderService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -18,9 +19,27 @@ class OrderService {
         .toList();
   }
 
+  /// Best-effort preview of the PO number a new order would likely get —
+  /// current max `po_id` + 1. This is NOT reserved and NOT guaranteed: a
+  /// concurrent insert from another device can still take it first, so the
+  /// real number only ever comes from the row [createOrder] actually
+  /// returns. Purely a "here's roughly what to expect" preview shown before
+  /// saving. Returns 1 when there are no orders yet.
+  Future<int> getNextPoIdPreview() async {
+    final rows = await _client
+        .from('purchase_orders')
+        .select('po_id')
+        .order('po_id', ascending: false)
+        .limit(1);
+    final list = rows as List;
+    if (list.isEmpty) return 1;
+    return (list.first['po_id'] as int) + 1;
+  }
+
   Future<PurchaseOrder> createOrder(
     PurchaseOrder order, {
     bool isSimulated = false,
+    int? factoryId,
   }) async {
     final row = await _client
         .from('purchase_orders')
@@ -30,10 +49,21 @@ class OrderService {
         })
         .select()
         .single();
-    return PurchaseOrder.fromJson(row);
+    final result = PurchaseOrder.fromJson(row);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.order,
+      );
+    }
+    return result;
   }
 
-  Future<PurchaseOrder> updateOrder(int poId, PurchaseOrder order) async {
+  Future<PurchaseOrder> updateOrder(
+    int poId,
+    PurchaseOrder order, {
+    int? factoryId,
+  }) async {
     final row = await _client
         .from('purchase_orders')
         .update({
@@ -43,10 +73,21 @@ class OrderService {
         .eq('po_id', poId)
         .select()
         .single();
-    return PurchaseOrder.fromJson(row);
+    final result = PurchaseOrder.fromJson(row);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.order,
+      );
+    }
+    return result;
   }
 
-  Future<PurchaseOrder> updateStatus(int poId, String status) async {
+  Future<PurchaseOrder> updateStatus(
+    int poId,
+    String status, {
+    int? factoryId,
+  }) async {
     final row = await _client
         .from('purchase_orders')
         .update({
@@ -56,11 +97,24 @@ class OrderService {
         .eq('po_id', poId)
         .select()
         .single();
-    return PurchaseOrder.fromJson(row);
+    final result = PurchaseOrder.fromJson(row);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.order,
+      );
+    }
+    return result;
   }
 
-  Future<void> deleteOrder(int poId) async {
+  Future<void> deleteOrder(int poId, {int? factoryId}) async {
     await _client.from('purchase_orders').delete().eq('po_id', poId);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.order,
+      );
+    }
   }
 
   /// Marks the order delivered and adds its quantity to the material's
@@ -72,12 +126,18 @@ class OrderService {
   /// genuinely doesn't exist yet (pre-migration database) — any other
   /// Postgrest failure (RLS denial, constraint violation) is a real error
   /// and should surface as one rather than silently degrading.
-  Future<void> receiveDelivery(PurchaseOrder order) async {
+  Future<void> receiveDelivery(PurchaseOrder order, {int? factoryId}) async {
     try {
       await _client.rpc('receive_delivery', params: {'p_po_id': order.poId});
     } on PostgrestException catch (e) {
       if (e.code != 'PGRST202') rethrow;
       await _receiveDeliveryFallback(order);
+    }
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.order,
+      );
     }
   }
 

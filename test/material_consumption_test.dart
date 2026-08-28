@@ -10,7 +10,6 @@ RawMaterial _material({int id = 1, double stock = 100, double perUnit = 2}) {
     currentStock: stock,
     unit: 'kg',
     consumptionPerUnit: perUnit,
-    reorderLevel: 10,
   );
 }
 

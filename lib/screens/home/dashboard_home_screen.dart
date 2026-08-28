@@ -219,18 +219,10 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
           )
         : null;
 
-    // Portrait: single scanning column, top to bottom. Landscape: the same
-    // sections split into two columns so the extra width is used instead of
-    // just stretching the portrait layout — same section builders either
-    // way, only the arrangement differs, so rotating never re-fetches data.
-    return OrientationBuilder(
-      builder: (context, orientation) {
-        if (orientation == Orientation.landscape) {
-          return _buildLandscapeReady(result, data, pal, aiInsight);
-        }
-        return _buildPortraitReady(result, data, pal, aiInsight);
-      },
-    );
+    // Single scanning column, top to bottom, in every orientation — landscape
+    // gets the same flow with more horizontal room via ResponsiveShell,
+    // rather than being split into two columns.
+    return _buildPortraitReady(result, data, pal, aiInsight);
   }
 
   Widget _buildPortraitReady(
@@ -254,51 +246,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
         const SizedBox(height: 16),
         RepaintBoundary(child: _buildActionCenter(result, pal)),
       ],
-    );
-  }
-
-  Widget _buildLandscapeReady(
-    BottleneckResult result,
-    _HomeData data,
-    _Palette pal,
-    Widget? aiInsight,
-  ) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Left: factory status story — header, bottleneck diagnosis, AI.
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RepaintBoundary(child: _buildHeader(result, pal)),
-                const SizedBox(height: 16),
-                RepaintBoundary(child: _buildHeroCard(result, pal)),
-                if (aiInsight != null) ...[
-                  const SizedBox(height: 16),
-                  aiInsight,
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Right: supporting breakdown — ceiling grid, benchmark, actions.
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RepaintBoundary(child: _buildCeilingGrid(result, pal)),
-                const SizedBox(height: 16),
-                RepaintBoundary(child: _buildOpenDataCard(data, pal)),
-                const SizedBox(height: 16),
-                RepaintBoundary(child: _buildActionCenter(result, pal)),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
