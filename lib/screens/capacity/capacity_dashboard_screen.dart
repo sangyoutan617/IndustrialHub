@@ -9,6 +9,7 @@ import '../../widgets/ai_insight_card.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
+import '../products/product_list_screen.dart';
 import 'benchmark_screen.dart';
 import 'machine_list_screen.dart';
 import 'manpower_list_screen.dart';
@@ -252,6 +253,24 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
 
   List<Widget> _buildActionItems(CapacitySnapshot snapshot) {
     return [
+      Card(
+        child: ListTile(
+          leading: Icon(
+            Icons.category_outlined,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          title: const Text('Products'),
+          subtitle: const Text(
+            'What this factory makes — assign machines, manpower, and '
+            'material requirements to each',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _navigateAndRefresh(
+            ProductListScreen(factoryId: widget.factory.factoryId),
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
       Row(
         children: [
           Expanded(
