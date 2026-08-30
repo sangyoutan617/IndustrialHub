@@ -1,17 +1,22 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../models/bom_entry.dart';
 import '../../models/daily_production.dart';
 import '../../models/factory.dart';
+import '../../models/product.dart';
+import '../../models/raw_material.dart';
+import '../../services/bom_service.dart';
 import '../../services/daily_production_service.dart';
 import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
+import '../../services/product_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
 
 enum _Granularity { day, rollingWeek, month }
 
-enum _LoadState { loading, error, ready }
+enum _LoadState { loading, error, noProducts, ready }
 
 class ProductionTrendScreen extends StatefulWidget {
   final Factory factory;
@@ -34,10 +39,14 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   final _service = DailyProductionService();
   final _materialService = MaterialService();
   final _movementService = MaterialMovementService();
+  final _productService = ProductService();
+  final _bomService = BomService();
 
   _LoadState _state = _LoadState.loading;
   _Granularity _granularity = _Granularity.day;
   List<DailyProduction> _raw = [];
+  List<Product> _products = [];
+  int? _selectedProductId;
   bool _isLogging = false;
 
   @override
@@ -57,15 +66,38 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     }
   }
 
+  /// Loads the product list (once per screen open, or after logging a
+  /// product this factory didn't have selected before) and this factory's
+  /// full product set stays cheap enough to always refetch — trend/log
+  /// dialogs both need an up-to-date list, not a stale snapshot.
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
+      final products = await _productService.getProducts(
+        widget.factory.factoryId,
+      );
+      if (!mounted) return;
+      if (products.isEmpty) {
+        setState(() {
+          _products = products;
+          _state = _LoadState.noProducts;
+        });
+        return;
+      }
+      // Default to the first non-General product if one exists — General
+      // is the migration catch-all, not something a user picks first.
+      final productId =
+          _selectedProductId ??
+          products.firstWhere((p) => !p.isGeneral, orElse: () => products.first).productId;
       final rows = await _service.getTrend(
         widget.factory.factoryId,
+        productId: productId,
         days: _fetchDays,
       );
       if (!mounted) return;
       setState(() {
+        _products = products;
+        _selectedProductId = productId;
         _raw = rows;
         _state = _LoadState.ready;
       });
@@ -81,6 +113,12 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     _load();
   }
 
+  void _setProduct(int? productId) {
+    if (productId == null || productId == _selectedProductId) return;
+    setState(() => _selectedProductId = productId);
+    _load();
+  }
+
   // Delegates all input state (controllers, date, checkbox, validation) to
   // _LogProductionDialog, which owns its own State — the same pattern
   // widgets/text_prompt_dialog.dart uses, and for the same reason: a
@@ -90,7 +128,10 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   Future<void> _openLogDialog() async {
     final result = await showDialog<_LogProductionResult>(
       context: context,
-      builder: (_) => const _LogProductionDialog(),
+      builder: (_) => _LogProductionDialog(
+        products: _products,
+        initialProductId: _selectedProductId,
+      ),
     );
     if (result == null) return;
 
@@ -98,13 +139,22 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     try {
       await _service.logProduction(
         factoryId: widget.factory.factoryId,
+        productId: result.productId,
         logDate: result.logDate,
         actualOutput: result.actualOutput,
         downtimeHours: result.downtimeHours,
       );
       if (result.deductMaterials && result.actualOutput > 0) {
-        await _consumeMaterials(result.actualOutput, result.logDate);
+        await _consumeMaterials(
+          result.productId,
+          result.actualOutput,
+          result.logDate,
+        );
       }
+      // Switch the view to whichever product was just logged, so the new
+      // entry is immediately visible rather than possibly landing on a
+      // product the trend chart isn't currently filtered to.
+      setState(() => _selectedProductId = result.productId);
       _load();
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -122,17 +172,22 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     }
   }
 
-  /// Deducts the raw material this output consumed, and warns (non-blocking)
-  /// about any material that didn't have enough stock. Best-effort — a
-  /// consumption failure never undoes the already-logged production.
-  Future<void> _consumeMaterials(int units, DateTime date) async {
+  /// Deducts the raw material this product's recipe says this output
+  /// consumed, and warns (non-blocking) about any material that didn't have
+  /// enough stock. Best-effort — a consumption failure never undoes the
+  /// already-logged production.
+  Future<void> _consumeMaterials(int productId, int units, DateTime date) async {
     try {
-      final materials = await _materialService.getMaterials(
-        widget.factory.factoryId,
-      );
+      final results = await Future.wait<dynamic>([
+        _materialService.getMaterials(widget.factory.factoryId),
+        _bomService.getBom(productId),
+      ]);
+      final materials = results[0] as List<RawMaterial>;
+      final bom = results[1] as List<BomEntry>;
       final skipped = await _movementService.recordProductionConsumption(
         factoryId: widget.factory.factoryId,
         materials: materials,
+        bom: bom,
         unitsProduced: units,
         date: date,
       );
@@ -292,11 +347,13 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Production trend')),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isLogging ? null : _openLogDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Log production'),
-      ),
+      floatingActionButton: _state == _LoadState.noProducts
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _isLogging ? null : _openLogDialog,
+              icon: const Icon(Icons.add),
+              label: const Text('Log production'),
+            ),
     );
   }
 
@@ -306,6 +363,13 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         return const LoadingIndicator();
       case _LoadState.error:
         return EmptyState.error(onAction: _load);
+      case _LoadState.noProducts:
+        return const EmptyState(
+          icon: Icons.category_outlined,
+          message:
+              'No products yet — add a product first, production is logged '
+              'against one.',
+        );
       case _LoadState.ready:
         return _buildReady();
     }
@@ -313,9 +377,28 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 
   Widget _buildReady() {
     final points = _points;
-    
+
     final headerSection = Column(
       children: [
+        DropdownButtonFormField<int>(
+          initialValue: _selectedProductId,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Product'),
+          items: [
+            for (final product in _products)
+              DropdownMenuItem(
+                value: product.productId,
+                child: Text(
+                  product.isGeneral
+                      ? '${product.productName} (auto-created)'
+                      : product.productName,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: _setProduct,
+        ),
+        const SizedBox(height: 16),
         Center(
           child: SegmentedButton<_Granularity>(
             segments: const [
@@ -575,12 +658,14 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 /// [Form.validate] has already passed, so every field here is guaranteed
 /// parseable and sign-correct.
 class _LogProductionResult {
+  final int productId;
   final DateTime logDate;
   final int actualOutput;
   final double downtimeHours;
   final bool deductMaterials;
 
   const _LogProductionResult({
+    required this.productId,
     required this.logDate,
     required this.actualOutput,
     required this.downtimeHours,
@@ -594,7 +679,10 @@ class _LogProductionResult {
 /// `showDialog` — the same pattern widgets/text_prompt_dialog.dart uses, to
 /// avoid the same class of rotation-during-dialog framework crash.
 class _LogProductionDialog extends StatefulWidget {
-  const _LogProductionDialog();
+  final List<Product> products;
+  final int? initialProductId;
+
+  const _LogProductionDialog({required this.products, this.initialProductId});
 
   @override
   State<_LogProductionDialog> createState() => _LogProductionDialogState();
@@ -606,6 +694,9 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
   final _formKey = GlobalKey<FormState>();
   DateTime _logDate = DateTime.now();
   bool _deductMaterials = true;
+  late int? _selectedProductId =
+      widget.initialProductId ??
+      (widget.products.isEmpty ? null : widget.products.first.productId);
 
   @override
   void dispose() {
@@ -626,9 +717,11 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedProductId == null) return;
     Navigator.pop(
       context,
       _LogProductionResult(
+        productId: _selectedProductId!,
         logDate: _logDate,
         actualOutput: int.parse(_outputController.text.trim()),
         downtimeHours: double.tryParse(_downtimeController.text.trim()) ?? 0,
@@ -652,6 +745,27 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              DropdownButtonFormField<int>(
+                initialValue: _selectedProductId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Product'),
+                items: [
+                  for (final product in widget.products)
+                    DropdownMenuItem(
+                      value: product.productId,
+                      child: Text(
+                        product.isGeneral
+                            ? '${product.productName} (auto-created)'
+                            : product.productName,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                onChanged: (value) =>
+                    setState(() => _selectedProductId = value),
+                validator: (v) => v == null ? 'Required' : null,
+              ),
+              const SizedBox(height: 8),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Date'),

@@ -55,7 +55,29 @@ class BottleneckService {
     final row = await _client
         .rpc('compute_bottleneck', params: {'p_factory_id': factoryId})
         .single();
+    return _fromRow(row);
+  }
 
+  /// Same verdict, scoped to one product — backed by the `compute_bottleneck`
+  /// overload that also takes `p_product_id` (every subquery filtered by
+  /// product, the material ceiling read from that product's own bill of
+  /// materials). [computeForFactory] still exists and is still correct for
+  /// callers that haven't been product-scoped yet; the two RPC signatures
+  /// coexist server-side.
+  Future<BottleneckResult> computeForProduct(
+    int factoryId,
+    int productId,
+  ) async {
+    final row = await _client
+        .rpc(
+          'compute_bottleneck',
+          params: {'p_factory_id': factoryId, 'p_product_id': productId},
+        )
+        .single();
+    return _fromRow(row);
+  }
+
+  BottleneckResult _fromRow(Map<String, dynamic> row) {
     return BottleneckResult(
       hasData: row['has_data'] as bool,
       machineCapacity: (row['machine_capacity'] as num).toDouble(),
