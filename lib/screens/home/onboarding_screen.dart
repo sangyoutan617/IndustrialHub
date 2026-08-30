@@ -4,6 +4,7 @@ import '../../models/msic_code.dart';
 import '../../services/capacity_service.dart';
 import '../../services/factory_service.dart';
 import '../../services/profile_service.dart';
+import '../../widgets/msic_field.dart';
 import '../../widgets/responsive_form_fields.dart';
 
 /// Shown once, right after a new user's first sign-in (profiles.onboarded is
@@ -200,22 +201,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedMsic,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'What do you produce? (industry)',
-                    ),
-                    items: [
-                      for (final code in _msicCodes)
-                        DropdownMenuItem(
-                          value: code.msicCode,
-                          child: Text(
-                            code.description,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
+                  MsicField(
+                    codes: _msicCodes,
+                    selectedCode: _selectedMsic,
+                    labelText: 'What do you produce? (industry)',
                     onChanged: (v) => setState(() => _selectedMsic = v),
                   ),
                   const SizedBox(height: 16),
