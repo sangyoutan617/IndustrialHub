@@ -365,6 +365,9 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
             const SizedBox(height: 16),
             downtimeSection,
           ],
+          // Clears the "Log production" FAB, which otherwise sits directly
+          // on top of the downtime bar chart's last few days.
+          const SizedBox(height: 96),
         ],
       ),
     );
@@ -525,7 +528,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                           if (points[i].actual != null)
                             FlSpot(i.toDouble(), points[i].actual!),
                       ],
-                      isCurved: true,
+                      isCurved: false,
                       color: Theme.of(context).colorScheme.primary,
                       barWidth: 3,
                       dotData: const FlDotData(show: false),
@@ -536,7 +539,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                           if (points[i].ceiling != null)
                             FlSpot(i.toDouble(), points[i].ceiling!),
                       ],
-                      isCurved: true,
+                      isCurved: false,
                       color: Theme.of(context).colorScheme.onSurface,
                       barWidth: 2,
                       dashArray: [6, 4],

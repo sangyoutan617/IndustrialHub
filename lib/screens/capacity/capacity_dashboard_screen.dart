@@ -95,8 +95,14 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
 
   Widget _buildReady() {
     final snapshot = _snapshot!;
+    // Null when there's no capacity data at all (no machines and no shifts
+    // configured) — both capacities are then 0, and `0 <= 0` would always
+    // tag Machine as "limiting" even though nothing is actually limiting
+    // anything yet. Null means "don't show a limiter chip on either bar".
     final isMachineLimiting =
-        snapshot.machineCapacity <= snapshot.manpowerCapacity;
+        snapshot.machineCapacity <= 0 && snapshot.manpowerCapacity <= 0
+        ? null
+        : snapshot.machineCapacity <= snapshot.manpowerCapacity;
 
     // Built once and handed to whichever layout (portrait/landscape) is
     // active below, so rotating never recreates — and re-fetches — it.
@@ -125,7 +131,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
 
   Widget _buildPortrait({
     required CapacitySnapshot snapshot,
-    required bool isMachineLimiting,
+    required bool? isMachineLimiting,
     required Widget aiInsight,
   }) {
     return RefreshIndicator(
@@ -145,7 +151,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
 
   Widget _buildLandscape({
     required CapacitySnapshot snapshot,
-    required bool isMachineLimiting,
+    required bool? isMachineLimiting,
     required Widget aiInsight,
   }) {
     // Same single vertical flow as portrait, just wider padding — landscape
@@ -165,7 +171,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
     );
   }
 
-  Widget _buildCeilingCard(CapacitySnapshot snapshot, bool isMachineLimiting) {
+  Widget _buildCeilingCard(CapacitySnapshot snapshot, bool? isMachineLimiting) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -218,7 +224,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                       snapshot.manpowerCapacity,
                       1.0,
                     ].reduce((a, b) => a > b ? a : b),
-                    isLimiter: isMachineLimiting,
+                    isLimiter: isMachineLimiting == true,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
@@ -232,7 +238,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                       snapshot.manpowerCapacity,
                       1.0,
                     ].reduce((a, b) => a > b ? a : b),
-                    isLimiter: !isMachineLimiting,
+                    isLimiter: isMachineLimiting == false,
                     color: Theme.of(context).colorScheme.secondary,
                   ),
                 ),

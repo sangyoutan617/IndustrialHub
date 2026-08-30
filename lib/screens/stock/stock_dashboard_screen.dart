@@ -113,7 +113,8 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           ),
         );
       }
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('StockDashboardScreen _load error: $e\n$st');
       if (!mounted) return;
       setState(() => _state = _LoadState.error);
     }
