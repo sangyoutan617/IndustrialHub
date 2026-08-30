@@ -3,9 +3,12 @@ import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/factory.dart';
+import '../../models/product.dart';
 import '../../services/capacity_service.dart';
 import '../../services/data_event_service.dart';
+import '../../services/product_service.dart';
 import '../../widgets/ai_insight_card.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
@@ -26,12 +29,15 @@ class CapacityDashboardScreen extends StatefulWidget {
       _CapacityDashboardScreenState();
 }
 
-enum _LoadState { loading, error, ready }
+enum _LoadState { loading, error, noProducts, ready }
 
 class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
   final _capacityService = CapacityService();
+  final _productService = ProductService();
   _LoadState _state = _LoadState.loading;
   CapacitySnapshot? _snapshot;
+  List<Product> _products = [];
+  int? _selectedProductId;
 
   @override
   void initState() {
@@ -43,7 +49,10 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
   @override
   void didUpdateWidget(covariant CapacityDashboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.factory.factoryId != widget.factory.factoryId) _load();
+    if (oldWidget.factory.factoryId != widget.factory.factoryId) {
+      _selectedProductId = null;
+      _load();
+    }
   }
 
   @override
@@ -59,19 +68,48 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
     }
   }
 
+  Product _defaultProduct(List<Product> products) =>
+      products.firstWhere((p) => !p.isGeneral, orElse: () => products.first);
+
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final snapshot = await _capacityService.getSnapshot(
+      final products = await _productService.getProducts(
         widget.factory.factoryId,
       );
+      if (products.isEmpty) {
+        setState(() {
+          _products = products;
+          _state = _LoadState.noProducts;
+        });
+        return;
+      }
+      final selected = _selectedProductId != null
+          ? products.firstWhere(
+              (p) => p.productId == _selectedProductId,
+              orElse: () => _defaultProduct(products),
+            )
+          : _defaultProduct(products);
+
+      final snapshot = await _capacityService.getSnapshot(
+        widget.factory.factoryId,
+        productId: selected.productId,
+      );
       setState(() {
+        _products = products;
+        _selectedProductId = selected.productId;
         _snapshot = snapshot;
         _state = _LoadState.ready;
       });
     } catch (_) {
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  void _setProduct(int? productId) {
+    if (productId == null || productId == _selectedProductId) return;
+    setState(() => _selectedProductId = productId);
+    _load();
   }
 
   Future<void> _navigateAndRefresh(Widget screen) async {
@@ -89,9 +127,40 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
           message: 'Could not load capacity data. Please try again.',
           onRetry: _load,
         );
+      case _LoadState.noProducts:
+        return const EmptyState(
+          icon: Icons.category_outlined,
+          message:
+              'No products yet — add a product first, capacity is tracked '
+              'per product.',
+        );
       case _LoadState.ready:
         return _buildReady();
     }
+  }
+
+  Product get _selectedProduct =>
+      _products.firstWhere((p) => p.productId == _selectedProductId);
+
+  Widget _productPicker() {
+    return DropdownButtonFormField<int>(
+      initialValue: _selectedProductId,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Product'),
+      items: [
+        for (final product in _products)
+          DropdownMenuItem(
+            value: product.productId,
+            child: Text(
+              product.isGeneral
+                  ? '${product.productName} (auto-created)'
+                  : product.productName,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: _setProduct,
+    );
   }
 
   Widget _buildReady() {
@@ -140,6 +209,8 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _productPicker(),
+          const SizedBox(height: 16),
           _buildCeilingCard(snapshot, isMachineLimiting),
           const SizedBox(height: 16),
           aiInsight,
@@ -162,6 +233,8 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         children: [
+          _productPicker(),
+          const SizedBox(height: 16),
           _buildCeilingCard(snapshot, isMachineLimiting),
           const SizedBox(height: 16),
           aiInsight,
@@ -349,6 +422,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
   String _buildBottleneckPrompt(CapacitySnapshot snapshot) {
     final gap = CapacityService.computeHiringGap(snapshot);
     final buffer = StringBuffer()
+      ..writeln('Product: ${_selectedProduct.productName}')
       ..writeln(
         'Daily production ceiling: ${formatUnits(snapshot.effectiveCapacity)}',
       )

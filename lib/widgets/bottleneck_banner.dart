@@ -7,6 +7,12 @@ import 'status.dart';
 class BottleneckBanner extends StatefulWidget {
   final int factoryId;
 
+  /// Which product's verdict to show — a machine/shift/material-rate now
+  /// belongs to one product, so "factory health" is only meaningful per
+  /// product. The caller owns the product picker; this widget just re-fetches
+  /// when it changes.
+  final int productId;
+
   /// Outer margin around the card. Defaults to a 16px margin on every side,
   /// matching this widget's original standalone usage — pass
   /// [EdgeInsets.zero] when embedding it as the first item of a list that
@@ -16,6 +22,7 @@ class BottleneckBanner extends StatefulWidget {
   const BottleneckBanner({
     super.key,
     required this.factoryId,
+    required this.productId,
     this.padding = const EdgeInsets.all(16),
   });
 
@@ -30,19 +37,30 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
   @override
   void initState() {
     super.initState();
-    _future = _service.computeForFactory(widget.factoryId);
+    _future = _service.computeForProduct(widget.factoryId, widget.productId);
   }
 
   @override
   void didUpdateWidget(covariant BottleneckBanner oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.factoryId != widget.factoryId) {
-      setState(() => _future = _service.computeForFactory(widget.factoryId));
+    if (oldWidget.factoryId != widget.factoryId ||
+        oldWidget.productId != widget.productId) {
+      setState(
+        () => _future = _service.computeForProduct(
+          widget.factoryId,
+          widget.productId,
+        ),
+      );
     }
   }
 
   void _retry() {
-    setState(() => _future = _service.computeForFactory(widget.factoryId));
+    setState(
+      () => _future = _service.computeForProduct(
+        widget.factoryId,
+        widget.productId,
+      ),
+    );
   }
 
   @override

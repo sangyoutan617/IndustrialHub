@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/formatters.dart';
 import '../../models/machine.dart';
+import '../../models/product.dart';
 import '../../services/capacity_service.dart';
+import '../../services/product_service.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 
@@ -15,13 +18,16 @@ class SimulatorScreen extends StatefulWidget {
   State<SimulatorScreen> createState() => _SimulatorScreenState();
 }
 
-enum _LoadState { loading, error, ready }
+enum _LoadState { loading, error, noProducts, ready }
 
 class _SimulatorScreenState extends State<SimulatorScreen> {
   final _capacityService = CapacityService();
+  final _productService = ProductService();
   _LoadState _state = _LoadState.loading;
 
   List<Machine> _machines = [];
+  List<Product> _products = [];
+  int? _selectedProductId;
 
   /// Rates the sliders extrapolate from. Weighted so the untouched baseline
   /// reproduces the same ceiling the Capacity dashboard shows.
@@ -62,11 +68,34 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     super.dispose();
   }
 
+  Product _defaultProduct(List<Product> products) =>
+      products.firstWhere((p) => !p.isGeneral, orElse: () => products.first);
+
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final snapshot = await _capacityService.getSnapshot(widget.factoryId);
+      final products = await _productService.getProducts(widget.factoryId);
+      if (products.isEmpty) {
+        setState(() {
+          _products = products;
+          _state = _LoadState.noProducts;
+        });
+        return;
+      }
+      final selected = _selectedProductId != null
+          ? products.firstWhere(
+              (p) => p.productId == _selectedProductId,
+              orElse: () => _defaultProduct(products),
+            )
+          : _defaultProduct(products);
+
+      final snapshot = await _capacityService.getSnapshot(
+        widget.factoryId,
+        productId: selected.productId,
+      );
       setState(() {
+        _products = products;
+        _selectedProductId = selected.productId;
         _machines = snapshot.machines;
         _baseline = SimulatorBaseline.from(snapshot);
         _resetToActual();
@@ -75,6 +104,12 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     } catch (_) {
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  void _setProduct(int? productId) {
+    if (productId == null || productId == _selectedProductId) return;
+    setState(() => _selectedProductId = productId);
+    _load();
   }
 
   void _resetToActual() {
@@ -150,7 +185,32 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
           message: 'Could not load simulator data. Please try again.',
           onRetry: _load,
         );
+      case _LoadState.noProducts:
+        return const EmptyState(
+          icon: Icons.category_outlined,
+          message:
+              'No products yet — add a product first, the simulator prices '
+              'what-ifs per product.',
+        );
       case _LoadState.ready:
+        final productPicker = DropdownButtonFormField<int>(
+          initialValue: _selectedProductId,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Product'),
+          items: [
+            for (final product in _products)
+              DropdownMenuItem(
+                value: product.productId,
+                child: Text(
+                  product.isGeneral
+                      ? '${product.productName} (auto-created)'
+                      : product.productName,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: _setProduct,
+        );
         final resultCard = _buildResultCard();
         final manpowerSection = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,6 +262,8 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              productPicker,
+              const SizedBox(height: 16),
               resultCard,
               const SizedBox(height: 24),
               manpowerSection,
