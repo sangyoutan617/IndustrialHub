@@ -13,6 +13,7 @@ Machine _machine({
   return Machine(
     machineId: id,
     factoryId: 1,
+    productId: 1,
     machineName: 'Machine $id',
     ratedOutputPerHour: rated,
     operatingHoursPerDay: hours,
@@ -31,6 +32,7 @@ Manpower _shift({
   return Manpower(
     manpowerId: id,
     factoryId: 1,
+    productId: 1,
     shiftName: 'Shift $id',
     workerCount: workers,
     shiftHours: hours,

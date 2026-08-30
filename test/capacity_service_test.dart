@@ -12,6 +12,7 @@ Machine _machine({
   return Machine(
     machineId: 1,
     factoryId: 1,
+    productId: 1,
     machineName: 'Test machine',
     ratedOutputPerHour: rated,
     operatingHoursPerDay: hours,
@@ -25,6 +26,7 @@ Manpower _shift({int workers = 5, double hours = 8, double perHour = 2}) {
   return Manpower(
     manpowerId: 1,
     factoryId: 1,
+    productId: 1,
     shiftName: 'Test shift',
     workerCount: workers,
     shiftHours: hours,
