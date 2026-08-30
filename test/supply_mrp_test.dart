@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:industrial_hub/models/bom_entry.dart';
 import 'package:industrial_hub/models/demand_forecast.dart';
 import 'package:industrial_hub/models/purchase_order.dart';
 import 'package:industrial_hub/models/raw_material.dart';
@@ -9,7 +10,6 @@ import 'package:industrial_hub/services/supply_service.dart';
 
 RawMaterial _material({
   double currentStock = 100,
-  double consumptionPerUnit = 1,
   int safetyStockDays = 3,
 }) {
   return RawMaterial(
@@ -18,7 +18,6 @@ RawMaterial _material({
     materialName: 'Test material',
     currentStock: currentStock,
     unit: 'kg',
-    consumptionPerUnit: consumptionPerUnit,
     safetyStockDays: safetyStockDays,
   );
 }
@@ -390,20 +389,14 @@ void main() {
   });
 
   group('MrpService.reorderLevelFor', () {
-    test('is 20% of one week\'s planned consumption', () {
-      final level = MrpService.reorderLevelFor(
-        consumptionPerUnit: 2,
-        plannedProductionPerDay: 10,
-      );
-      // weekly consumption = 2 * 10 * 7 = 140; 20% of that = 28.
+    test('is 20% of one week\'s burn rate', () {
+      final level = MrpService.reorderLevelFor(burnRatePerDay: 20);
+      // weekly consumption = 20 * 7 = 140; 20% of that = 28.
       expect(level, 28);
     });
 
-    test('is zero when there is no planned production', () {
-      final level = MrpService.reorderLevelFor(
-        consumptionPerUnit: 2,
-        plannedProductionPerDay: 0,
-      );
+    test('is zero when there is no burn rate', () {
+      final level = MrpService.reorderLevelFor(burnRatePerDay: 0);
       expect(level, 0);
     });
   });
@@ -450,13 +443,13 @@ void main() {
   group('MrpService.buildPlan', () {
     test('belowReorderLevel triggers independently of date logic even '
         'with no supplier at all', () {
-      // consumptionPerUnit 1 × plannedProductionPerDay 10 × 7 days × 20%
-      // buffer = a reorder level of 14, well above the 5 on hand here.
+      // burnRatePerDay 10 × 7 days × 20% buffer = a reorder level of 14,
+      // well above the 5 on hand here.
       final plan = MrpService.buildPlan(
         material: _material(currentStock: 5),
         suppliersForMaterial: const [],
         ordersForMaterial: const [],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       expect(plan.belowReorderLevel, isTrue);
@@ -467,12 +460,14 @@ void main() {
       expect(plan.orderByDate, isNull);
     });
 
-    test('burn rate is consumption per unit times planned production', () {
+    test('burnRatePerDay flows straight through to the resulting plan '
+        '(the caller — MrpService.aggregateBurnRate — owns the math now, '
+        'not buildPlan)', () {
       final plan = MrpService.buildPlan(
-        material: _material(consumptionPerUnit: 3),
+        material: _material(),
         suppliersForMaterial: [_supplier()],
         ordersForMaterial: const [],
-        plannedProductionPerDay: 20,
+        burnRatePerDay: 60,
         today: today,
       );
       expect(plan.burnRatePerDay, 60);
@@ -480,13 +475,13 @@ void main() {
 
     test('an open purchase order pushes the stock-out date later than with '
         'no orders at all', () {
-      final material = _material(currentStock: 50, consumptionPerUnit: 1);
+      final material = _material(currentStock: 50);
       final supplier = _supplier(leadTimeDays: 5);
       final baseline = MrpService.buildPlan(
         material: material,
         suppliersForMaterial: [supplier],
         ordersForMaterial: const [],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       final withOrder = MrpService.buildPlan(
@@ -500,7 +495,7 @@ void main() {
             status: PurchaseOrderStatus.processing,
           ),
         ],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       expect(withOrder.inboundTotal, 200);
@@ -512,13 +507,13 @@ void main() {
       // supplier defaults: leadTimeDays 7, reliabilityRating 5 ->
       // effectiveLeadDays 7. material defaults: safetyStockDays 3.
       // targetCoverDays = 7 + 3 + reviewPeriodDays(14) = 24.
-      final material = _material(currentStock: 0, consumptionPerUnit: 1);
+      final material = _material(currentStock: 0);
       final supplier = _supplier();
       final baseline = MrpService.buildPlan(
         material: material,
         suppliersForMaterial: [supplier],
         ordersForMaterial: const [],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       // burnRate 10 * targetCoverDays 24 - onHand 0 - inbound(windowed) 0
@@ -536,7 +531,7 @@ void main() {
             status: PurchaseOrderStatus.processing,
           ),
         ],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       // The order is still open and still counted in the displayed total...
@@ -548,7 +543,7 @@ void main() {
 
     test('an inbound delivery landing within the target cover window nets '
         'against the suggested order quantity as before', () {
-      final material = _material(currentStock: 0, consumptionPerUnit: 1);
+      final material = _material(currentStock: 0);
       final supplier = _supplier();
       final plan = MrpService.buildPlan(
         material: material,
@@ -561,7 +556,7 @@ void main() {
             status: PurchaseOrderStatus.processing,
           ),
         ],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       // raw = 240 - 0 - 190 = 50.
@@ -570,7 +565,7 @@ void main() {
 
     test('a delivery landing exactly on the target cover boundary still '
         'counts toward the suggested quantity', () {
-      final material = _material(currentStock: 0, consumptionPerUnit: 1);
+      final material = _material(currentStock: 0);
       final supplier = _supplier();
       final plan = MrpService.buildPlan(
         material: material,
@@ -584,7 +579,7 @@ void main() {
             status: PurchaseOrderStatus.processing,
           ),
         ],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       // raw = 240 - 0 - 40 = 200.
@@ -593,7 +588,7 @@ void main() {
 
     test('mixes an in-window and an out-of-window order: inboundTotal sums '
         'both, but suggestedQty only nets the in-window one', () {
-      final material = _material(currentStock: 0, consumptionPerUnit: 1);
+      final material = _material(currentStock: 0);
       final supplier = _supplier();
       final plan = MrpService.buildPlan(
         material: material,
@@ -614,7 +609,7 @@ void main() {
             status: PurchaseOrderStatus.processing,
           ),
         ],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       expect(plan.inboundTotal, 1100);
@@ -625,7 +620,7 @@ void main() {
     test('delivered and cancelled orders are excluded from inbound — their '
         'stock is already reflected in current_stock', () {
       final plan = MrpService.buildPlan(
-        material: _material(currentStock: 50, consumptionPerUnit: 1),
+        material: _material(currentStock: 50),
         suppliersForMaterial: [_supplier()],
         ordersForMaterial: [
           _order(
@@ -643,7 +638,7 @@ void main() {
             status: PurchaseOrderStatus.cancelled,
           ),
         ],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       expect(plan.inboundTotal, 0);
@@ -652,7 +647,7 @@ void main() {
     test('overdueInboundTotal and overdueOrderCount only count open orders '
         'whose expected delivery has already passed', () {
       final plan = MrpService.buildPlan(
-        material: _material(currentStock: 50, consumptionPerUnit: 1),
+        material: _material(currentStock: 50),
         suppliersForMaterial: [_supplier()],
         ordersForMaterial: [
           _order(
@@ -670,7 +665,7 @@ void main() {
             status: PurchaseOrderStatus.processing,
           ),
         ],
-        plannedProductionPerDay: 10,
+        burnRatePerDay: 10,
         today: today,
       );
       expect(plan.overdueOrderCount, 1);
@@ -680,7 +675,7 @@ void main() {
 
     test('a missing expected-delivery date falls back to the order\'s own '
         'supplier lead time, not the material\'s overall best supplier', () {
-      final material = _material(currentStock: 100, consumptionPerUnit: 1);
+      final material = _material(currentStock: 100);
       // The best supplier overall is fast (3-day effective lead)...
       final fastBestSupplier = _supplier(
         supplierId: 1,
@@ -706,7 +701,7 @@ void main() {
             status: PurchaseOrderStatus.processing,
           ),
         ],
-        plannedProductionPerDay: 1,
+        burnRatePerDay: 1,
         today: today,
       );
       // Days 0-9: no inbound yet, balance just drains by 1/day from 100.
@@ -1009,6 +1004,69 @@ void main() {
         const [],
       );
       expect(result, 0);
+    });
+  });
+
+  group('MrpService.aggregateBurnRate', () {
+    BomEntry entry({int productId = 1, int materialId = 1, double perUnit = 2}) {
+      return BomEntry(
+        productId: productId,
+        materialId: materialId,
+        quantityPerUnit: perUnit,
+      );
+    }
+
+    test('sums one product\'s planned production against its own rate', () {
+      final rate = MrpService.aggregateBurnRate(
+        plannedPerProduct: {1: 50},
+        bom: [entry(productId: 1, materialId: 1, perUnit: 2)],
+        materialId: 1,
+      );
+      expect(rate, 100);
+    });
+
+    test('sums across every product that consumes the material, at each '
+        'product\'s own rate', () {
+      final rate = MrpService.aggregateBurnRate(
+        plannedPerProduct: {1: 50, 2: 20},
+        bom: [
+          entry(productId: 1, materialId: 1, perUnit: 2), // 50 * 2 = 100
+          entry(productId: 2, materialId: 1, perUnit: 5), // 20 * 5 = 100
+        ],
+        materialId: 1,
+      );
+      expect(rate, 200);
+    });
+
+    test('ignores BOM lines for a different material', () {
+      final rate = MrpService.aggregateBurnRate(
+        plannedPerProduct: {1: 50},
+        bom: [
+          entry(productId: 1, materialId: 1, perUnit: 2),
+          entry(productId: 1, materialId: 2, perUnit: 999),
+        ],
+        materialId: 1,
+      );
+      expect(rate, 100);
+    });
+
+    test('a product with no planned production contributes zero, not a '
+        'missing-key error', () {
+      final rate = MrpService.aggregateBurnRate(
+        plannedPerProduct: const {}, // product 1 has no entry at all
+        bom: [entry(productId: 1, materialId: 1, perUnit: 2)],
+        materialId: 1,
+      );
+      expect(rate, 0);
+    });
+
+    test('a material with no BOM line at all has zero burn rate', () {
+      final rate = MrpService.aggregateBurnRate(
+        plannedPerProduct: {1: 50},
+        bom: const [],
+        materialId: 1,
+      );
+      expect(rate, 0);
     });
   });
 }

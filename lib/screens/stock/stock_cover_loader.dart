@@ -1,19 +1,17 @@
+import '../../core/product_name_matching.dart';
 import '../../models/demand_forecast.dart';
 import '../../models/finished_stock.dart';
 import '../../services/demand_service.dart';
 import '../../services/stock_service.dart';
 import '../../widgets/status.dart';
 
+// Re-exported so existing importers of this file (demand_form_screen.dart,
+// tests) keep working unchanged — normaliseProductName is also now used by
+// SupplyService, which can't depend on a screens/ file, hence the move.
+export '../../core/product_name_matching.dart';
+
 const int lowCoverDaysThreshold = 7;
 const int overstockDaysThreshold = 60;
-
-/// The single normalisation used on *both* sides of the demand-to-stock join.
-///
-/// There is no foreign key between `demand_forecast.product_name` and
-/// `finished_stock.product_name` — they are matched on the name itself, so
-/// both sides must normalise identically or a forecast silently stops
-/// counting. Keeping that in one function is what guarantees they agree.
-String normaliseProductName(String name) => name.trim().toLowerCase();
 
 /// Why a product has no demand figure. Distinguishing these is the point:
 /// [noForecast] and [zeroPerDay] used to both render as "No demand set",

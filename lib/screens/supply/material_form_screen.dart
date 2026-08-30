@@ -59,11 +59,6 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
         unit: _unitController.text.trim().isEmpty
             ? 'kg'
             : _unitController.text.trim(),
-        // No longer editable here — superseded by the per-product bill of
-        // materials (see the Product detail screen). Preserved rather than
-        // zeroed on an edit, purely so nothing reading the old column mid-
-        // migration sees data disappear out from under it.
-        consumptionPerUnit: widget.material?.consumptionPerUnit ?? 0,
         safetyStockDays: int.parse(_safetyStockController.text),
         unitCost: double.parse(_unitCostController.text),
       );

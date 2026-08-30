@@ -162,15 +162,36 @@ class MrpService {
   const MrpService._();
 
   /// Low-stock threshold for a material, computed from planned usage
-  /// instead of typed in by hand: 20% of one week's consumption at the
-  /// planned production rate. Pure — no DB.
-  static double reorderLevelFor({
-    required double consumptionPerUnit,
-    required double plannedProductionPerDay,
-  }) {
-    final weeklyConsumption =
-        consumptionPerUnit * plannedProductionPerDay * 7;
+  /// instead of typed in by hand: 20% of one week's consumption at
+  /// [burnRatePerDay] — that material's own already-aggregated daily rate
+  /// (see [aggregateBurnRate]), not re-derived from a single product's
+  /// rate. Pure — no DB.
+  static double reorderLevelFor({required double burnRatePerDay}) {
+    final weeklyConsumption = burnRatePerDay * 7;
     return weeklyConsumption * reorderLevelWeeklyBuffer;
+  }
+
+  /// Total daily consumption of one material across every product that
+  /// uses it: Σ plannedPerProduct[line.productId] × line.quantityPerUnit,
+  /// summed over every [bom] line referencing [materialId]. Pure — no DB.
+  /// Replaces the old single-rate `consumptionPerUnit ×
+  /// plannedProductionPerDay` now that different products can consume the
+  /// same material at different rates, or not at all — a material with no
+  /// matching [bom] line contributes nothing. [plannedPerProduct] is each
+  /// product's own planned production for the day (see
+  /// [SupplyService.plannedProductionPerDayFor]); a product missing from
+  /// that map contributes nothing, same as a zero rate.
+  static double aggregateBurnRate({
+    required Map<int, double> plannedPerProduct,
+    required List<BomEntry> bom,
+    required int materialId,
+  }) {
+    var total = 0.0;
+    for (final entry in bom) {
+      if (entry.materialId != materialId) continue;
+      total += (plannedPerProduct[entry.productId] ?? 0) * entry.quantityPerUnit;
+    }
+    return total;
   }
 
   /// Raw material one product's production run consumes: `unitsProduced ×
@@ -399,21 +420,21 @@ class MrpService {
         .fold<double>(0, (sum, d) => sum + d.quantity);
   }
 
-  /// Builds the full read-out for one material: burn rate from planned
-  /// production, the best available supplier, an inbound-aware stock-out
-  /// projection, and the derived order-by date / risk / suggested quantity.
+  /// Builds the full read-out for one material: an inbound-aware stock-out
+  /// projection from [burnRatePerDay], the best available supplier, and the
+  /// derived order-by date / risk / suggested quantity. [burnRatePerDay] is
+  /// the caller's already-aggregated rate for this material — see
+  /// [aggregateBurnRate] — since a material can now be consumed by several
+  /// products at different rates, not derived from a single
+  /// `consumptionPerUnit` here.
   static MaterialPlan buildPlan({
     required RawMaterial material,
     required List<Supplier> suppliersForMaterial,
     required List<PurchaseOrder> ordersForMaterial,
-    required double plannedProductionPerDay,
+    required double burnRatePerDay,
     required DateTime today,
   }) {
-    final burnRate = material.consumptionPerUnit * plannedProductionPerDay;
-    final reorderLevel = reorderLevelFor(
-      consumptionPerUnit: material.consumptionPerUnit,
-      plannedProductionPerDay: plannedProductionPerDay,
-    );
+    final reorderLevel = reorderLevelFor(burnRatePerDay: burnRatePerDay);
     final supplier = bestSupplier(suppliersForMaterial);
     final leadDays = supplier != null ? effectiveLeadDays(supplier) : null;
 
@@ -455,7 +476,7 @@ class MrpService {
 
     final projection = project(
       openingStock: material.currentStock,
-      burnRatePerDay: burnRate,
+      burnRatePerDay: burnRatePerDay,
       inbound: inbound,
       today: today,
     );
@@ -477,7 +498,7 @@ class MrpService {
 
     final suggested = leadDays != null
         ? suggestedQty(
-            burnRatePerDay: burnRate,
+            burnRatePerDay: burnRatePerDay,
             onHand: material.currentStock,
             // Only count deliveries landing within the target cover window
             // — a shipment arriving well after that window doesn't help
@@ -497,7 +518,7 @@ class MrpService {
 
     return MaterialPlan(
       material: material,
-      burnRatePerDay: burnRate,
+      burnRatePerDay: burnRatePerDay,
       onHand: material.currentStock,
       inboundTotal: inboundTotal,
       overdueInboundTotal: overdueInboundTotal,

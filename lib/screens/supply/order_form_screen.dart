@@ -54,7 +54,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   _LoadState _state = _LoadState.loading;
   List<RawMaterial> _materials = [];
   List<Supplier> _suppliers = [];
-  double _plannedProductionPerDay = 0;
+  List<MaterialPlan> _plans = [];
 
   /// Best-effort preview of the PO number a new order would likely get —
   /// see [OrderService.getNextPoIdPreview]. Null while editing (the real
@@ -101,7 +101,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       setState(() {
         _materials = overview.materials;
         _suppliers = overview.suppliers;
-        _plannedProductionPerDay = overview.plannedProductionPerDay;
+        _plans = overview.plans;
         _nextPoIdPreview = preview;
 
         final order = widget.order;
@@ -237,7 +237,13 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final material = _selectedMaterial;
     final quantity = double.tryParse(_quantityController.text);
     if (material == null || quantity == null || quantity <= 0) return null;
-    final burnRate = material.consumptionPerUnit * _plannedProductionPerDay;
+    // Reads the same already-aggregated burn rate MaterialDetailScreen and
+    // the material list show — a material can now be consumed by several
+    // products at different rates, so this is looked up rather than
+    // re-derived from a single per-unit figure.
+    final matches = _plans.where((p) => p.material.materialId == material.materialId);
+    if (matches.isEmpty) return null;
+    final burnRate = matches.first.burnRatePerDay;
     if (burnRate <= 0) return null;
     final days = quantity / burnRate;
     return 'Covers ~${days.toStringAsFixed(0)} days of planned production';

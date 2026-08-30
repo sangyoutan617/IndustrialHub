@@ -17,6 +17,20 @@ class BomService {
         .toList();
   }
 
+  /// Every BOM line across every product in a factory, in one query — used
+  /// by SupplyService to aggregate one material's total daily burn rate
+  /// across all the products that consume it, rather than fetching each
+  /// product's recipe separately.
+  Future<List<BomEntry>> getAllForFactory(int factoryId) async {
+    final rows = await _client
+        .from('product_materials')
+        .select('*, products!inner(factory_id)')
+        .eq('products.factory_id', factoryId);
+    return (rows as List)
+        .map((row) => BomEntry.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
   /// The reverse lookup for a material's detail screen — every product that
   /// consumes it, so a manager can see "if I delete/change this material,
   /// what does it affect" without opening each product individually.
