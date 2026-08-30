@@ -23,6 +23,17 @@ class SupplyOverview {
   final List<PurchaseOrder> orders;
   final List<MaterialPlan> plans;
 
+  /// Every product this factory has, and the factory's full bill of
+  /// materials across all of them — exposed so a screen can narrate which
+  /// products are driving a given material's burn rate (see
+  /// material_list_screen.dart's AI prompt) without a separate fetch.
+  final List<Product> products;
+  final List<BomEntry> bom;
+
+  /// Each product's own planned production for the day — the per-product
+  /// figures [plannedProductionPerDay] sums together.
+  final Map<int, double> plannedPerProduct;
+
   /// Sum of every product's own planned production for the day — each
   /// product's demand forecast clamped to that product's own capacity (see
   /// [SupplyService.plannedProductionPerDayFor]), then added together. Not
@@ -40,6 +51,9 @@ class SupplyOverview {
     required this.suppliers,
     required this.orders,
     required this.plans,
+    required this.products,
+    required this.bom,
+    required this.plannedPerProduct,
     required this.plannedProductionPerDay,
     required this.productionFromForecast,
   });
@@ -57,6 +71,26 @@ class SupplyOverview {
 
   List<PurchaseOrder> ordersFor(int materialId) =>
       orders.where((o) => o.materialId == materialId).toList();
+
+  /// Every product that consumes [materialId], paired with how much of the
+  /// material each contributes to its total daily burn rate — sorted
+  /// biggest contributor first. Powers the "used by" narration on the
+  /// material list's AI prompt.
+  List<(Product, double)> productContributionsFor(int materialId) {
+    final byId = {for (final p in products) p.productId: p};
+    final contributions = <(Product, double)>[
+      for (final entry in bom)
+        if (entry.materialId == materialId)
+          if (byId[entry.productId] != null)
+            (
+              byId[entry.productId]!,
+              (plannedPerProduct[entry.productId] ?? 0) *
+                  entry.quantityPerUnit,
+            ),
+    ].where((c) => c.$2 > 0).toList();
+    contributions.sort((a, b) => b.$2.compareTo(a.$2));
+    return contributions;
+  }
 }
 
 class SupplyService {
@@ -162,6 +196,9 @@ class SupplyService {
       suppliers: suppliers,
       orders: orders,
       plans: plans,
+      products: products,
+      bom: bom,
+      plannedPerProduct: plannedPerProduct,
       plannedProductionPerDay: plannedProductionPerDay,
       productionFromForecast: productionFromForecast,
     );
