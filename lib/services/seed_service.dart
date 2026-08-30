@@ -1,3 +1,4 @@
+import '../models/bom_entry.dart';
 import '../models/demand_forecast.dart';
 import '../models/factory.dart';
 import '../models/machine.dart';
@@ -6,6 +7,7 @@ import '../models/purchase_order.dart';
 import '../models/raw_material.dart';
 import '../models/stock_movement.dart';
 import '../models/supplier.dart';
+import 'bom_service.dart';
 import 'demand_service.dart';
 import 'factory_service.dart';
 import 'machine_service.dart';
@@ -33,6 +35,7 @@ class SeedService {
   final _manpowerService = ManpowerService();
   final _materialService = MaterialService();
   final _productService = ProductService();
+  final _bomService = BomService();
   final _supplierService = SupplierService();
   final _stockService = StockService();
   final _demandService = DemandService();
@@ -54,7 +57,7 @@ class SeedService {
     final generalProductId = products.firstWhere((p) => p.isGeneral).productId;
     await _seedMachines(factory.factoryId, generalProductId);
     await _seedManpower(factory.factoryId, generalProductId);
-    final materials = await _seedMaterials(factory.factoryId);
+    final materials = await _seedMaterials(factory.factoryId, generalProductId);
     final suppliers = await _seedSuppliers(materials);
     await _seedStockAndDemand(factory.factoryId);
     await _simulateOrders(materials, suppliers);
@@ -119,26 +122,36 @@ class SeedService {
     }
   }
 
-  Future<List<RawMaterial>> _seedMaterials(int factoryId) async {
+  /// [productId] receives each material's demo consumption rate as a
+  /// product_materials (BOM) row — the seeded machines/manpower attach to
+  /// the same General product, so a single recipe there is enough to
+  /// exercise burn-rate/stock-out projections for the demo factory.
+  Future<List<RawMaterial>> _seedMaterials(int factoryId, int productId) async {
     final specs = [
       ('Plastic Resin', 20000.0, 'kg', 3.0, 4.5),
       ('Colorant', 800.0, 'litres', 0.5, 12.0),
       ('Packaging Boxes', 10000.0, 'boxes', 1.0, 0.8),
     ];
     final created = <RawMaterial>[];
-    for (final (name, stock, unit, consumption, unitCost) in specs) {
-      created.add(
-        await _materialService.createMaterial(
-          RawMaterial(
-            materialId: 0,
-            factoryId: factoryId,
-            materialName: name,
-            currentStock: stock,
-            unit: unit,
-            consumptionPerUnit: consumption,
-            unitCost: unitCost,
-          ),
+    for (final (name, stock, unit, consumptionPerUnit, unitCost) in specs) {
+      final material = await _materialService.createMaterial(
+        RawMaterial(
+          materialId: 0,
+          factoryId: factoryId,
+          materialName: name,
+          currentStock: stock,
+          unit: unit,
+          unitCost: unitCost,
         ),
+      );
+      created.add(material);
+      await _bomService.upsertEntry(
+        BomEntry(
+          productId: productId,
+          materialId: material.materialId,
+          quantityPerUnit: consumptionPerUnit,
+        ),
+        factoryId: factoryId,
       );
     }
     return created;
