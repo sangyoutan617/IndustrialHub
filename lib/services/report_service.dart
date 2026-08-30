@@ -6,18 +6,23 @@ import 'package:pdf/widgets.dart' as pw;
 import '../core/formatters.dart';
 import '../models/factory.dart';
 import '../screens/stock/stock_cover_loader.dart';
+import 'admin_service.dart';
 import 'bottleneck_service.dart';
 import 'mrp_service.dart';
+import 'product_service.dart';
 import 'supply_service.dart';
 
-/// Builds a one-page PDF summary of a factory — the bottleneck verdict,
-/// capacity breakdown, finished-goods stock, and supply risk — from figures
-/// the deterministic engines already computed. Nothing here recalculates: it
-/// reads [BottleneckService], [loadStockOverview] and [SupplyService] and
-/// lays their numbers out.
+/// Builds a one-page PDF summary of a factory — the per-product bottleneck
+/// verdict, finished-goods stock, and supply risk — from figures the
+/// deterministic engines already computed. Nothing here recalculates: it
+/// reads [BottleneckService] (once per product), [loadStockOverview] and
+/// [SupplyService] and lays their numbers out. Loops every product rather
+/// than offering a picker — a PDF read offline later doesn't benefit from
+/// one, unlike the live capacity dashboard.
 class ReportService {
   final BottleneckService _bottleneckService = BottleneckService();
   final SupplyService _supplyService = SupplyService();
+  final ProductService _productService = ProductService();
 
   // Matches the app's teal brand (lib/core/theme.dart AppColors).
   static const _green = PdfColor.fromInt(0xFF0F766E);
@@ -25,9 +30,19 @@ class ReportService {
   static const _grey = PdfColor.fromInt(0xFF6B7280);
 
   Future<Uint8List> buildFactoryReportPdf(Factory factory) async {
-    final bottleneck = await _bottleneckService.computeForFactory(
-      factory.factoryId,
+    final products = await _productService.getProducts(factory.factoryId);
+    final bottlenecks = await Future.wait(
+      products.map(
+        (p) => _bottleneckService.computeForProduct(
+          factory.factoryId,
+          p.productId,
+        ),
+      ),
     );
+    final productBottlenecks = [
+      for (var i = 0; i < products.length; i++)
+        ProductBottleneck(product: products[i], bottleneck: bottlenecks[i]),
+    ];
     final stock = await loadStockOverview(factory.factoryId);
     final supply = await _supplyService.load(factory.factoryId);
 
@@ -41,9 +56,7 @@ class ReportService {
           children: [
             _header(factory),
             pw.SizedBox(height: 20),
-            _factoryHealth(bottleneck),
-            pw.SizedBox(height: 18),
-            _capacityBreakdown(bottleneck),
+            _capacitySection(productBottlenecks),
             pw.SizedBox(height: 18),
             _stockOverview(stock),
             pw.SizedBox(height: 18),
@@ -79,39 +92,46 @@ class ReportService {
     );
   }
 
-  pw.Widget _factoryHealth(BottleneckResult r) {
-    if (!r.hasData) {
-      return _section('Factory health', [
+  /// One line per product rather than a single factory-wide verdict —
+  /// achievable/demand can be in different units from one product to the
+  /// next, so "X of Y products meeting demand" is the summary figure that
+  /// stays meaningful, same as the admin cross-factory rollup.
+  pw.Widget _capacitySection(List<ProductBottleneck> productBottlenecks) {
+    if (productBottlenecks.isEmpty) {
+      return _section('Capacity', [
         pw.Text(
-          'No production data yet — add machines, manpower, materials and '
-          'demand to activate the bottleneck engine.',
+          'No products configured for this factory.',
           style: const pw.TextStyle(fontSize: 11, color: _grey),
         ),
       ]);
     }
-    final verdict = r.canMeetDemand
-        ? 'Meeting demand'
-        : 'Short by ${formatUnits(r.shortfall ?? 0)}/day';
-    return _section('Factory health', [
-      _row('Achievable output', '${formatUnits(r.achievable)}/day'),
-      _row('Demand required', '${formatUnits(r.requiredPerDay)}/day'),
-      _row('Verdict', verdict),
-      _row('Binding constraint', _limiterLabel(r.limiter)),
-    ]);
-  }
+    final withData = productBottlenecks.where((p) => p.bottleneck.hasData);
+    final meetingDemand = withData
+        .where((p) => p.bottleneck.canMeetDemand)
+        .length;
 
-  pw.Widget _capacityBreakdown(BottleneckResult r) {
-    if (!r.hasData) return pw.SizedBox();
-    return _section('Capacity breakdown', [
-      _row('Machine capacity', '${formatUnits(r.machineCapacity)}/day'),
-      _row('Manpower capacity', '${formatUnits(r.manpowerCapacity)}/day'),
+    final rows = <pw.Widget>[
       _row(
-        'Raw-material ceiling',
-        r.materialCeiling != null
-            ? '${formatUnits(r.materialCeiling!)}/day'
-            : 'not set',
+        'Products meeting demand',
+        '$meetingDemand of ${withData.length}'
+            '${productBottlenecks.length != withData.length ? ' (${productBottlenecks.length - withData.length} with no production data yet)' : ''}',
       ),
-    ]);
+      pw.SizedBox(height: 4),
+    ];
+    for (final pb in productBottlenecks) {
+      final r = pb.bottleneck;
+      if (!r.hasData) {
+        rows.add(_row(pb.product.productName, 'No production data yet'));
+        continue;
+      }
+      final verdict = r.canMeetDemand
+          ? '${formatUnits(r.achievable)}/day achievable vs '
+                '${formatUnits(r.requiredPerDay)}/day required — meeting demand'
+          : 'Short by ${formatUnits(r.shortfall ?? 0)}/day '
+                '(${_limiterLabel(r.limiter)} limited)';
+      rows.add(_row(pb.product.productName, verdict));
+    }
+    return _section('Capacity — by product', rows);
   }
 
   pw.Widget _stockOverview(StockOverview stock) {

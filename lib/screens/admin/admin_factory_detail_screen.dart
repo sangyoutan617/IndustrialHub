@@ -3,6 +3,7 @@ import '../../core/formatters.dart';
 import '../../models/factory.dart';
 import '../../models/product.dart';
 import '../../models/supplier.dart';
+import '../../services/admin_service.dart';
 import '../../services/bottleneck_service.dart';
 import '../../services/mrp_service.dart';
 import '../../services/product_service.dart';
@@ -38,7 +39,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   final _productService = ProductService();
 
   _LoadState _state = _LoadState.loading;
-  BottleneckResult? _bottleneck;
+  List<ProductBottleneck> _productBottlenecks = [];
   List<MaterialPlan> _lowStockPlans = [];
   List<Product> _products = [];
   int? _selectedProductId;
@@ -72,10 +73,23 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
             )
           : _defaultProduct(products);
 
-      final bottleneck = await _bottleneckService.computeForProduct(
-        widget.factory.factoryId,
-        selected.productId,
+      // Every product's own verdict, not just the picked one — the alerts
+      // section below lists every shortfall across the whole factory. The
+      // product picker + BottleneckBanner underneath is for drilling into
+      // one product's full detail, a separate concern.
+      final bottlenecks = await Future.wait(
+        products.map(
+          (p) => _bottleneckService.computeForProduct(
+            widget.factory.factoryId,
+            p.productId,
+          ),
+        ),
       );
+      final productBottlenecks = [
+        for (var i = 0; i < products.length; i++)
+          ProductBottleneck(product: products[i], bottleneck: bottlenecks[i]),
+      ];
+
       final overview = await _supplyService.load(widget.factory.factoryId);
       final lowStock = overview.plans
           .where((p) => p.belowReorderLevel)
@@ -84,7 +98,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
       setState(() {
         _products = products;
         _selectedProductId = selected.productId;
-        _bottleneck = bottleneck;
+        _productBottlenecks = productBottlenecks;
         _lowStockPlans = lowStock;
         _state = _LoadState.ready;
       });
@@ -172,7 +186,9 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
 
   Widget _buildReady() {
     final factory = widget.factory;
-    final bottleneck = _bottleneck!;
+    final shortProducts = _productBottlenecks
+        .where((p) => p.bottleneck.hasData && !p.bottleneck.canMeetDemand)
+        .toList();
 
     final infoCard = Card(
       child: Padding(
@@ -236,13 +252,14 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
       children: [
         Text('Alerts', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        if (bottleneck.hasData && !bottleneck.canMeetDemand) ...[
+        for (final pb in shortProducts) ...[
           InfoBanner(
             status: AppStatus.danger,
             title:
-                'Output shortfall: short by ${formatWhole(bottleneck.shortfall!)} units/day',
+                '${pb.product.productName}: short by '
+                '${formatWhole(pb.bottleneck.shortfall!)} units/day',
             message:
-                'Limiting resource: ${_resourceLabel(bottleneck.limiter ?? bottleneck.bottleneckResource)}',
+                'Limiting resource: ${_resourceLabel(pb.bottleneck.limiter ?? pb.bottleneck.bottleneckResource)}',
           ),
           const SizedBox(height: 8),
         ],
@@ -258,8 +275,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
           ),
           const SizedBox(height: 8),
         ],
-        if ((!bottleneck.hasData || bottleneck.canMeetDemand) &&
-            _lowStockPlans.isEmpty)
+        if (shortProducts.isEmpty && _lowStockPlans.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(

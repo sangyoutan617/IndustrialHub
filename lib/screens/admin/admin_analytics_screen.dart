@@ -4,7 +4,6 @@ import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../services/admin_service.dart';
-import '../../services/bottleneck_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
@@ -45,35 +44,27 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     }
   }
 
-  // Consistent bottleneck-type -> status mapping, used for both the bar
-  // chart bars/legend and the factories table's Bottleneck column.
-  AppStatus _bottleneckStatus(FactoryStat stat) {
-    if (!stat.bottleneck.hasData) return AppStatus.neutral;
-    switch (stat.bottleneck.limiter ?? stat.bottleneck.bottleneckResource) {
-      case 'MACHINE':
-        return AppStatus.info;
-      case 'MANPOWER':
-        return AppStatus.warning;
-      case 'RAW MATERIAL':
-        return AppStatus.danger;
-      default:
-        return AppStatus.success;
-    }
+  // Consistent status mapping for a factory's overall picture, used for
+  // both the bar chart bars and the factories table's row.
+  AppStatus _factoryStatus(FactoryStat stat) {
+    if (stat.productsWithData == 0) return AppStatus.neutral;
+    return stat.productsShort > 0 ? AppStatus.danger : AppStatus.success;
   }
 
-  Color _bottleneckColor(FactoryStat stat) => _bottleneckStatus(stat).color;
+  Color _factoryColor(FactoryStat stat) => _factoryStatus(stat).color;
 
-  String _bottleneckLabel(BottleneckResult result) {
-    if (!result.hasData) return 'No data';
-    switch (result.limiter ?? result.bottleneckResource) {
+  String _resourceLabel(String? resource) {
+    switch (resource) {
       case 'MACHINE':
         return 'Machine';
       case 'MANPOWER':
         return 'Manpower';
       case 'RAW MATERIAL':
         return 'Raw material';
+      case null:
+        return '—';
       default:
-        return result.limiter ?? result.bottleneckResource;
+        return resource;
     }
   }
 
@@ -135,34 +126,32 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
+            // Achievable/demand are no longer summed platform-wide — a
+            // factory's products can be in different units, and summing
+            // across factories compounds that. "X of Y products meeting
+            // demand" is the one figure that stays meaningful regardless of
+            // what any given product is measured in.
             Row(
               children: [
                 Expanded(
                   child: KpiCard(
                     icon: Icons.speed_outlined,
-                    label: 'Aggregate achievable/day',
-                    value: formatWhole(stats.totalAchievable),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.m),
-                Expanded(
-                  child: KpiCard(
-                    icon: Icons.trending_up,
-                    label: 'Aggregate demand/day',
-                    value: formatWhole(stats.totalDemand),
+                    label: 'Products meeting demand',
+                    value: '${stats.totalProductsMeetingDemand}',
+                    unit: 'of ${stats.totalProductsWithData}',
                   ),
                 ),
                 const SizedBox(width: AppSpacing.m),
                 Expanded(
                   child: KpiCard(
                     icon: Icons.warning_amber_rounded,
-                    label: 'Below demand',
-                    value: '${stats.factoriesBelowDemand}',
+                    label: 'Factories at risk',
+                    value: '${stats.factoriesAtRisk}',
                     unit: 'of ${stats.factories.length}',
-                    status: stats.factoriesBelowDemand > 0
+                    status: stats.factoriesAtRisk > 0
                         ? AppStatus.danger
                         : AppStatus.success,
-                    statusLabel: stats.factoriesBelowDemand > 0
+                    statusLabel: stats.factoriesAtRisk > 0
                         ? 'At risk'
                         : 'On track',
                   ),
@@ -226,6 +215,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     );
   }
 
+  // Percent of products meeting demand, not raw achievable units — a
+  // factory's products can be in different units, so a bar chart of raw
+  // achievable output isn't comparable factory-to-factory (or even
+  // product-to-product within one factory). Percent-meeting-demand is.
   Widget _buildChartCard(CrossFactoryStats stats) {
     final bars = stats.factories;
     return Card(
@@ -235,7 +228,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Achievable output/day by factory',
+              'Products meeting demand, by factory',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
@@ -243,10 +236,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               spacing: 12,
               runSpacing: 4,
               children: [
-                _legendDot('Machine', AppStatus.info.color),
-                _legendDot('Manpower', AppStatus.warning.color),
-                _legendDot('Raw material', AppStatus.danger.color),
-                _legendDot('No bottleneck', AppStatus.success.color),
+                _legendDot('At risk (some products short)', AppStatus.danger.color),
+                _legendDot('On track', AppStatus.success.color),
                 _legendDot('No data', AppStatus.neutral.color),
               ],
             ),
@@ -255,6 +246,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               height: 220,
               child: BarChart(
                 BarChartData(
+                  maxY: 100,
                   gridData: const FlGridData(show: false),
                   borderData: FlBorderData(show: false),
                   titlesData: FlTitlesData(
@@ -264,10 +256,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                     rightTitles: const AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
-                    leftTitles: const AxisTitles(
+                    leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
                         reservedSize: 40,
+                        getTitlesWidget: (value, meta) =>
+                            Text('${value.toInt()}%', style: Theme.of(context).textTheme.labelSmall),
                       ),
                     ),
                     bottomTitles: AxisTitles(
@@ -299,8 +293,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                         x: i,
                         barRods: [
                           BarChartRodData(
-                            toY: bars[i].bottleneck.achievable,
-                            color: _bottleneckColor(bars[i]),
+                            toY: bars[i].productsWithData == 0
+                                ? 0
+                                : bars[i].productsMeetingDemand /
+                                      bars[i].productsWithData *
+                                      100,
+                            color: _factoryColor(bars[i]),
                             width: 18,
                             borderRadius: BorderRadius.circular(4),
                           ),
@@ -348,10 +346,10 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               child: DataTable(
                 columns: const [
                   DataColumn(label: Text('Factory')),
-                  DataColumn(label: Text('Achievable/day'), numeric: true),
-                  DataColumn(label: Text('Demand/day'), numeric: true),
-                  DataColumn(label: Text('Shortfall'), numeric: true),
-                  DataColumn(label: Text('Bottleneck')),
+                  DataColumn(label: Text('Products'), numeric: true),
+                  DataColumn(label: Text('Meeting demand'), numeric: true),
+                  DataColumn(label: Text('Short'), numeric: true),
+                  DataColumn(label: Text('Common bottleneck')),
                 ],
                 rows: [
                   for (final stat in stats.factories)
@@ -359,31 +357,13 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       onSelectChanged: (_) => _openDetail(stat.factory),
                       cells: [
                         DataCell(Text(stat.factory.factoryName)),
-                        DataCell(
-                          Text(
-                            stat.bottleneck.hasData
-                                ? formatWhole(stat.bottleneck.achievable)
-                                : '—',
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            stat.bottleneck.hasData
-                                ? formatWhole(stat.bottleneck.requiredPerDay)
-                                : '—',
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            stat.bottleneck.shortfall != null
-                                ? formatWhole(stat.bottleneck.shortfall!)
-                                : '—',
-                          ),
-                        ),
+                        DataCell(Text('${stat.productsWithData}')),
+                        DataCell(Text('${stat.productsMeetingDemand}')),
+                        DataCell(Text('${stat.productsShort}')),
                         DataCell(
                           StatusChip(
-                            label: _bottleneckLabel(stat.bottleneck),
-                            status: _bottleneckStatus(stat),
+                            label: _resourceLabel(stat.dominantBottleneckResource),
+                            status: _factoryStatus(stat),
                             dense: true,
                           ),
                         ),
