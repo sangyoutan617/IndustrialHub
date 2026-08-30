@@ -1,3 +1,4 @@
+import '../models/bom_entry.dart';
 import '../models/purchase_order.dart';
 import '../models/raw_material.dart';
 import '../models/supplier.dart';
@@ -172,34 +173,42 @@ class MrpService {
     return weeklyConsumption * reorderLevelWeeklyBuffer;
   }
 
-  /// Raw material a production run consumes: `unitsProduced ×
-  /// consumption_per_unit` per material. Pure — no DB. In the single-product
-  /// capacity model every material is consumed in proportion to uniform
-  /// output, so this is the bill of materials for one run. Materials with a
-  /// zero rate are omitted. Feeds the auto-decrement when production is logged
-  /// (see [DailyProductionService]) and sizes a manual usage entry.
+  /// Raw material one product's production run consumes: `unitsProduced ×
+  /// quantity_per_unit` per line of [bom] — that product's own bill of
+  /// materials (see [BomService.getBom]), not a factory-wide rate. Pure —
+  /// no DB. Lines with a zero rate are omitted. Feeds the auto-decrement
+  /// when production is logged (see [DailyProductionService]) and sizes a
+  /// manual usage entry.
   static Map<int, double> computeProductionConsumption(
-    Iterable<RawMaterial> materials,
+    Iterable<BomEntry> bom,
     int unitsProduced,
   ) {
     final result = <int, double>{};
-    for (final m in materials) {
-      final used = m.consumptionPerUnit * unitsProduced;
-      if (used > 0) result[m.materialId] = used;
+    for (final entry in bom) {
+      final used = entry.quantityPerUnit * unitsProduced;
+      if (used > 0) result[entry.materialId] = used;
     }
     return result;
   }
 
   /// Materials whose current stock can't cover producing [unitsProduced]
-  /// units — a real "you couldn't have made this many" signal surfaced as a
-  /// warning when logging production. Pure — no DB.
-  static List<RawMaterial> insufficientMaterials(
-    Iterable<RawMaterial> materials,
-    int unitsProduced,
-  ) {
-    return materials
-        .where((m) => m.consumptionPerUnit * unitsProduced > m.currentStock)
-        .toList();
+  /// units of the product [bom] belongs to — a real "you couldn't have made
+  /// this many" signal surfaced as a warning when logging production. A
+  /// material [bom] has no line for isn't required by this product, so it's
+  /// never flagged regardless of its stock. Pure — no DB.
+  static List<RawMaterial> insufficientMaterials({
+    required Iterable<RawMaterial> materials,
+    required Iterable<BomEntry> bom,
+    required int unitsProduced,
+  }) {
+    final ratePerMaterial = {
+      for (final entry in bom) entry.materialId: entry.quantityPerUnit,
+    };
+    return materials.where((m) {
+      final rate = ratePerMaterial[m.materialId];
+      if (rate == null) return false;
+      return rate * unitsProduced > m.currentStock;
+    }).toList();
   }
 
   /// Total spend for one purchase order at its captured price: `quantity ×
