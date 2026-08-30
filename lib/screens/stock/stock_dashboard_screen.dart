@@ -37,7 +37,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   _LoadState _state = _LoadState.loading;
   List<ProductCover> _covers = [];
   List<DemandForecast> _forecasts = [];
-  List<UnmatchedForecast> _unmatchedForecasts = [];
   int _pendingMovements = 0;
 
   @override
@@ -91,7 +90,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
       setState(() {
         _covers = overview.covers;
         _forecasts = overview.forecasts;
-        _unmatchedForecasts = overview.unmatchedForecasts;
         _pendingMovements = pending;
         _state = _LoadState.ready;
       });
@@ -113,7 +111,8 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           ),
         );
       }
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('StockDashboardScreen _load error: $e\n$st');
       if (!mounted) return;
       setState(() => _state = _LoadState.error);
     }
@@ -261,10 +260,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             _buildPendingSyncBanner(),
             const SizedBox(height: AppSpacing.l),
           ],
-          if (_unmatchedForecasts.isNotEmpty) ...[
-            _buildUnmatchedForecastBanner(),
-            const SizedBox(height: AppSpacing.l),
-          ],
           _buildCoverSummaryCard(mostUrgent),
           const SizedBox(height: AppSpacing.l),
           if (aiInsight != null) ...[
@@ -284,87 +279,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           _buildCoverListSection(),
           const SizedBox(height: AppSpacing.xl),
           _buildDemandSection(),
-        ],
-      ),
-    );
-  }
-
-  /// Demand forecasts in effect today that matched no product.
-  ///
-  /// Days-of-cover joins demand to stock on the product name, with no
-  /// foreign key behind it — so a forecast whose name doesn't match counts
-  /// toward nothing, and the product it was meant for reads as "No demand
-  /// set". That used to be indistinguishable from genuinely having no
-  /// forecast; this is what makes it visible.
-  Widget _buildUnmatchedForecastBanner() {
-    final theme = Theme.of(context);
-    final count = _unmatchedForecasts.length;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.m),
-      decoration: BoxDecoration(
-        color: AppColors.warningLight,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.warning),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.link_off_rounded,
-                size: 18,
-                color: AppColors.warning,
-              ),
-              const SizedBox(width: AppSpacing.s),
-              Expanded(
-                child: Text(
-                  count == 1
-                      ? '1 demand forecast matches no product'
-                      : '$count demand forecasts match no product',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: AppColors.warning,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'These are not counted in days of cover. Rename either side so '
-            'the names match.',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: AppSpacing.s),
-          for (final unmatched in _unmatchedForecasts)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '"${unmatched.forecast.productName}"',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    TextSpan(
-                      text: ' · ${unmatched.forecast.requiredPerDay}/day',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    if (unmatched.closestProductName != null)
-                      TextSpan(
-                        text:
-                            '  — did you mean "${unmatched.closestProductName}"?',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );

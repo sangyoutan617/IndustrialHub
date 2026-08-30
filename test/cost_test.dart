@@ -15,7 +15,6 @@ RawMaterial _material({
     materialName: 'Material $id',
     currentStock: stock,
     unit: 'kg',
-    consumptionPerUnit: 1,
     unitCost: unitCost,
   );
 }

@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/finished_stock.dart';
+import '../models/product.dart';
 import '../models/stock_movement.dart';
 import 'data_event_service.dart';
 import 'stock_offline_queue_service.dart';
@@ -8,63 +9,45 @@ class StockService {
   final SupabaseClient _client = Supabase.instance.client;
   final _queue = StockOfflineQueueService();
 
+  static const _selectWithProduct = '*, products(product_name)';
+
   Future<List<FinishedStock>> getStockList(int factoryId) async {
     final rows = await _client
         .from('finished_stock')
-        .select()
-        .eq('factory_id', factoryId)
-        .order('product_name', ascending: true);
-    return (rows as List)
+        .select(_selectWithProduct)
+        .eq('factory_id', factoryId);
+    // Sorted client-side by the joined product name — finished_stock has
+    // no product-name column of its own to order the query by any more.
+    final list = (rows as List)
         .map((row) => FinishedStock.fromJson(row as Map<String, dynamic>))
         .toList();
+    list.sort((a, b) => a.productName.compareTo(b.productName));
+    return list;
   }
 
+  /// Creates a finished-stock row for [product] — one row per product per
+  /// factory (see the DB's own unique constraint); the caller is
+  /// responsible for only offering products that don't already have one
+  /// (see stock_list_screen.dart's picker).
   Future<FinishedStock> createStock(
     int factoryId,
-    String productName,
+    Product product,
     int initialQuantity,
   ) async {
     final row = await _client
         .from('finished_stock')
         .insert({
           'factory_id': factoryId,
-          'product_name': productName,
+          'product_id': product.productId,
           'current_quantity': initialQuantity,
         })
-        .select()
+        .select(_selectWithProduct)
         .single();
     final result = FinishedStock.fromJson(row);
     DataEventService.instance.notifyChanged(
       factoryId: factoryId,
       source: DataChangeSource.stock,
     );
-    return result;
-  }
-
-  /// Renames a finished-goods product. Demand is matched to stock by product
-  /// name (see loadStockOverview), so fixing a typo here also repairs the
-  /// days-of-cover calculation that a mismatched name silently broke.
-  Future<FinishedStock> updateStock(
-    int stockId,
-    String productName, {
-    int? factoryId,
-  }) async {
-    final row = await _client
-        .from('finished_stock')
-        .update({
-          'product_name': productName,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('stock_id', stockId)
-        .select()
-        .single();
-    final result = FinishedStock.fromJson(row);
-    if (factoryId != null) {
-      DataEventService.instance.notifyChanged(
-        factoryId: factoryId,
-        source: DataChangeSource.stock,
-      );
-    }
     return result;
   }
 

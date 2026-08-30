@@ -4,19 +4,50 @@ import '../models/productivity_benchmark.dart';
 import 'bottleneck_service.dart';
 import 'capacity_service.dart';
 import 'factory_service.dart';
+import 'product_service.dart';
 
 class FactoryStat {
   final Factory factory;
-  final BottleneckResult bottleneck;
+
+  /// Every product this factory has, each with its own bottleneck verdict.
+  /// Summing achievable/demand across products stopped being meaningful the
+  /// moment a factory could have more than one product — they can be in
+  /// different units — so this is the per-product source every rollup below
+  /// counts from, rather than a single blended factory-wide number.
+  final List<ProductBottleneck> products;
   final double? outputPerWorker;
   final String? msicCategory;
 
   const FactoryStat({
     required this.factory,
-    required this.bottleneck,
+    required this.products,
     required this.outputPerWorker,
     required this.msicCategory,
   });
+
+  Iterable<ProductBottleneck> get _withData =>
+      products.where((p) => p.bottleneck.hasData);
+
+  int get productsWithData => _withData.length;
+
+  int get productsMeetingDemand =>
+      _withData.where((p) => p.bottleneck.canMeetDemand).length;
+
+  int get productsShort => productsWithData - productsMeetingDemand;
+
+  /// The limiting resource behind the most of this factory's shortfalls —
+  /// a rough single-glance signal for the summary table. Null when nothing
+  /// is short (nothing to attribute a bottleneck to).
+  String? get dominantBottleneckResource {
+    final short = _withData.where((p) => !p.bottleneck.canMeetDemand);
+    if (short.isEmpty) return null;
+    final counts = <String, int>{};
+    for (final p in short) {
+      final key = p.bottleneck.limiter ?? p.bottleneck.bottleneckResource;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  }
 }
 
 class DivisionIpiReading {
@@ -49,20 +80,26 @@ class CategoryProductivity {
 
 class CrossFactoryStats {
   final List<FactoryStat> factories;
-  final double totalAchievable;
-  final double totalDemand;
-  final int factoriesBelowDemand;
   final List<DivisionIpiReading> ipiReadings;
   final List<CategoryProductivity> productivity;
 
   const CrossFactoryStats({
     required this.factories,
-    required this.totalAchievable,
-    required this.totalDemand,
-    required this.factoriesBelowDemand,
     required this.ipiReadings,
     required this.productivity,
   });
+
+  int get totalProductsWithData =>
+      factories.fold(0, (sum, f) => sum + f.productsWithData);
+
+  int get totalProductsMeetingDemand =>
+      factories.fold(0, (sum, f) => sum + f.productsMeetingDemand);
+
+  int get totalProductsShort =>
+      totalProductsWithData - totalProductsMeetingDemand;
+
+  int get factoriesAtRisk =>
+      factories.where((f) => f.productsShort > 0).length;
 }
 
 class AdminService {
@@ -70,6 +107,7 @@ class AdminService {
   final FactoryService _factoryService = FactoryService();
   final BottleneckService _bottleneckService = BottleneckService();
   final CapacityService _capacityService = CapacityService();
+  final ProductService _productService = ProductService();
 
   Future<bool> isAdmin(String userId) async {
     final row = await _client
@@ -80,16 +118,26 @@ class AdminService {
     return row != null;
   }
 
-  /// Per-factory bottleneck stats reuse [BottleneckService] and
-  /// [CapacityService] rather than re-deriving the capacity math here.
+  /// Per-factory, per-product bottleneck stats — reuses [BottleneckService]
+  /// and [CapacityService] rather than re-deriving the capacity math here.
   Future<CrossFactoryStats> crossFactoryStats() async {
     final factories = await _factoryService.getFactories();
 
     final stats = <FactoryStat>[];
     for (final factory in factories) {
-      final bottleneck = await _bottleneckService.computeForFactory(
-        factory.factoryId,
+      final products = await _productService.getProducts(factory.factoryId);
+      final bottlenecks = await Future.wait(
+        products.map(
+          (p) => _bottleneckService.computeForProduct(
+            factory.factoryId,
+            p.productId,
+          ),
+        ),
       );
+      final productBottlenecks = [
+        for (var i = 0; i < products.length; i++)
+          ProductBottleneck(product: products[i], bottleneck: bottlenecks[i]),
+      ];
 
       double? outputPerWorker;
       String? category;
@@ -104,25 +152,12 @@ class AdminService {
       stats.add(
         FactoryStat(
           factory: factory,
-          bottleneck: bottleneck,
+          products: productBottlenecks,
           outputPerWorker: outputPerWorker,
           msicCategory: category,
         ),
       );
     }
-
-    final withData = stats.where((s) => s.bottleneck.hasData);
-    final totalAchievable = withData.fold<double>(
-      0,
-      (sum, s) => sum + s.bottleneck.achievable,
-    );
-    final totalDemand = withData.fold<double>(
-      0,
-      (sum, s) => sum + s.bottleneck.requiredPerDay,
-    );
-    final factoriesBelowDemand = withData
-        .where((s) => !s.bottleneck.canMeetDemand)
-        .length;
 
     final divisions = <String>{
       for (final f in factories)
@@ -191,9 +226,6 @@ class AdminService {
 
     return CrossFactoryStats(
       factories: stats,
-      totalAchievable: totalAchievable,
-      totalDemand: totalDemand,
-      factoriesBelowDemand: factoriesBelowDemand,
       ipiReadings: ipiReadings,
       productivity: productivity,
     );

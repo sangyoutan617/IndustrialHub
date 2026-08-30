@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../models/demand_forecast.dart';
+import '../../models/product.dart';
 import '../../services/demand_service.dart';
-import '../../services/stock_service.dart';
+import '../../services/product_service.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
-import 'stock_cover_loader.dart';
 
 class DemandFormScreen extends StatefulWidget {
   final int factoryId;
@@ -16,24 +18,20 @@ class DemandFormScreen extends StatefulWidget {
   State<DemandFormScreen> createState() => _DemandFormScreenState();
 }
 
+enum _LoadState { loading, error, ready }
+
 class _DemandFormScreenState extends State<DemandFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _service = DemandService();
-  final _stockService = StockService();
+  final _productService = ProductService();
 
-  late final _nameController = TextEditingController(
-    text: widget.forecast?.productName,
-  );
   late final _requiredController = TextEditingController(
     text: widget.forecast?.requiredPerDay.toString(),
   );
-  final _nameFocus = FocusNode();
 
-  /// Existing finished-stock product names. Demand is joined to stock by
-  /// name with no foreign key, so offering the real names is what stops a
-  /// forecast being saved against a product that doesn't exist.
-  List<String> _productNames = [];
-  bool _productNamesLoaded = false;
+  _LoadState _state = _LoadState.loading;
+  List<Product> _products = [];
+  int? _selectedProductId;
 
   DateTime? _periodStart;
   DateTime? _periodEnd;
@@ -48,43 +46,37 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
     super.initState();
     _periodStart = widget.forecast?.periodStart;
     _periodEnd = widget.forecast?.periodEnd;
-    _nameController.addListener(_onNameChanged);
-    _loadProductNames();
+    _selectedProductId = widget.forecast?.productId;
+    _load();
   }
 
-  Future<void> _loadProductNames() async {
+  Future<void> _load() async {
+    setState(() => _state = _LoadState.loading);
     try {
-      final stock = await _stockService.getStockList(widget.factoryId);
+      final products = await _productService.getProducts(widget.factoryId);
       if (!mounted) return;
       setState(() {
-        _productNames = stock.map((s) => s.productName).toList();
-        _productNamesLoaded = true;
+        _products = products;
+        // Default a new forecast to the first non-General product if one
+        // exists — General is the migration catch-all, not something a
+        // user picks first when forecasting demand.
+        _selectedProductId ??= products.isEmpty
+            ? null
+            : products.firstWhere(
+                (p) => !p.isGeneral,
+                orElse: () => products.first,
+              ).productId;
+        _state = _LoadState.ready;
       });
     } catch (_) {
-      // A failed lookup only costs the picker and the warning below — the
-      // form still saves, exactly as it did before there was a picker.
-      if (mounted) setState(() => _productNamesLoaded = true);
+      if (!mounted) return;
+      setState(() => _state = _LoadState.error);
     }
-  }
-
-  void _onNameChanged() {
-    if (_productNamesLoaded) setState(() {});
-  }
-
-  /// Whether what's typed currently lands on a real product, using the same
-  /// normalisation [loadStockOverview] joins on.
-  bool get _nameMatchesProduct {
-    final typed = normaliseProductName(_nameController.text);
-    if (typed.isEmpty) return true;
-    return _productNames.map(normaliseProductName).contains(typed);
   }
 
   @override
   void dispose() {
-    _nameController.removeListener(_onNameChanged);
-    _nameController.dispose();
     _requiredController.dispose();
-    _nameFocus.dispose();
     super.dispose();
   }
 
@@ -107,11 +99,8 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
   }
 
   Future<void> _suggestFromHistory() async {
-    final productName = _nameController.text.trim();
-    if (productName.isEmpty) {
-      setState(() => _suggestError = 'Enter a product name first.');
-      return;
-    }
+    final productId = _selectedProductId;
+    if (productId == null) return;
     setState(() {
       _isSuggesting = true;
       _suggestError = null;
@@ -119,9 +108,12 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
     try {
       final suggestion = await _service.suggestRequiredPerDay(
         factoryId: widget.factoryId,
-        productName: productName,
+        productId: productId,
       );
       if (suggestion == null) {
+        final productName = _products
+            .firstWhere((p) => p.productId == productId)
+            .productName;
         setState(
           () => _suggestError =
               'No shipment history found for "$productName" in the last 30 days.',
@@ -143,12 +135,18 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    final productId = _selectedProductId;
+    if (productId == null) return;
     setState(() => _isSaving = true);
     try {
+      final productName = _products
+          .firstWhere((p) => p.productId == productId)
+          .productName;
       final forecast = DemandForecast(
         demandId: widget.forecast?.demandId ?? 0,
         factoryId: widget.factoryId,
-        productName: _nameController.text.trim(),
+        productId: productId,
+        productName: productName,
         requiredPerDay: int.parse(_requiredController.text),
         periodStart: _periodStart,
         periodEnd: _periodEnd,
@@ -172,223 +170,149 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
     }
   }
 
-  /// The product name field, backed by the real finished-stock names.
-  ///
-  /// [RawAutocomplete] rather than [Autocomplete] because the surrounding
-  /// form already owns [_nameController] — the save path and the
-  /// suggest-from-history button both read it — and only RawAutocomplete
-  /// accepts an external controller.
-  Widget _buildProductNameField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        RawAutocomplete<String>(
-          textEditingController: _nameController,
-          focusNode: _nameFocus,
-          optionsBuilder: (value) {
-            final typed = normaliseProductName(value.text);
-            if (typed.isEmpty) return _productNames;
-            return _productNames.where(
-              (name) => normaliseProductName(name).contains(typed),
-            );
-          },
-          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-            return TextFormField(
-              controller: controller,
-              focusNode: focusNode,
-              onFieldSubmitted: (_) => onFieldSubmitted(),
-              decoration: InputDecoration(
-                labelText: 'Product name',
-                helperText: _productNames.isEmpty
-                    ? 'Match the product name used in Finished Stock to link them'
-                    : 'Pick an existing product so the forecast links to it',
-                suffixIcon: _productNames.isEmpty
-                    ? null
-                    : const Icon(Icons.arrow_drop_down),
-              ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-            );
-          },
-          optionsViewBuilder: (context, onSelected, options) {
-            final items = options.toList();
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 240),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    itemCount: items.length,
-                    itemBuilder: (context, index) => ListTile(
-                      title: Text(items[index]),
-                      onTap: () => onSelected(items[index]),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        if (_productNamesLoaded && !_nameMatchesProduct)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.xs),
-            child: _buildUnmatchedNameWarning(),
-          ),
-      ],
-    );
-  }
-
-  /// Shown while the typed name lands on no product. This forecast would
-  /// still save — demand is allowed to run ahead of a product being created
-  /// — but it would count toward nothing until the names agree, which is
-  /// exactly the silent failure worth naming out loud.
-  Widget _buildUnmatchedNameWarning() {
-    final suggestion = closestProductName(_nameController.text, _productNames);
-    final theme = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
-        const SizedBox(width: AppSpacing.xs),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _productNames.isEmpty
-                    ? 'No finished-stock products exist yet, so this forecast '
-                          'will not count toward days of cover.'
-                    : 'No product with this name — this forecast will not '
-                          'count toward days of cover.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.warning,
-                ),
-              ),
-              if (suggestion != null)
-                TextButton(
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 32),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () {
-                    _nameController.text = suggestion;
-                    _nameController.selection = TextSelection.collapsed(
-                      offset: suggestion.length,
-                    );
-                  },
-                  child: Text('Use "$suggestion"'),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? 'Edit demand' : 'Add demand')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.l),
+      body: SafeArea(child: _buildBody()),
+    );
+  }
+
+  Widget _buildBody() {
+    switch (_state) {
+      case _LoadState.loading:
+        return const LoadingIndicator();
+      case _LoadState.error:
+        return EmptyState.error(onAction: _load);
+      case _LoadState.ready:
+        if (_products.isEmpty) {
+          return const EmptyState(
+            icon: Icons.category_outlined,
+            message:
+                'No products yet — add a product first, a demand forecast '
+                'must target one.',
+          );
+        }
+        return _buildForm();
+    }
+  }
+
+  Widget _buildForm() {
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.all(AppSpacing.l),
+        children: [
+          ResponsiveFormFields(
             children: [
-              ResponsiveFormFields(
-                children: [
-                  _buildProductNameField(),
-                  const SizedBox(height: AppSpacing.l),
-                  TextFormField(
-                    controller: _requiredController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Required units per day',
-                      helperText:
-                          'A number you set, or derive one from shipment history below',
-                    ),
-                    validator: (v) {
-                      final parsed = int.tryParse(v ?? '');
-                      if (parsed == null || parsed < 0) {
-                        return 'Enter a non-negative whole number';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.s),
-                  FormBreak(
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
-                        onPressed: _isSuggesting ? null : _suggestFromHistory,
-                        icon: _isSuggesting
-                            ? const SizedBox(
-                                height: 16,
-                                width: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.auto_graph, size: 18),
-                        label: const Text('Suggest from shipment history'),
+              DropdownButtonFormField<int>(
+                initialValue: _selectedProductId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Product'),
+                items: [
+                  for (final product in _products)
+                    DropdownMenuItem(
+                      value: product.productId,
+                      child: Text(
+                        product.isGeneral
+                            ? '${product.productName} (auto-created)'
+                            : product.productName,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ),
-                  if (_suggestError != null)
-                    FormBreak(
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.xs),
-                        child: Text(
-                          _suggestError!,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: AppSpacing.l),
-                  FormBreak(
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Period start (optional)'),
-                      subtitle: Text(_formatDate(_periodStart)),
-                      trailing: const Icon(Icons.calendar_today_outlined),
-                      onTap: () => _pickDate(isStart: true),
-                    ),
-                  ),
-                  FormBreak(
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Period end (optional)'),
-                      subtitle: Text(_formatDate(_periodEnd)),
-                      trailing: const Icon(Icons.calendar_today_outlined),
-                      onTap: () => _pickDate(isStart: false),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  FormBreak(
-                    FilledButton(
-                      onPressed: _isSaving ? null : _save,
-                      child: _isSaving
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Save'),
-                    ),
-                  ),
                 ],
+                // Locked once editing an existing forecast — changing the
+                // product would silently redirect an existing forecast's
+                // history onto a different product instead of creating a
+                // new one for it; delete and re-add is the explicit way.
+                onChanged: _isEditing
+                    ? null
+                    : (value) => setState(() => _selectedProductId = value),
+                validator: (v) => v == null ? 'Required' : null,
+              ),
+              const SizedBox(height: AppSpacing.l),
+              TextFormField(
+                controller: _requiredController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Required units per day',
+                  helperText:
+                      'A number you set, or derive one from shipment history below',
+                ),
+                validator: (v) {
+                  final parsed = int.tryParse(v ?? '');
+                  if (parsed == null || parsed < 0) {
+                    return 'Enter a non-negative whole number';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: AppSpacing.s),
+              FormBreak(
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: (_isSuggesting || _selectedProductId == null)
+                        ? null
+                        : _suggestFromHistory,
+                    icon: _isSuggesting
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_graph, size: 18),
+                    label: const Text('Suggest from shipment history'),
+                  ),
+                ),
+              ),
+              if (_suggestError != null)
+                FormBreak(
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      _suggestError!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: AppSpacing.l),
+              FormBreak(
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Period start (optional)'),
+                  subtitle: Text(_formatDate(_periodStart)),
+                  trailing: const Icon(Icons.calendar_today_outlined),
+                  onTap: () => _pickDate(isStart: true),
+                ),
+              ),
+              FormBreak(
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Period end (optional)'),
+                  subtitle: Text(_formatDate(_periodEnd)),
+                  trailing: const Icon(Icons.calendar_today_outlined),
+                  onTap: () => _pickDate(isStart: false),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              FormBreak(
+                FilledButton(
+                  onPressed: _isSaving ? null : _save,
+                  child: _isSaving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }

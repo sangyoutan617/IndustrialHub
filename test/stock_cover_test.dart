@@ -15,6 +15,7 @@ void main() {
   FinishedStock stock({int quantity = 100}) => FinishedStock(
     stockId: 1,
     factoryId: 1,
+    productId: 1,
     productName: 'Test Product',
     currentQuantity: quantity,
   );

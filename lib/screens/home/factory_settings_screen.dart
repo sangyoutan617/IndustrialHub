@@ -4,6 +4,7 @@ import '../../models/factory.dart';
 import '../../models/msic_code.dart';
 import '../../services/capacity_service.dart';
 import '../../services/factory_service.dart';
+import '../../widgets/msic_field.dart';
 import '../../widgets/responsive_form_fields.dart';
 
 /// Edit a factory's location, state, and industry after it's been created —
@@ -126,22 +127,9 @@ class _FactorySettingsScreenState extends State<FactorySettingsScreen> {
                     onChanged: (v) => setState(() => _selectedState = v),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedMsic,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Industry (MSIC)',
-                    ),
-                    items: [
-                      for (final code in _msicCodes)
-                        DropdownMenuItem(
-                          value: code.msicCode,
-                          child: Text(
-                            code.description,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
+                  MsicField(
+                    codes: _msicCodes,
+                    selectedCode: _selectedMsic,
                     onChanged: (v) => setState(() => _selectedMsic = v),
                   ),
                   const SizedBox(height: 28),

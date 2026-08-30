@@ -1,6 +1,12 @@
 class DailyProduction {
   final int dailyId;
   final int factoryId;
+
+  /// Which product this day's output was logged against. `daily_production`
+  /// now carries one row per (factory, product, day) rather than one per
+  /// (factory, day) — a factory producing several products logs several
+  /// rows for the same date.
+  final int productId;
   final DateTime logDate;
   final int actualOutput;
   final double? machineCapacity;
@@ -14,6 +20,7 @@ class DailyProduction {
   const DailyProduction({
     required this.dailyId,
     required this.factoryId,
+    required this.productId,
     required this.logDate,
     required this.actualOutput,
     this.machineCapacity,
@@ -29,6 +36,7 @@ class DailyProduction {
     return DailyProduction(
       dailyId: json['daily_id'] as int,
       factoryId: json['factory_id'] as int,
+      productId: json['product_id'] as int,
       logDate: DateTime.parse(json['log_date'] as String),
       actualOutput: json['actual_output'] as int,
       machineCapacity: (json['machine_capacity'] as num?)?.toDouble(),

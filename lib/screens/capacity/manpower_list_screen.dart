@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../models/manpower.dart';
+import '../../models/product.dart';
 import '../../services/capacity_service.dart';
 import '../../services/manpower_service.dart';
+import '../../services/product_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
@@ -23,8 +25,10 @@ enum _LoadState { loading, error, ready }
 
 class _ManpowerListScreenState extends State<ManpowerListScreen> {
   final _service = ManpowerService();
+  final _productService = ProductService();
   _LoadState _state = _LoadState.loading;
   List<Manpower> _shifts = [];
+  Map<int, String> _productNames = {};
 
   @override
   void initState() {
@@ -35,9 +39,17 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final shifts = await _service.getShifts(widget.factoryId);
+      final results = await Future.wait<dynamic>([
+        _service.getShifts(widget.factoryId),
+        _productService.getProducts(widget.factoryId),
+      ]);
+      final shifts = results[0] as List<Manpower>;
+      final products = results[1] as List<Product>;
       setState(() {
         _shifts = shifts;
+        _productNames = {
+          for (final p in products) p.productId: p.productName,
+        };
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -174,9 +186,22 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: Text(
-          '${shift.workerCount} workers × ${shift.shiftHours}h × '
-          '${shift.outputPerWorkerHour}/worker-hour',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${shift.workerCount} workers × ${shift.shiftHours}h × '
+              '${shift.outputPerWorkerHour}/worker-hour',
+            ),
+            Text(
+              _productNames[shift.productId] ?? 'Unknown product',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,

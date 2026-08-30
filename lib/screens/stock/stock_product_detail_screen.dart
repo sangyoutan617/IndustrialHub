@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
+import '../../services/product_service.dart';
 import '../../services/stock_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/error_state.dart';
@@ -37,6 +38,7 @@ enum _LoadState { loading, error, notFound, ready }
 
 class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
   final _service = StockService();
+  final _productService = ProductService();
   _LoadState _state = _LoadState.loading;
   ProductCover? _cover;
 
@@ -69,6 +71,10 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
     }
   }
 
+  /// Renames the underlying product itself (via ProductService), not just
+  /// this screen's local view of it — a product's name is shared across
+  /// every module now (Capacity, Supply's bill of materials, demand
+  /// forecasts), so fixing a typo here fixes it everywhere at once.
   Future<void> _rename() async {
     final stock = _cover!.stock;
     final newName = await showTextPromptDialog(
@@ -82,7 +88,7 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
     // are left to check here.
     if (!mounted || newName == null || newName == stock.productName) return;
     try {
-      await _service.updateStock(stock.stockId, newName);
+      await _productService.renameProduct(stock.productId, newName);
       if (!mounted) return;
       _load();
       ScaffoldMessenger.of(

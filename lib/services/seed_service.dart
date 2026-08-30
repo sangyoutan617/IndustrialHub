@@ -1,17 +1,21 @@
+import '../models/bom_entry.dart';
 import '../models/demand_forecast.dart';
 import '../models/factory.dart';
 import '../models/machine.dart';
 import '../models/manpower.dart';
+import '../models/product.dart';
 import '../models/purchase_order.dart';
 import '../models/raw_material.dart';
 import '../models/stock_movement.dart';
 import '../models/supplier.dart';
+import 'bom_service.dart';
 import 'demand_service.dart';
 import 'factory_service.dart';
 import 'machine_service.dart';
 import 'manpower_service.dart';
 import 'material_service.dart';
 import 'order_service.dart';
+import 'product_service.dart';
 import 'stock_service.dart';
 import 'supplier_service.dart';
 
@@ -31,6 +35,8 @@ class SeedService {
   final _machineService = MachineService();
   final _manpowerService = ManpowerService();
   final _materialService = MaterialService();
+  final _productService = ProductService();
+  final _bomService = BomService();
   final _supplierService = SupplierService();
   final _stockService = StockService();
   final _demandService = DemandService();
@@ -45,9 +51,14 @@ class SeedService {
     }
 
     final factory = await _seedFactory();
-    await _seedMachines(factory.factoryId);
-    await _seedManpower(factory.factoryId);
-    final materials = await _seedMaterials(factory.factoryId);
+    // createFactory() auto-creates one "General" product per factory —
+    // demo machines/manpower don't model distinct products, so everything
+    // seeded here attaches to it, same as a real factory's legacy data.
+    final products = await _productService.getProducts(factory.factoryId);
+    final generalProductId = products.firstWhere((p) => p.isGeneral).productId;
+    await _seedMachines(factory.factoryId, generalProductId);
+    await _seedManpower(factory.factoryId, generalProductId);
+    final materials = await _seedMaterials(factory.factoryId, generalProductId);
     final suppliers = await _seedSuppliers(materials);
     await _seedStockAndDemand(factory.factoryId);
     await _simulateOrders(materials, suppliers);
@@ -64,7 +75,7 @@ class SeedService {
     );
   }
 
-  Future<List<Machine>> _seedMachines(int factoryId) async {
+  Future<List<Machine>> _seedMachines(int factoryId, int productId) async {
     final specs = [
       ('Extruder Line A', 50.0, 16.0, 95.0, 'Active'),
       ('Extruder Line B', 40.0, 16.0, 90.0, 'Active'),
@@ -78,6 +89,7 @@ class SeedService {
           Machine(
             machineId: 0,
             factoryId: factoryId,
+            productId: productId,
             machineName: name,
             ratedOutputPerHour: rated,
             operatingHoursPerDay: hours,
@@ -92,13 +104,14 @@ class SeedService {
     return created;
   }
 
-  Future<void> _seedManpower(int factoryId) async {
+  Future<void> _seedManpower(int factoryId, int productId) async {
     final specs = [('Day Shift', 15, 8.0, 5.0), ('Night Shift', 8, 8.0, 4.0)];
     for (final (name, workers, hours, perHour) in specs) {
       await _manpowerService.createShift(
         Manpower(
           manpowerId: 0,
           factoryId: factoryId,
+          productId: productId,
           shiftName: name,
           workerCount: workers,
           shiftHours: hours,
@@ -110,26 +123,36 @@ class SeedService {
     }
   }
 
-  Future<List<RawMaterial>> _seedMaterials(int factoryId) async {
+  /// [productId] receives each material's demo consumption rate as a
+  /// product_materials (BOM) row — the seeded machines/manpower attach to
+  /// the same General product, so a single recipe there is enough to
+  /// exercise burn-rate/stock-out projections for the demo factory.
+  Future<List<RawMaterial>> _seedMaterials(int factoryId, int productId) async {
     final specs = [
       ('Plastic Resin', 20000.0, 'kg', 3.0, 4.5),
       ('Colorant', 800.0, 'litres', 0.5, 12.0),
       ('Packaging Boxes', 10000.0, 'boxes', 1.0, 0.8),
     ];
     final created = <RawMaterial>[];
-    for (final (name, stock, unit, consumption, unitCost) in specs) {
-      created.add(
-        await _materialService.createMaterial(
-          RawMaterial(
-            materialId: 0,
-            factoryId: factoryId,
-            materialName: name,
-            currentStock: stock,
-            unit: unit,
-            consumptionPerUnit: consumption,
-            unitCost: unitCost,
-          ),
+    for (final (name, stock, unit, consumptionPerUnit, unitCost) in specs) {
+      final material = await _materialService.createMaterial(
+        RawMaterial(
+          materialId: 0,
+          factoryId: factoryId,
+          materialName: name,
+          currentStock: stock,
+          unit: unit,
+          unitCost: unitCost,
         ),
+      );
+      created.add(material);
+      await _bomService.upsertEntry(
+        BomEntry(
+          productId: productId,
+          materialId: material.materialId,
+          quantityPerUnit: consumptionPerUnit,
+        ),
+        factoryId: factoryId,
       );
     }
     return created;
@@ -191,9 +214,20 @@ class SeedService {
     return created;
   }
 
+  /// A distinct real product (not the machines/manpower/materials' shared
+  /// General one) — finished stock and demand forecasts are always about a
+  /// specific product, so the demo needs at least one to seed them against.
   Future<void> _seedStockAndDemand(int factoryId) async {
     const productName = 'Sparkling Water 500ml';
-    final stock = await _stockService.createStock(factoryId, productName, 0);
+    final product = await _productService.createProduct(
+      Product(
+        productId: 0,
+        factoryId: factoryId,
+        productName: productName,
+        unit: 'bottles',
+      ),
+    );
+    final stock = await _stockService.createStock(factoryId, product, 0);
 
     final now = DateTime.now();
     await _stockService.recordMovement(
@@ -217,6 +251,7 @@ class SeedService {
       DemandForecast(
         demandId: 0,
         factoryId: factoryId,
+        productId: product.productId,
         productName: productName,
         requiredPerDay: 1000,
       ),

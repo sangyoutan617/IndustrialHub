@@ -4,7 +4,6 @@ class RawMaterial {
   final String materialName;
   final double currentStock;
   final String unit;
-  final double consumptionPerUnit;
   final int safetyStockDays;
 
   /// Cost of one [unit] of this material on hand, in the factory's currency
@@ -18,7 +17,6 @@ class RawMaterial {
     required this.materialName,
     required this.currentStock,
     required this.unit,
-    required this.consumptionPerUnit,
     this.safetyStockDays = 3,
     this.unitCost,
   });
@@ -30,7 +28,6 @@ class RawMaterial {
       materialName: json['material_name'] as String,
       currentStock: (json['current_stock'] as num).toDouble(),
       unit: json['unit'] as String? ?? 'kg',
-      consumptionPerUnit: (json['consumption_per_unit'] as num).toDouble(),
       // Falls back to 3 when the column hasn't been migrated yet, so the
       // app keeps working against an older database schema.
       safetyStockDays: (json['safety_stock_days'] as num?)?.toInt() ?? 3,
@@ -46,7 +43,6 @@ class RawMaterial {
       'material_name': materialName,
       'current_stock': currentStock,
       'unit': unit,
-      'consumption_per_unit': consumptionPerUnit,
       'safety_stock_days': safetyStockDays,
       'unit_cost': unitCost,
     };

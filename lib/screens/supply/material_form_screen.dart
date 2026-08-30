@@ -27,9 +27,6 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
   late final _unitController = TextEditingController(
     text: widget.material?.unit ?? 'kg',
   );
-  late final _consumptionController = TextEditingController(
-    text: widget.material?.consumptionPerUnit.toString(),
-  );
   late final _unitCostController = TextEditingController(
     text: widget.material?.unitCost?.toString() ?? '',
   );
@@ -45,7 +42,6 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
     _nameController.dispose();
     _stockController.dispose();
     _unitController.dispose();
-    _consumptionController.dispose();
     _unitCostController.dispose();
     _safetyStockController.dispose();
     super.dispose();
@@ -63,7 +59,6 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
         unit: _unitController.text.trim().isEmpty
             ? 'kg'
             : _unitController.text.trim(),
-        consumptionPerUnit: double.parse(_consumptionController.text),
         safetyStockDays: int.parse(_safetyStockController.text),
         unitCost: double.parse(_unitCostController.text),
       );
@@ -149,24 +144,22 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                     validator: (v) => _requiredNumber(v, min: 0),
                   ),
                   const FormBreak(
+                    Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'How much of this material a product consumes is now '
+                        'set per-product — open a product and add this '
+                        'material to its recipe.',
+                        style: TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                  ),
+                  const FormBreak(
                     SectionHeader(
-                      title: 'Consumption & reorder settings',
+                      title: 'Reorder settings',
                       padding: EdgeInsets.only(top: 20, bottom: 4),
                     ),
                   ),
-                  TextFormField(
-                    controller: _consumptionController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Consumption per product unit',
-                      helperText:
-                          'How much of this material one produced unit uses',
-                    ),
-                    validator: (v) => _requiredNumber(v, min: 0),
-                  ),
-                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _safetyStockController,
                     keyboardType: TextInputType.number,

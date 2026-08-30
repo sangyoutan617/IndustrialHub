@@ -6,22 +6,27 @@ import 'data_event_service.dart';
 class DemandService {
   final SupabaseClient _client = Supabase.instance.client;
 
+  static const _selectWithProduct = '*, products(product_name)';
+
   Future<List<DemandForecast>> getForecasts(int factoryId) async {
     final rows = await _client
         .from('demand_forecast')
-        .select()
-        .eq('factory_id', factoryId)
-        .order('product_name', ascending: true);
-    return (rows as List)
+        .select(_selectWithProduct)
+        .eq('factory_id', factoryId);
+    // Sorted client-side by the joined product name — demand_forecast has
+    // no product-name column of its own to order the query by any more.
+    final list = (rows as List)
         .map((row) => DemandForecast.fromJson(row as Map<String, dynamic>))
         .toList();
+    list.sort((a, b) => a.productName.compareTo(b.productName));
+    return list;
   }
 
   Future<DemandForecast> createForecast(DemandForecast forecast) async {
     final row = await _client
         .from('demand_forecast')
         .insert(forecast.toInsertJson(forecast.factoryId))
-        .select()
+        .select(_selectWithProduct)
         .single();
     final result = DemandForecast.fromJson(row);
     DataEventService.instance.notifyChanged(
@@ -39,7 +44,7 @@ class DemandService {
         .from('demand_forecast')
         .update(forecast.toInsertJson(forecast.factoryId))
         .eq('demand_id', demandId)
-        .select()
+        .select(_selectWithProduct)
         .single();
     final result = DemandForecast.fromJson(row);
     DataEventService.instance.notifyChanged(
@@ -62,19 +67,19 @@ class DemandService {
   /// Suggests a required_per_day baseline from actual shipment history,
   /// rather than leaving it as a number the user just types with no basis.
   /// Purely a suggestion — the caller still lets the user override it.
-  /// Returns null if there's no matching finished_stock row (product name
-  /// hasn't been used yet) or no shipment_out movements to derive a rate
-  /// from.
+  /// Returns null if there's no matching finished_stock row (this product
+  /// isn't tracked as finished stock yet) or no shipment_out movements to
+  /// derive a rate from.
   Future<double?> suggestRequiredPerDay({
     required int factoryId,
-    required String productName,
+    required int productId,
     int lookbackDays = 30,
   }) async {
     final stockRow = await _client
         .from('finished_stock')
         .select('stock_id')
         .eq('factory_id', factoryId)
-        .ilike('product_name', productName)
+        .eq('product_id', productId)
         .maybeSingle();
     if (stockRow == null) return null;
     final stockId = stockRow['stock_id'] as int;

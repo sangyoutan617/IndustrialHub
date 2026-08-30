@@ -202,9 +202,22 @@ class CapacityService {
     return machineCapacity < manpowerCapacity ? 'MACHINE' : 'MANPOWER';
   }
 
-  Future<CapacitySnapshot> getSnapshot(int factoryId) async {
-    final machines = await _machineService.getMachines(factoryId);
-    final shifts = await _manpowerService.getShifts(factoryId);
+  /// [productId] filters to just that product's own machines/shifts —
+  /// every screen that shows a capacity ceiling is now scoped to one
+  /// product at a time, since a machine/shift belongs to exactly one
+  /// product (see [Machine.productId]/[Manpower.productId]). Omitting it
+  /// returns the old factory-wide total, still used by the couple of
+  /// call sites (cross-factory admin rollups, the PDF report) that
+  /// haven't been product-scoped yet.
+  Future<CapacitySnapshot> getSnapshot(int factoryId, {int? productId}) async {
+    final allMachines = await _machineService.getMachines(factoryId);
+    final allShifts = await _manpowerService.getShifts(factoryId);
+    final machines = productId == null
+        ? allMachines
+        : allMachines.where((m) => m.productId == productId).toList();
+    final shifts = productId == null
+        ? allShifts
+        : allShifts.where((s) => s.productId == productId).toList();
 
     final machineCapacity = computeMachineCapacity(machines);
     final manpowerCapacity = computeManpowerCapacity(shifts);

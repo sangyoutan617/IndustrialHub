@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../models/factory.dart';
 import '../../models/msic_code.dart';
+import '../../models/product.dart';
 import '../../models/productivity_benchmark.dart';
 import '../../services/bottleneck_service.dart';
 import '../../services/capacity_service.dart';
+import '../../services/product_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../capacity/benchmark_screen.dart';
 import '../capacity/machine_list_screen.dart';
@@ -63,11 +65,25 @@ class _HomeData {
   final MsicCode? msic;
   final ProductivityBenchmark? productivity;
 
+  /// Every product this factory has, and which one [bottleneck] was
+  /// computed for — the hero card is scoped to one product at a time now
+  /// that machines/manpower/materials each belong to a specific product.
+  final List<Product> products;
+  final Product selectedProduct;
+
+  /// Every product's own verdict — not just [selectedProduct]'s — so the AI
+  /// insight can narrate the whole factory rather than only the currently
+  /// viewed product.
+  final List<ProductBottleneck> allBottlenecks;
+
   const _HomeData({
     required this.bottleneck,
     required this.outputPerWorker,
     required this.msic,
     required this.productivity,
+    required this.products,
+    required this.selectedProduct,
+    required this.allBottlenecks,
   });
 }
 
@@ -113,9 +129,11 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     with SingleTickerProviderStateMixin {
   final _bottleneckService = BottleneckService();
   final _capacityService = CapacityService();
+  final _productService = ProductService();
 
   late Future<_HomeData> _future;
   late final AnimationController _pulseController;
+  int? _selectedProductId;
 
   @override
   void initState() {
@@ -132,6 +150,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
   void didUpdateWidget(covariant DashboardHomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.factory.factoryId != widget.factory.factoryId) {
+      _selectedProductId = null;
       setState(() => _future = _load());
     }
   }
@@ -142,11 +161,45 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     super.dispose();
   }
 
+  Product _defaultProduct(List<Product> products) =>
+      products.firstWhere((p) => !p.isGeneral, orElse: () => products.first);
+
   Future<_HomeData> _load() async {
     final factoryId = widget.factory.factoryId;
-    final bottleneck = await _bottleneckService.computeForFactory(factoryId);
-    final snapshot = await _capacityService.getSnapshot(factoryId);
+    final products = await _productService.getProducts(factoryId);
+    if (products.isEmpty) {
+      // Shouldn't happen — every factory gets an auto-created General
+      // product — but there's nothing to show a bottleneck verdict for if
+      // it somehow does. Falls through to the existing error UI.
+      throw StateError('No products configured for this factory.');
+    }
+    final selected = _selectedProductId != null
+        ? products.firstWhere(
+            (p) => p.productId == _selectedProductId,
+            orElse: () => _defaultProduct(products),
+          )
+        : _defaultProduct(products);
+    _selectedProductId = selected.productId;
+
+    final bottleneck = await _bottleneckService.computeForProduct(
+      factoryId,
+      selected.productId,
+    );
+    final snapshot = await _capacityService.getSnapshot(
+      factoryId,
+      productId: selected.productId,
+    );
     final outputPerWorker = _capacityService.outputPerWorker(snapshot);
+
+    final allResults = await Future.wait(
+      products.map(
+        (p) => _bottleneckService.computeForProduct(factoryId, p.productId),
+      ),
+    );
+    final allBottlenecks = [
+      for (var i = 0; i < products.length; i++)
+        ProductBottleneck(product: products[i], bottleneck: allResults[i]),
+    ];
 
     MsicCode? msic;
     ProductivityBenchmark? productivity;
@@ -165,10 +218,21 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       outputPerWorker: outputPerWorker,
       msic: msic,
       productivity: productivity,
+      products: products,
+      selectedProduct: selected,
+      allBottlenecks: allBottlenecks,
     );
   }
 
   void _retry() => setState(() => _future = _load());
+
+  void _setProduct(int? productId) {
+    if (productId == null || productId == _selectedProductId) return;
+    setState(() {
+      _selectedProductId = productId;
+      _future = _load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -219,15 +283,16 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
 
   Widget _buildReady(_HomeData data, _Palette pal) {
     final result = data.bottleneck;
-    // Factory-wide AI narration tying material/machine/manpower into a
-    // single verdict. Narrates the already-computed bottleneck result;
-    // never recalculates it. See _buildFactoryPrompt. Built once here and
-    // handed to whichever layout (portrait/landscape) is active below, so
-    // rotating never recreates — and re-fetches — the AI card.
+    // Per-product AI narration tying material/machine/manpower into a
+    // single verdict for whichever product is selected. Narrates the
+    // already-computed bottleneck result; never recalculates it. See
+    // _buildProductPrompt. Built once here and handed to whichever layout
+    // (portrait/landscape) is active below, so rotating never recreates —
+    // and re-fetches — the AI card.
     final aiInsight = result.hasData
         ? AiInsightCard(
-            buildPrompt: () => _buildFactoryPrompt(result),
-            system: _factorySystem,
+            buildPrompt: () => _buildProductPrompt(data),
+            system: _productSystem,
           )
         : null;
 
@@ -247,7 +312,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
-        RepaintBoundary(child: _buildHeader(result, pal)),
+        RepaintBoundary(child: _buildHeader(result, data, pal)),
         const SizedBox(height: 16),
         RepaintBoundary(child: _buildHeroCard(result, pal)),
         const SizedBox(height: 16),
@@ -263,40 +328,73 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
 
   // ---------------- Factory-wide AI summary ----------------
 
-  // Deterministic figures only — the whole bottleneck verdict is computed by
-  // compute_bottleneck() (BottleneckService). The AI card just narrates which
-  // of material/machine/manpower is the single binding constraint.
-  static const _factorySystem =
+  // Deterministic figures only — every bottleneck verdict is computed by
+  // compute_bottleneck() (BottleneckService), once per product. The AI card
+  // narrates the whole factory's picture and calls out the currently viewed
+  // product's own binding constraint; it never computes anything itself.
+  static const _productSystem =
       'You are a factory operations assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. In '
-      '2-3 short, plain-language sentences for a factory manager, say whether '
-      'the factory can meet demand and which single resource — raw material, '
-      'machines, or manpower — is the binding constraint, then give one '
-      'concrete next step based only on the numbers provided. No markdown, no '
+      '2-3 short, plain-language sentences for a factory manager, say how '
+      'many of this factory\'s products are meeting demand and which single '
+      'resource — raw material, machines, or manpower — is the binding '
+      'constraint for the currently viewed product, then give one concrete '
+      'next step based only on the numbers provided. No markdown, no '
       'headings, under 80 words.';
 
-  String _buildFactoryPrompt(BottleneckResult r) {
+  // Enumerates every product's own verdict — sorted by urgency, most-short
+  // first — the same template stock_dashboard_screen.dart's
+  // _buildStockPrompt established for this app's other multi-item
+  // dashboards, then calls out the currently viewed product's full
+  // machine/manpower/material breakdown (this RPC's richest figure,
+  // available only for whichever product is picked).
+  String _buildProductPrompt(_HomeData data) {
+    final withData = data.allBottlenecks.where((p) => p.bottleneck.hasData).toList();
+    final noDataCount = data.allBottlenecks.length - withData.length;
+    final short = withData.where((p) => !p.bottleneck.canMeetDemand).toList()
+      ..sort(
+        (a, b) => (b.bottleneck.shortfall ?? 0).compareTo(
+          a.bottleneck.shortfall ?? 0,
+        ),
+      );
+
     final buffer = StringBuffer()
-      ..writeln('Achievable output: ${formatUnits(r.achievable)}/day')
-      ..writeln('Demand required: ${formatUnits(r.requiredPerDay)}/day')
-      ..writeln('Can meet demand: ${r.canMeetDemand ? 'yes' : 'no'}')
+      ..writeln('Products tracked: ${data.allBottlenecks.length}')
+      ..writeln(
+        'Meeting demand: ${withData.length - short.length} of ${withData.length}',
+      );
+    if (noDataCount > 0) {
+      buffer.writeln('Products with no production data yet: $noDataCount');
+    }
+    for (final pb in withData) {
+      final r = pb.bottleneck;
+      final line = StringBuffer(
+        '- ${pb.product.productName}: ${formatUnits(r.achievable)}/day '
+        'achievable vs ${formatUnits(r.requiredPerDay)}/day required',
+      );
+      line.write(
+        r.canMeetDemand
+            ? ' (meeting demand)'
+            : ' (short by ${formatUnits(r.shortfall ?? 0)}/day, '
+                  '${_limiterLabel(r.limiter ?? r.bottleneckResource)} limited)',
+      );
+      buffer.writeln(line.toString());
+    }
+
+    final r = data.bottleneck;
+    buffer
+      ..writeln('Currently viewing: ${data.selectedProduct.productName}')
       ..writeln('Machine capacity: ${formatUnits(r.machineCapacity)}/day')
       ..writeln('Manpower capacity: ${formatUnits(r.manpowerCapacity)}/day')
       ..writeln(
         'Raw-material ceiling: ${r.materialCeiling != null ? '${formatUnits(r.materialCeiling!)}/day' : 'not set'}',
       );
-    if (r.limiter != null) {
-      buffer.writeln('Binding constraint: ${_limiterLabel(r.limiter)}');
-    }
-    if (r.shortfall != null) {
-      buffer.writeln('Shortfall vs demand: ${formatUnits(r.shortfall!)}/day');
-    }
     return buffer.toString();
   }
 
   // ---------------- Header ----------------
 
-  Widget _buildHeader(BottleneckResult result, _Palette pal) {
+  Widget _buildHeader(BottleneckResult result, _HomeData data, _Palette pal) {
     final hasData = result.hasData;
     final healthy = hasData && result.canMeetDemand;
     final dotColor = !hasData
@@ -325,6 +423,10 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
           formatDate(DateTime.now()),
           style: TextStyle(color: pal.textSecondary, fontSize: 13),
         ),
+        if (data.products.length > 1) ...[
+          const SizedBox(height: 10),
+          _buildProductPicker(data, pal),
+        ],
         const SizedBox(height: 12),
         Container(
           width: double.infinity,
@@ -351,6 +453,44 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
           ),
         ),
       ],
+    );
+  }
+
+  /// Only shown once a factory has a second product — with just the
+  /// auto-created General catch-all there's nothing to pick between.
+  Widget _buildProductPicker(_HomeData data, _Palette pal) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: pal.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: pal.cardBorder),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: data.selectedProduct.productId,
+          isExpanded: true,
+          isDense: true,
+          dropdownColor: pal.card,
+          icon: Icon(Icons.expand_more, color: pal.textSecondary, size: 18),
+          style: TextStyle(
+            color: pal.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          items: [
+            for (final p in data.products)
+              DropdownMenuItem(
+                value: p.productId,
+                child: Text(
+                  p.isGeneral ? '${p.productName} (auto-created)' : p.productName,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: _setProduct,
+        ),
+      ),
     );
   }
 

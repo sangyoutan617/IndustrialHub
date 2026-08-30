@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/bom_entry.dart';
 import '../models/raw_material.dart';
 import '../models/raw_material_movement.dart';
 import 'data_event_service.dart';
@@ -77,19 +78,20 @@ class MaterialMovementService {
     );
   }
 
-  /// Deducts the raw material a production run consumed
-  /// ([MrpService.computeProductionConsumption]). Any material without enough
-  /// stock is skipped (its id returned) rather than driving stock negative, so
-  /// the caller can warn without the whole run failing. Never throws for
-  /// insufficient stock.
+  /// Deducts the raw material one product's production run consumed
+  /// ([MrpService.computeProductionConsumption], using that product's own
+  /// [bom]). Any material without enough stock is skipped (its id returned)
+  /// rather than driving stock negative, so the caller can warn without the
+  /// whole run failing. Never throws for insufficient stock.
   Future<List<int>> recordProductionConsumption({
     required int factoryId,
     required List<RawMaterial> materials,
+    required List<BomEntry> bom,
     required int unitsProduced,
     required DateTime date,
   }) async {
     final consumption = MrpService.computeProductionConsumption(
-      materials,
+      bom,
       unitsProduced,
     );
     final byId = {for (final m in materials) m.materialId: m};

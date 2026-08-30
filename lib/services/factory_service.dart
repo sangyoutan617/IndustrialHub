@@ -37,7 +37,22 @@ class FactoryService {
         })
         .select()
         .single();
-    return Factory.fromJson(row);
+    final factory = Factory.fromJson(row);
+    // Every factory that existed when multi-product support shipped got an
+    // auto-created "General" product via a one-time migration backfill —
+    // this is that same guarantee applied going forward, so a brand-new
+    // factory is never left with zero products (which would leave the
+    // machine/manpower forms with nothing to pick from). is_general can
+    // only ever be set here, never via ProductService's normal create path,
+    // and a partial unique index backstops at most one per factory even if
+    // this were ever called twice.
+    await _client.from('products').insert({
+      'factory_id': factory.factoryId,
+      'product_name': 'General',
+      'unit': 'units',
+      'is_general': true,
+    });
+    return factory;
   }
 
   Future<Factory> updateMsicCode(int factoryId, String msicCode) async {
