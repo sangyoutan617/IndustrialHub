@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
+import '../../models/product.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material_movement.dart';
+import '../../services/bom_service.dart';
 import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
 import '../../services/mrp_service.dart';
@@ -14,6 +16,7 @@ import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/material_projection_sheet.dart';
 import '../../widgets/status.dart';
+import '../products/product_detail_screen.dart';
 import 'material_form_screen.dart';
 import 'order_form_screen.dart';
 import 'supplier_comparison_screen.dart';
@@ -44,10 +47,12 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   final _supplyService = SupplyService();
   final _materialService = MaterialService();
   final _movementService = MaterialMovementService();
+  final _bomService = BomService();
 
   _LoadState _state = _LoadState.loading;
   MaterialPlan? _plan;
   List<RawMaterialMovement> _movements = [];
+  List<Product> _usedInProducts = [];
   int _loadToken = 0;
 
   @override
@@ -69,19 +74,27 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           break;
         }
       }
-      // Ledger is a nice-to-have; a failure here shouldn't blank the screen.
+      // Ledger and "used in" are both nice-to-haves; a failure in either
+      // shouldn't blank the whole screen.
       List<RawMaterialMovement> movements = const [];
+      List<Product> usedIn = const [];
       if (plan != null) {
         try {
           movements = await _movementService.getMovements(widget.materialId);
         } catch (e) {
           debugPrint('supply: failed to load material ledger: $e');
         }
+        try {
+          usedIn = await _bomService.getProductsUsing(widget.materialId);
+        } catch (e) {
+          debugPrint('supply: failed to load products using material: $e');
+        }
       }
       if (!mounted || token != _loadToken) return;
       setState(() {
         _plan = plan;
         _movements = movements;
+        _usedInProducts = usedIn;
         _state = plan != null ? _LoadState.ready : _LoadState.notFound;
       });
     } catch (e) {
@@ -456,6 +469,47 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           label: const Text('View 30-day trend'),
         ),
       ),
+      ..._usedInSection(theme),
+    ];
+  }
+
+  /// Read-only reverse lookup — every product whose recipe consumes this
+  /// material, so a manager can see what changing/removing it would affect
+  /// without opening each product individually. Editing the actual rate
+  /// happens on the product's own detail screen (ProductDetailScreen), not
+  /// here — a product's bill of materials is one thing a manager edits as a
+  /// whole, this is only the reverse view.
+  List<Widget> _usedInSection(ThemeData theme) {
+    return [
+      const SectionHeader(title: 'Used in'),
+      if (_usedInProducts.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+          child: Text(
+            'No product currently lists this material in its recipe.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        )
+      else
+        Card(
+          child: Column(
+            children: [
+              for (final product in _usedInProducts)
+                ListTile(
+                  title: Text(product.productName, overflow: TextOverflow.ellipsis),
+                  subtitle: product.isGeneral ? const Text('General') : null,
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProductDetailScreen(product: product),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
     ];
   }
 

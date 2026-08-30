@@ -4,6 +4,13 @@ class RawMaterial {
   final String materialName;
   final double currentStock;
   final String unit;
+
+  /// The old single-rate-per-material consumption assumption from before
+  /// multi-product support — "how much of this material one produced unit
+  /// uses," with no notion of *which* product. Superseded by the
+  /// product_materials bill-of-materials (see BomService); no longer
+  /// editable from the material form. Kept on the model only until nothing
+  /// reads it and the column is dropped.
   final double consumptionPerUnit;
   final int safetyStockDays;
 
@@ -18,7 +25,7 @@ class RawMaterial {
     required this.materialName,
     required this.currentStock,
     required this.unit,
-    required this.consumptionPerUnit,
+    this.consumptionPerUnit = 0,
     this.safetyStockDays = 3,
     this.unitCost,
   });
