@@ -1,4 +1,3 @@
-import '../core/product_name_matching.dart';
 import '../models/bom_entry.dart';
 import '../models/demand_forecast.dart';
 import '../models/product.dart';
@@ -112,21 +111,10 @@ class SupplyService {
     final productionFromForecast =
         forecasts.fold<int>(0, (sum, f) => sum + f.requiredPerDay) > 0;
 
-    // Attributes each forecast to a product by name — the same join
-    // stock_cover_loader.dart uses to match demand against finished stock,
-    // since demand_forecast doesn't carry a product_id FK yet (planned for
-    // phase h). A forecast matching no product contributes to no product's
-    // planned production, same as it already reads as "unmatched" on the
-    // Stock dashboard.
+    // Attributes each forecast to its product via the real FK (phase h).
     final forecastsByProduct = <int, List<DemandForecast>>{};
     for (final forecast in forecasts) {
-      final key = normaliseProductName(forecast.productName);
-      for (final product in products) {
-        if (normaliseProductName(product.productName) == key) {
-          forecastsByProduct.putIfAbsent(product.productId, () => []).add(forecast);
-          break;
-        }
-      }
+      forecastsByProduct.putIfAbsent(forecast.productId, () => []).add(forecast);
     }
 
     // Each product's own capacity (its own machines/shifts only — see

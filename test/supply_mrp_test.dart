@@ -95,6 +95,7 @@ DemandForecast _forecast({int requiredPerDay = 100}) {
   return DemandForecast(
     demandId: 1,
     factoryId: 1,
+    productId: 1,
     productName: 'Test product',
     requiredPerDay: requiredPerDay,
   );

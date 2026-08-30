@@ -10,6 +10,7 @@ DemandForecast _forecast({
   return DemandForecast(
     demandId: id,
     factoryId: 1,
+    productId: 1,
     productName: 'Widget',
     requiredPerDay: perDay,
     periodStart: start,
