@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:industrial_hub/models/bom_entry.dart';
 import 'package:industrial_hub/models/demand_forecast.dart';
+import 'package:industrial_hub/models/product.dart';
 import 'package:industrial_hub/models/purchase_order.dart';
 import 'package:industrial_hub/models/raw_material.dart';
 import 'package:industrial_hub/models/supplier.dart';
@@ -1068,6 +1069,67 @@ void main() {
         materialId: 1,
       );
       expect(rate, 0);
+    });
+  });
+
+  group('SupplyOverview.productContributionsFor', () {
+    Product product({int id = 1, String name = 'Product'}) {
+      return Product(productId: id, factoryId: 1, productName: name);
+    }
+
+    SupplyOverview overview({
+      required List<Product> products,
+      required List<BomEntry> bom,
+      required Map<int, double> plannedPerProduct,
+    }) {
+      return SupplyOverview(
+        materials: const [],
+        suppliers: const [],
+        orders: const [],
+        plans: const [],
+        products: products,
+        bom: bom,
+        plannedPerProduct: plannedPerProduct,
+        plannedProductionPerDay: 0,
+        productionFromForecast: false,
+      );
+    }
+
+    test('sorts contributors biggest first', () {
+      final o = overview(
+        products: [product(id: 1, name: 'A'), product(id: 2, name: 'B')],
+        bom: [
+          BomEntry(productId: 1, materialId: 1, quantityPerUnit: 2), // 50*2=100
+          BomEntry(productId: 2, materialId: 1, quantityPerUnit: 5), // 20*5=100
+        ],
+        plannedPerProduct: {1: 50, 2: 40}, // A: 100, B: 200
+      );
+      final contributions = o.productContributionsFor(1);
+      expect(contributions.map((c) => c.$1.productName), ['B', 'A']);
+      expect(contributions.map((c) => c.$2), [200.0, 100.0]);
+    });
+
+    test('excludes a zero-quantity contribution', () {
+      final o = overview(
+        products: [product(id: 1, name: 'A')],
+        bom: [BomEntry(productId: 1, materialId: 1, quantityPerUnit: 0)],
+        plannedPerProduct: {1: 50},
+      );
+      expect(o.productContributionsFor(1), isEmpty);
+    });
+
+    test('excludes lines for a different material', () {
+      final o = overview(
+        products: [product(id: 1, name: 'A')],
+        bom: [BomEntry(productId: 1, materialId: 2, quantityPerUnit: 3)],
+        plannedPerProduct: {1: 50},
+      );
+      expect(o.productContributionsFor(1), isEmpty);
+    });
+
+    test('no BOM lines at all yields no contributors', () {
+      final o = overview(products: const [], bom: const [], plannedPerProduct: const {});
+      expect(o.productContributionsFor(1), isEmpty);
     });
   });
 }

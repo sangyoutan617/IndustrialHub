@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/factory.dart';
 import '../../models/product.dart';
+import '../../services/bottleneck_service.dart';
 import '../../services/capacity_service.dart';
 import '../../services/data_event_service.dart';
 import '../../services/product_service.dart';
@@ -34,9 +35,11 @@ enum _LoadState { loading, error, noProducts, ready }
 class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
   final _capacityService = CapacityService();
   final _productService = ProductService();
+  final _bottleneckService = BottleneckService();
   _LoadState _state = _LoadState.loading;
   CapacitySnapshot? _snapshot;
   List<Product> _products = [];
+  List<ProductBottleneck> _allBottlenecks = [];
   int? _selectedProductId;
 
   @override
@@ -95,10 +98,27 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         widget.factory.factoryId,
         productId: selected.productId,
       );
+      // Every product's own verdict — not just the picked one — so the AI
+      // insight can narrate the whole factory the way the Stock/Supply
+      // dashboards already do, rather than only the currently viewed
+      // product's numbers.
+      final bottlenecks = await Future.wait(
+        products.map(
+          (p) => _bottleneckService.computeForProduct(
+            widget.factory.factoryId,
+            p.productId,
+          ),
+        ),
+      );
+      final allBottlenecks = [
+        for (var i = 0; i < products.length; i++)
+          ProductBottleneck(product: products[i], bottleneck: bottlenecks[i]),
+      ];
       setState(() {
         _products = products;
         _selectedProductId = selected.productId;
         _snapshot = snapshot;
+        _allBottlenecks = allBottlenecks;
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -414,36 +434,82 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
   static const _bottleneckSystem =
       'You are a factory capacity assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. '
-      'In 2-3 short, plain-language sentences for a factory manager, '
-      'explain what is limiting daily output and give one concrete, '
-      'actionable next step based only on the numbers provided. No '
-      'markdown, no headings, under 80 words.';
+      'In 2-3 short, plain-language sentences for a factory manager, say '
+      'how many of this factory\'s products are meeting demand and name '
+      'the one most short, then give one concrete, actionable next step '
+      'based only on the numbers provided. No markdown, no headings, '
+      'under 80 words.';
 
+  String _resourceLabel(String resource) {
+    switch (resource) {
+      case 'MACHINE':
+        return 'Machine';
+      case 'MANPOWER':
+        return 'Manpower';
+      case 'RAW MATERIAL':
+        return 'Raw material';
+      default:
+        return resource;
+    }
+  }
+
+  // Enumerates every product's own verdict — sorted by urgency, most-short
+  // first — the same template stock_dashboard_screen.dart's
+  // _buildStockPrompt established for this app's other multi-item
+  // dashboards, rather than narrating only the currently picked product.
+  // The hiring-gap sizing at the end stays scoped to the picked product
+  // ([snapshot]) since compute_bottleneck doesn't size a hiring
+  // recommendation itself — that math is this screen's own.
   String _buildBottleneckPrompt(CapacitySnapshot snapshot) {
-    final gap = CapacityService.computeHiringGap(snapshot);
+    final withData = _allBottlenecks.where((p) => p.bottleneck.hasData).toList();
+    final noDataCount = _allBottlenecks.length - withData.length;
+    final short = withData.where((p) => !p.bottleneck.canMeetDemand).toList()
+      ..sort(
+        (a, b) => (b.bottleneck.shortfall ?? 0).compareTo(
+          a.bottleneck.shortfall ?? 0,
+        ),
+      );
+
     final buffer = StringBuffer()
-      ..writeln('Product: ${_selectedProduct.productName}')
+      ..writeln('Products tracked: ${_allBottlenecks.length}')
       ..writeln(
-        'Daily production ceiling: ${formatUnits(snapshot.effectiveCapacity)}',
-      )
-      ..writeln('Machine capacity: ${formatUnits(snapshot.machineCapacity)}')
-      ..writeln('Labour capacity: ${formatUnits(snapshot.manpowerCapacity)}')
-      ..writeln('Bottleneck resource: ${snapshot.bottleneckResource}')
-      ..writeln('Current total workers: ${gap.currentWorkers}');
+        'Meeting demand: ${withData.length - short.length} of ${withData.length}',
+      );
+    if (noDataCount > 0) {
+      buffer.writeln('Products with no capacity data yet: $noDataCount');
+    }
+    for (final pb in withData) {
+      final r = pb.bottleneck;
+      final line = StringBuffer(
+        '- ${pb.product.productName}: ${formatUnits(r.achievable)}/day achievable',
+      );
+      if (r.requiredPerDay > 0) {
+        line.write(' vs ${formatUnits(r.requiredPerDay)}/day required');
+      }
+      line.write(
+        r.canMeetDemand
+            ? ' (meeting demand)'
+            : ' (short by ${formatUnits(r.shortfall ?? 0)}/day, '
+                  '${_resourceLabel(r.limiter ?? r.bottleneckResource)} limited)',
+      );
+      buffer.writeln(line.toString());
+    }
+
+    final gap = CapacityService.computeHiringGap(snapshot);
+    buffer.writeln(
+      'Currently viewing: ${_selectedProduct.productName} — '
+      '${gap.currentWorkers} total workers',
+    );
     if (gap.additionalWorkersNeeded != null) {
       buffer.writeln(
         'Hiring ${gap.additionalWorkersNeeded} more worker(s) at the '
-        'current average output rate would remove the labour bottleneck.',
+        'current average output rate would remove this product\'s labour '
+        'bottleneck.',
       );
     } else if (gap.bottleneck == 'MANPOWER') {
       buffer.writeln(
-        'Labour is the bottleneck, but there is not enough shift data to '
-        'size a hiring recommendation.',
-      );
-    } else {
-      buffer.writeln(
-        'Machines are the bottleneck — hiring more workers will not '
-        'increase output right now.',
+        'Labour is this product\'s bottleneck, but there is not enough '
+        'shift data to size a hiring recommendation.',
       );
     }
     return buffer.toString();

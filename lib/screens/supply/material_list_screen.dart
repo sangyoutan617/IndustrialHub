@@ -630,6 +630,21 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       if (p.suggestedQty != null && p.suggestedQty! > 0) {
         line.write(', suggested order ${formatNumber(p.suggestedQty!)}');
       }
+      // Which products are actually driving this material's burn rate — a
+      // material can now be shared across several products' recipes at
+      // different rates, so "why is this being used up" isn't a single
+      // answer any more.
+      final contributions = overview.productContributionsFor(
+        p.material.materialId,
+      );
+      if (contributions.isNotEmpty) {
+        final usedBy = contributions
+            .map((c) => '${c.$1.productName} (${formatNumber(c.$2)}/day)')
+            .join(', ');
+        line.write(', used by: $usedBy');
+      } else if (p.burnRatePerDay <= 0) {
+        line.write(", not yet assigned to any product's recipe");
+      }
       buffer.writeln(line.toString());
     }
     return buffer.toString();

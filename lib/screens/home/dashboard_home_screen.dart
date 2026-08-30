@@ -71,6 +71,11 @@ class _HomeData {
   final List<Product> products;
   final Product selectedProduct;
 
+  /// Every product's own verdict — not just [selectedProduct]'s — so the AI
+  /// insight can narrate the whole factory rather than only the currently
+  /// viewed product.
+  final List<ProductBottleneck> allBottlenecks;
+
   const _HomeData({
     required this.bottleneck,
     required this.outputPerWorker,
@@ -78,6 +83,7 @@ class _HomeData {
     required this.productivity,
     required this.products,
     required this.selectedProduct,
+    required this.allBottlenecks,
   });
 }
 
@@ -185,6 +191,16 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
     final outputPerWorker = _capacityService.outputPerWorker(snapshot);
 
+    final allResults = await Future.wait(
+      products.map(
+        (p) => _bottleneckService.computeForProduct(factoryId, p.productId),
+      ),
+    );
+    final allBottlenecks = [
+      for (var i = 0; i < products.length; i++)
+        ProductBottleneck(product: products[i], bottleneck: allResults[i]),
+    ];
+
     MsicCode? msic;
     ProductivityBenchmark? productivity;
     final msicCode = widget.factory.msicCode;
@@ -204,6 +220,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       productivity: productivity,
       products: products,
       selectedProduct: selected,
+      allBottlenecks: allBottlenecks,
     );
   }
 
@@ -274,7 +291,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     // and re-fetches — the AI card.
     final aiInsight = result.hasData
         ? AiInsightCard(
-            buildPrompt: () => _buildProductPrompt(result, data.selectedProduct),
+            buildPrompt: () => _buildProductPrompt(data),
             system: _productSystem,
           )
         : null;
@@ -309,38 +326,69 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // ---------------- Per-product AI summary ----------------
+  // ---------------- Factory-wide AI summary ----------------
 
-  // Deterministic figures only — the whole bottleneck verdict is computed by
-  // compute_bottleneck() (BottleneckService). The AI card just narrates which
-  // of material/machine/manpower is the single binding constraint for the
-  // selected product.
+  // Deterministic figures only — every bottleneck verdict is computed by
+  // compute_bottleneck() (BottleneckService), once per product. The AI card
+  // narrates the whole factory's picture and calls out the currently viewed
+  // product's own binding constraint; it never computes anything itself.
   static const _productSystem =
       'You are a factory operations assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. In '
-      '2-3 short, plain-language sentences for a factory manager, say whether '
-      'the named product can meet demand and which single resource — raw '
-      'material, machines, or manpower — is the binding constraint, then '
-      'give one concrete next step based only on the numbers provided. No '
-      'markdown, no headings, under 80 words.';
+      '2-3 short, plain-language sentences for a factory manager, say how '
+      'many of this factory\'s products are meeting demand and which single '
+      'resource — raw material, machines, or manpower — is the binding '
+      'constraint for the currently viewed product, then give one concrete '
+      'next step based only on the numbers provided. No markdown, no '
+      'headings, under 80 words.';
 
-  String _buildProductPrompt(BottleneckResult r, Product product) {
+  // Enumerates every product's own verdict — sorted by urgency, most-short
+  // first — the same template stock_dashboard_screen.dart's
+  // _buildStockPrompt established for this app's other multi-item
+  // dashboards, then calls out the currently viewed product's full
+  // machine/manpower/material breakdown (this RPC's richest figure,
+  // available only for whichever product is picked).
+  String _buildProductPrompt(_HomeData data) {
+    final withData = data.allBottlenecks.where((p) => p.bottleneck.hasData).toList();
+    final noDataCount = data.allBottlenecks.length - withData.length;
+    final short = withData.where((p) => !p.bottleneck.canMeetDemand).toList()
+      ..sort(
+        (a, b) => (b.bottleneck.shortfall ?? 0).compareTo(
+          a.bottleneck.shortfall ?? 0,
+        ),
+      );
+
     final buffer = StringBuffer()
-      ..writeln('Product: ${product.productName}')
-      ..writeln('Achievable output: ${formatUnits(r.achievable)}/day')
-      ..writeln('Demand required: ${formatUnits(r.requiredPerDay)}/day')
-      ..writeln('Can meet demand: ${r.canMeetDemand ? 'yes' : 'no'}')
+      ..writeln('Products tracked: ${data.allBottlenecks.length}')
+      ..writeln(
+        'Meeting demand: ${withData.length - short.length} of ${withData.length}',
+      );
+    if (noDataCount > 0) {
+      buffer.writeln('Products with no production data yet: $noDataCount');
+    }
+    for (final pb in withData) {
+      final r = pb.bottleneck;
+      final line = StringBuffer(
+        '- ${pb.product.productName}: ${formatUnits(r.achievable)}/day '
+        'achievable vs ${formatUnits(r.requiredPerDay)}/day required',
+      );
+      line.write(
+        r.canMeetDemand
+            ? ' (meeting demand)'
+            : ' (short by ${formatUnits(r.shortfall ?? 0)}/day, '
+                  '${_limiterLabel(r.limiter ?? r.bottleneckResource)} limited)',
+      );
+      buffer.writeln(line.toString());
+    }
+
+    final r = data.bottleneck;
+    buffer
+      ..writeln('Currently viewing: ${data.selectedProduct.productName}')
       ..writeln('Machine capacity: ${formatUnits(r.machineCapacity)}/day')
       ..writeln('Manpower capacity: ${formatUnits(r.manpowerCapacity)}/day')
       ..writeln(
         'Raw-material ceiling: ${r.materialCeiling != null ? '${formatUnits(r.materialCeiling!)}/day' : 'not set'}',
       );
-    if (r.limiter != null) {
-      buffer.writeln('Binding constraint: ${_limiterLabel(r.limiter)}');
-    }
-    if (r.shortfall != null) {
-      buffer.writeln('Shortfall vs demand: ${formatUnits(r.shortfall!)}/day');
-    }
     return buffer.toString();
   }
 

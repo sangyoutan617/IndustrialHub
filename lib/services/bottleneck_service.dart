@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/product.dart';
 
 class BottleneckResult {
   final bool hasData;
@@ -39,6 +40,19 @@ class BottleneckResult {
       shortfall: null,
     );
   }
+}
+
+/// One product's bottleneck verdict, paired with the product itself so a
+/// list of these can be rendered — or narrated to the AI insight card —
+/// without a separate lookup. Shared by every screen that needs "every
+/// product's own verdict" rather than one factory-wide number: the admin
+/// cross-factory rollup, the per-factory admin drill-in, the PDF report,
+/// and the Capacity/Home dashboards' AI prompts.
+class ProductBottleneck {
+  final Product product;
+  final BottleneckResult bottleneck;
+
+  const ProductBottleneck({required this.product, required this.bottleneck});
 }
 
 class BottleneckService {

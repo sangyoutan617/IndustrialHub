@@ -6,7 +6,6 @@ import 'package:pdf/widgets.dart' as pw;
 import '../core/formatters.dart';
 import '../models/factory.dart';
 import '../screens/stock/stock_cover_loader.dart';
-import 'admin_service.dart';
 import 'bottleneck_service.dart';
 import 'mrp_service.dart';
 import 'product_service.dart';

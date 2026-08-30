@@ -1,20 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/factory.dart';
-import '../models/product.dart';
 import '../models/productivity_benchmark.dart';
 import 'bottleneck_service.dart';
 import 'capacity_service.dart';
 import 'factory_service.dart';
 import 'product_service.dart';
-
-/// One product's bottleneck verdict, paired with the product itself so a
-/// list of these can be rendered without a separate lookup.
-class ProductBottleneck {
-  final Product product;
-  final BottleneckResult bottleneck;
-
-  const ProductBottleneck({required this.product, required this.bottleneck});
-}
 
 class FactoryStat {
   final Factory factory;
