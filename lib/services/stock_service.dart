@@ -15,11 +15,14 @@ class StockService {
     final rows = await _client
         .from('finished_stock')
         .select(_selectWithProduct)
-        .eq('factory_id', factoryId)
-        .order('product_name', ascending: true);
-    return (rows as List)
+        .eq('factory_id', factoryId);
+    // Sorted client-side by the joined product name — finished_stock has
+    // no product-name column of its own to order the query by any more.
+    final list = (rows as List)
         .map((row) => FinishedStock.fromJson(row as Map<String, dynamic>))
         .toList();
+    list.sort((a, b) => a.productName.compareTo(b.productName));
+    return list;
   }
 
   /// Creates a finished-stock row for [product] — one row per product per
@@ -36,7 +39,6 @@ class StockService {
         .insert({
           'factory_id': factoryId,
           'product_id': product.productId,
-          'product_name': product.productName,
           'current_quantity': initialQuantity,
         })
         .select(_selectWithProduct)

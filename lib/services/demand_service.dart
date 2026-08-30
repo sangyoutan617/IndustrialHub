@@ -12,11 +12,14 @@ class DemandService {
     final rows = await _client
         .from('demand_forecast')
         .select(_selectWithProduct)
-        .eq('factory_id', factoryId)
-        .order('product_name', ascending: true);
-    return (rows as List)
+        .eq('factory_id', factoryId);
+    // Sorted client-side by the joined product name — demand_forecast has
+    // no product-name column of its own to order the query by any more.
+    final list = (rows as List)
         .map((row) => DemandForecast.fromJson(row as Map<String, dynamic>))
         .toList();
+    list.sort((a, b) => a.productName.compareTo(b.productName));
+    return list;
   }
 
   Future<DemandForecast> createForecast(DemandForecast forecast) async {

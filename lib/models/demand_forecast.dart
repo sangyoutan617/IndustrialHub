@@ -3,11 +3,9 @@ class DemandForecast {
   final int factoryId;
   final int productId;
 
-  /// Display name. Read from the joined `products` row when the query
-  /// embedded one (see DemandService.getForecasts) — demand_forecast's own
-  /// `product_name` column is a write-time mirror kept only until it's
-  /// dropped (multi-product capacity plan, phase k), and is never the
-  /// source of truth once [productId] exists.
+  /// Display name, read from the joined `products` row (see
+  /// DemandService.getForecasts) — demand_forecast carries no product-name
+  /// column of its own any more, [productId] is the only source of truth.
   final String productName;
   final int requiredPerDay;
   final DateTime? periodStart;
@@ -29,9 +27,9 @@ class DemandForecast {
       demandId: json['demand_id'] as int,
       factoryId: json['factory_id'] as int,
       productId: json['product_id'] as int,
-      productName:
-          joinedProduct?['product_name'] as String? ??
-          json['product_name'] as String,
+      // Falls back rather than throwing if a caller's query ever forgets
+      // to embed the join — a wrong-looking name beats a crash.
+      productName: joinedProduct?['product_name'] as String? ?? 'Unknown product',
       requiredPerDay: json['required_per_day'] as int,
       periodStart: json['period_start'] != null
           ? DateTime.parse(json['period_start'] as String)
@@ -46,9 +44,6 @@ class DemandForecast {
     return {
       'factory_id': factoryId,
       'product_id': productId,
-      // Mirrored alongside product_id until the text column is dropped —
-      // see the class doc comment.
-      'product_name': productName,
       'required_per_day': requiredPerDay,
       'period_start': periodStart?.toIso8601String().substring(0, 10),
       'period_end': periodEnd?.toIso8601String().substring(0, 10),
