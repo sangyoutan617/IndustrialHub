@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../models/machine.dart';
+import '../../models/product.dart';
 import '../../services/capacity_service.dart';
 import '../../services/machine_service.dart';
+import '../../services/product_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
@@ -25,8 +27,10 @@ enum _LoadState { loading, error, ready }
 
 class _MachineListScreenState extends State<MachineListScreen> {
   final _service = MachineService();
+  final _productService = ProductService();
   _LoadState _state = _LoadState.loading;
   List<Machine> _machines = [];
+  Map<int, String> _productNames = {};
 
   @override
   void initState() {
@@ -37,9 +41,17 @@ class _MachineListScreenState extends State<MachineListScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final machines = await _service.getMachines(widget.factoryId);
+      final results = await Future.wait<dynamic>([
+        _service.getMachines(widget.factoryId),
+        _productService.getProducts(widget.factoryId),
+      ]);
+      final machines = results[0] as List<Machine>;
+      final products = results[1] as List<Product>;
       setState(() {
         _machines = machines;
+        _productNames = {
+          for (final p in products) p.productId: p.productName,
+        };
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -149,22 +161,36 @@ class _MachineListScreenState extends State<MachineListScreen> {
                   ),
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        StatusChip(
-                          label: isActive ? 'Active' : 'Maintenance',
-                          status: isActive
-                              ? AppStatus.success
-                              : AppStatus.warning,
-                          dense: true,
+                        Row(
+                          children: [
+                            StatusChip(
+                              label: isActive ? 'Active' : 'Maintenance',
+                              status: isActive
+                                  ? AppStatus.success
+                                  : AppStatus.warning,
+                              dense: true,
+                            ),
+                            const SizedBox(width: AppSpacing.s),
+                            Expanded(
+                              child: Text(
+                                isActive
+                                    ? '${formatUnits(contribution)}/day'
+                                    : 'Excluded from capacity (${machine.status})',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: AppSpacing.s),
-                        Expanded(
-                          child: Text(
-                            isActive
-                                ? '${formatUnits(contribution)}/day'
-                                : 'Excluded from capacity (${machine.status})',
-                            overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 2),
+                        Text(
+                          _productNames[machine.productId] ?? 'Unknown product',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],

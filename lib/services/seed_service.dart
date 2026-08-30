@@ -12,6 +12,7 @@ import 'machine_service.dart';
 import 'manpower_service.dart';
 import 'material_service.dart';
 import 'order_service.dart';
+import 'product_service.dart';
 import 'stock_service.dart';
 import 'supplier_service.dart';
 
@@ -31,6 +32,7 @@ class SeedService {
   final _machineService = MachineService();
   final _manpowerService = ManpowerService();
   final _materialService = MaterialService();
+  final _productService = ProductService();
   final _supplierService = SupplierService();
   final _stockService = StockService();
   final _demandService = DemandService();
@@ -45,8 +47,13 @@ class SeedService {
     }
 
     final factory = await _seedFactory();
-    await _seedMachines(factory.factoryId);
-    await _seedManpower(factory.factoryId);
+    // createFactory() auto-creates one "General" product per factory —
+    // demo machines/manpower don't model distinct products, so everything
+    // seeded here attaches to it, same as a real factory's legacy data.
+    final products = await _productService.getProducts(factory.factoryId);
+    final generalProductId = products.firstWhere((p) => p.isGeneral).productId;
+    await _seedMachines(factory.factoryId, generalProductId);
+    await _seedManpower(factory.factoryId, generalProductId);
     final materials = await _seedMaterials(factory.factoryId);
     final suppliers = await _seedSuppliers(materials);
     await _seedStockAndDemand(factory.factoryId);
@@ -64,7 +71,7 @@ class SeedService {
     );
   }
 
-  Future<List<Machine>> _seedMachines(int factoryId) async {
+  Future<List<Machine>> _seedMachines(int factoryId, int productId) async {
     final specs = [
       ('Extruder Line A', 50.0, 16.0, 95.0, 'Active'),
       ('Extruder Line B', 40.0, 16.0, 90.0, 'Active'),
@@ -78,6 +85,7 @@ class SeedService {
           Machine(
             machineId: 0,
             factoryId: factoryId,
+            productId: productId,
             machineName: name,
             ratedOutputPerHour: rated,
             operatingHoursPerDay: hours,
@@ -92,13 +100,14 @@ class SeedService {
     return created;
   }
 
-  Future<void> _seedManpower(int factoryId) async {
+  Future<void> _seedManpower(int factoryId, int productId) async {
     final specs = [('Day Shift', 15, 8.0, 5.0), ('Night Shift', 8, 8.0, 4.0)];
     for (final (name, workers, hours, perHour) in specs) {
       await _manpowerService.createShift(
         Manpower(
           manpowerId: 0,
           factoryId: factoryId,
+          productId: productId,
           shiftName: name,
           workerCount: workers,
           shiftHours: hours,
