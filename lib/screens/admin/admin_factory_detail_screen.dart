@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../models/factory.dart';
+import '../../models/product.dart';
 import '../../models/supplier.dart';
 import '../../services/bottleneck_service.dart';
 import '../../services/mrp_service.dart';
+import '../../services/product_service.dart';
 import '../../services/supplier_service.dart';
 import '../../services/supply_service.dart';
 import '../../widgets/bottleneck_banner.dart';
@@ -33,10 +35,13 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   final _supplyService = SupplyService();
   final _bottleneckService = BottleneckService();
   final _supplierService = SupplierService();
+  final _productService = ProductService();
 
   _LoadState _state = _LoadState.loading;
   BottleneckResult? _bottleneck;
   List<MaterialPlan> _lowStockPlans = [];
+  List<Product> _products = [];
+  int? _selectedProductId;
 
   @override
   void initState() {
@@ -44,11 +49,32 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
     _load();
   }
 
+  Product _defaultProduct(List<Product> products) =>
+      products.firstWhere((p) => !p.isGeneral, orElse: () => products.first);
+
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final bottleneck = await _bottleneckService.computeForFactory(
+      final products = await _productService.getProducts(
         widget.factory.factoryId,
+      );
+      if (products.isEmpty) {
+        // Shouldn't happen — every factory gets an auto-created General
+        // product — but there's nothing meaningful to show a bottleneck
+        // verdict for if it somehow does.
+        setState(() => _state = _LoadState.error);
+        return;
+      }
+      final selected = _selectedProductId != null
+          ? products.firstWhere(
+              (p) => p.productId == _selectedProductId,
+              orElse: () => _defaultProduct(products),
+            )
+          : _defaultProduct(products);
+
+      final bottleneck = await _bottleneckService.computeForProduct(
+        widget.factory.factoryId,
+        selected.productId,
       );
       final overview = await _supplyService.load(widget.factory.factoryId);
       final lowStock = overview.plans
@@ -56,6 +82,8 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
           .toList();
 
       setState(() {
+        _products = products;
+        _selectedProductId = selected.productId;
         _bottleneck = bottleneck;
         _lowStockPlans = lowStock;
         _state = _LoadState.ready;
@@ -63,6 +91,12 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
     } catch (_) {
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  void _setProduct(int? productId) {
+    if (productId == null || productId == _selectedProductId) return;
+    setState(() => _selectedProductId = productId);
+    _load();
   }
 
   Future<void> _raisePurchaseOrder(MaterialPlan plan) async {
@@ -170,7 +204,32 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
       ),
     );
     
-    final bottleneckBanner = BottleneckBanner(factoryId: factory.factoryId);
+    final productPicker = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: DropdownButtonFormField<int>(
+        initialValue: _selectedProductId,
+        isExpanded: true,
+        decoration: const InputDecoration(labelText: 'Product'),
+        items: [
+          for (final product in _products)
+            DropdownMenuItem(
+              value: product.productId,
+              child: Text(
+                product.isGeneral
+                    ? '${product.productName} (auto-created)'
+                    : product.productName,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        onChanged: _setProduct,
+      ),
+    );
+
+    final bottleneckBanner = BottleneckBanner(
+      factoryId: factory.factoryId,
+      productId: _selectedProductId!,
+    );
 
     final alertsSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,6 +276,8 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           infoCard,
+          const SizedBox(height: 8),
+          productPicker,
           bottleneckBanner,
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
