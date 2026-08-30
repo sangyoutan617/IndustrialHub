@@ -3,6 +3,7 @@ import '../models/demand_forecast.dart';
 import '../models/factory.dart';
 import '../models/machine.dart';
 import '../models/manpower.dart';
+import '../models/product.dart';
 import '../models/purchase_order.dart';
 import '../models/raw_material.dart';
 import '../models/stock_movement.dart';
@@ -213,9 +214,20 @@ class SeedService {
     return created;
   }
 
+  /// A distinct real product (not the machines/manpower/materials' shared
+  /// General one) — finished stock and demand forecasts are always about a
+  /// specific product, so the demo needs at least one to seed them against.
   Future<void> _seedStockAndDemand(int factoryId) async {
     const productName = 'Sparkling Water 500ml';
-    final stock = await _stockService.createStock(factoryId, productName, 0);
+    final product = await _productService.createProduct(
+      Product(
+        productId: 0,
+        factoryId: factoryId,
+        productName: productName,
+        unit: 'bottles',
+      ),
+    );
+    final stock = await _stockService.createStock(factoryId, product, 0);
 
     final now = DateTime.now();
     await _stockService.recordMovement(
@@ -239,6 +251,7 @@ class SeedService {
       DemandForecast(
         demandId: 0,
         factoryId: factoryId,
+        productId: product.productId,
         productName: productName,
         requiredPerDay: 1000,
       ),

@@ -34,6 +34,26 @@ class ProductService {
     return result;
   }
 
+  /// Renames a product without touching its other fields. A targeted
+  /// update rather than [updateProduct]'s full-object overwrite — a caller
+  /// that only has a name in hand (e.g. a rename-only flow on another
+  /// module's screen, which doesn't know this product's unit) would
+  /// otherwise silently reset unit to its default via toInsertJson.
+  Future<Product> renameProduct(int productId, String productName) async {
+    final row = await _client
+        .from('products')
+        .update({'product_name': productName})
+        .eq('product_id', productId)
+        .select()
+        .single();
+    final result = Product.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: result.factoryId,
+      source: DataChangeSource.capacity,
+    );
+    return result;
+  }
+
   Future<Product> updateProduct(int productId, Product product) async {
     final row = await _client
         .from('products')
