@@ -103,14 +103,103 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
 
   Future<void> _logDowntime() async {
     final machine = _machine!;
-    final hoursController = TextEditingController();
-    final reasonController = TextEditingController();
+    final result = await _downtimeDialog(
+      title: 'Log downtime',
+      confirmLabel: 'Log',
+      unitCount: machine.unitCount,
+    );
+    if (result == null) return;
+
+    setState(() => _acting = true);
+    try {
+      await _downtimeService.logDowntime(
+        machineId: machine.machineId,
+        factoryId: widget.factoryId,
+        hours: result.hours,
+        machinesDown: result.machinesDown,
+        unitCount: machine.unitCount,
+        reason: result.reason,
+        date: DateTime.now(),
+      );
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Downtime logged')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not log downtime. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _editDowntime(MachineDowntimeLog entry) async {
+    final machine = _machine!;
+    final result = await _downtimeDialog(
+      title: 'Edit downtime',
+      confirmLabel: 'Save',
+      unitCount: machine.unitCount,
+      initialHours: entry.downtimeHours,
+      initialMachinesDown: entry.machinesDown,
+      initialReason: entry.reason,
+    );
+    if (result == null) return;
+
+    setState(() => _acting = true);
+    try {
+      await _downtimeService.updateDowntimeLog(
+        logId: entry.logId,
+        factoryId: widget.factoryId,
+        hours: result.hours,
+        machinesDown: result.machinesDown,
+        reason: result.reason,
+      );
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Downtime updated')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update this entry. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  /// Shared hours / machines-down / reason form for logging and editing a
+  /// downtime event. The "Machines down" field only appears for a group
+  /// (`unitCount > 1`) — a single machine is always 1 down. Returns null if
+  /// the user cancels.
+  Future<({double hours, int machinesDown, String? reason})?> _downtimeDialog({
+    required String title,
+    required String confirmLabel,
+    required int unitCount,
+    double? initialHours,
+    int? initialMachinesDown,
+    String? initialReason,
+  }) async {
+    final hoursController = TextEditingController(
+      text: initialHours == null ? '' : formatNumber(initialHours),
+    );
+    final machinesDownController = TextEditingController(
+      text: (initialMachinesDown ?? 1).toString(),
+    );
+    final reasonController = TextEditingController(text: initialReason ?? '');
     final formKey = GlobalKey<FormState>();
+    final isGroup = unitCount > 1;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Log downtime'),
+        title: Text(title),
         content: SingleChildScrollView(
           child: Form(
             key: formKey,
@@ -132,6 +221,27 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
                     return null;
                   },
                 ),
+                if (isGroup) ...[
+                  const SizedBox(height: AppSpacing.m),
+                  TextFormField(
+                    controller: machinesDownController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Machines down',
+                      helperText: 'Out of $unitCount in this group',
+                    ),
+                    validator: (v) {
+                      final parsed = int.tryParse((v ?? '').trim());
+                      if (parsed == null || parsed < 1) {
+                        return 'Enter a whole number of 1 or more';
+                      }
+                      if (parsed > unitCount) {
+                        return 'This group only has $unitCount machines';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.m),
                 TextField(
                   controller: reasonController,
@@ -154,38 +264,21 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
                 Navigator.pop(context, true);
               }
             },
-            child: const Text('Log'),
+            child: Text(confirmLabel),
           ),
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) return null;
 
-    setState(() => _acting = true);
-    try {
-      await _downtimeService.logDowntime(
-        machineId: machine.machineId,
-        factoryId: widget.factoryId,
-        hours: double.parse(hoursController.text.trim()),
-        reason: reasonController.text.trim().isEmpty
-            ? null
-            : reasonController.text.trim(),
-        date: DateTime.now(),
-      );
-      if (!mounted) return;
-      await _load();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Downtime logged')));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not log downtime. Please try again.')),
-      );
-    } finally {
-      if (mounted) setState(() => _acting = false);
-    }
+    final reason = reasonController.text.trim();
+    return (
+      hours: double.parse(hoursController.text.trim()),
+      machinesDown: isGroup
+          ? int.parse(machinesDownController.text.trim())
+          : 1,
+      reason: reason.isEmpty ? null : reason,
+    );
   }
 
   Future<void> _startRepair() => _runAction(
@@ -302,6 +395,11 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
                     label: 'Operating hours',
                     value: '${formatNumber(machine.operatingHoursPerDay)}/day',
                   ),
+                  if (machine.isGroup)
+                    MetricRow(
+                      label: 'Machines in group',
+                      value: '${machine.unitCount}',
+                    ),
                   MetricRow(
                     label: 'Capacity contribution',
                     value: machine.isActive
@@ -314,6 +412,16 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
           ),
           const SizedBox(height: AppSpacing.l),
           _actionSection(machine),
+          if (_openPartialUnitsDown(machine) > 0) ...[
+            const SizedBox(height: AppSpacing.s),
+            Text(
+              '${_openPartialUnitsDown(machine)} of ${machine.unitCount} '
+              'units currently down — the group still counts toward capacity.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ],
           const SectionHeader(title: 'Downtime log'),
           if (_log.isEmpty)
             Padding(
@@ -360,19 +468,45 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
     return Align(alignment: Alignment.centerLeft, child: button);
   }
 
+  /// Units currently down across still-open events, but only while the group
+  /// itself is still Active — once it's flipped wholesale to Downtime/Repair
+  /// the status chip already says everything and this note would double up.
+  int _openPartialUnitsDown(Machine machine) {
+    if (!machine.isGroup || !machine.isActive) return 0;
+    return _log
+        .where((e) => !e.resolved)
+        .fold<int>(0, (sum, e) => sum + e.machinesDown);
+  }
+
   Widget _logTile(MachineDowntimeLog entry, ThemeData theme) {
+    final machine = _machine!;
+    final unitsSuffix = machine.isGroup || entry.machinesDown > 1
+        ? ' · ${entry.machinesDown} '
+              '${entry.machinesDown == 1 ? 'unit' : 'units'}'
+        : '';
     return ListTile(
       dense: true,
       title: Text(
         entry.reason?.isNotEmpty == true ? entry.reason! : 'Downtime',
       ),
       subtitle: Text(
-        '${formatDate(entry.logDate)} · ${formatNumber(entry.downtimeHours)}h',
+        '${formatDate(entry.logDate)} · '
+        '${formatNumber(entry.downtimeHours)}h$unitsSuffix',
       ),
-      trailing: StatusChip(
-        label: entry.resolved ? 'Repaired' : 'Open',
-        status: entry.resolved ? AppStatus.success : AppStatus.danger,
-        dense: true,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          StatusChip(
+            label: entry.resolved ? 'Repaired' : 'Open',
+            status: entry.resolved ? AppStatus.success : AppStatus.danger,
+            dense: true,
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            tooltip: 'Edit entry',
+            onPressed: _acting ? null : () => _editDowntime(entry),
+          ),
+        ],
       ),
     );
   }

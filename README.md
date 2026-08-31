@@ -49,8 +49,15 @@
   not summed into `daily_production.downtime_hours`; rolling the two
   together is a reasonable future step but isn't built here. There is also
   no uptime-percentage field on a machine any more — capacity uses each
-  Active machine's full nameplate rate (`rated × hours`), and real
-  stoppages are what the downtime log is for.
+  Active machine's full nameplate rate (`rated × hours × unit_count`), and
+  real stoppages are what the downtime log is for.
+- **A machine row is a group.** `machines.unit_count` (default 1) lets one
+  row stand for several identical machines; capacity counts all of them.
+  A downtime event records `machines_down` — how many units the breakdown
+  took out — which is shown on the machine page but is **informational
+  only**: it does not derate the ceiling, and the group is only flipped
+  wholesale to Downtime when every unit is down. Hours, reason and unit
+  count on a logged event are editable from the machine page.
 
 ## Government data refresh
 

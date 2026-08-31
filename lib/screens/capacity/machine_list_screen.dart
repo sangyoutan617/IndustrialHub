@@ -197,6 +197,18 @@ class _MachineListScreenState extends State<MachineListScreen> {
                               dense: true,
                             ),
                             const SizedBox(width: AppSpacing.s),
+                            if (machine.isGroup) ...[
+                              Text(
+                                '×${machine.unitCount}',
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                              const SizedBox(width: AppSpacing.s),
+                            ],
                             Expanded(
                               child: Text(
                                 isActive

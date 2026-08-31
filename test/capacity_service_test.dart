@@ -6,6 +6,7 @@ import 'package:industrial_hub/services/capacity_service.dart';
 Machine _machine({
   double rated = 10,
   double hours = 8,
+  int unitCount = 1,
   String status = 'Active',
 }) {
   return Machine(
@@ -15,6 +16,7 @@ Machine _machine({
     machineName: 'Test machine',
     ratedOutputPerHour: rated,
     operatingHoursPerDay: hours,
+    unitCount: unitCount,
     status: status,
     isSimulated: false,
   );
@@ -78,6 +80,25 @@ void main() {
 
     test('empty list yields zero capacity', () {
       expect(CapacityService.computeMachineCapacity([]), 0);
+    });
+
+    test('a group counts every unit — unitCount multiplies the contribution', () {
+      final single = CapacityService.computeMachineCapacity([
+        _machine(rated: 10, hours: 8),
+      ]);
+      final groupOfThree = CapacityService.computeMachineCapacity([
+        _machine(rated: 10, hours: 8, unitCount: 3),
+      ]);
+      expect(single, 80);
+      expect(groupOfThree, 240);
+    });
+
+    test('an under-maintenance group is excluded regardless of unitCount', () {
+      final capacity = CapacityService.computeMachineCapacity([
+        _machine(rated: 10, hours: 8, unitCount: 2),
+        _machine(rated: 100, hours: 24, unitCount: 5, status: 'Under Maintenance'),
+      ]);
+      expect(capacity, 160);
     });
   });
 

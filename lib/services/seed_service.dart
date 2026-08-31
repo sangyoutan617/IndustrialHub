@@ -45,6 +45,7 @@ typedef _DowntimeEvent = ({
   int daysAgo,
   String machineName,
   double hours,
+  int machinesDown,
   String reason,
 });
 
@@ -69,30 +70,35 @@ class SeedService {
       daysAgo: 75,
       machineName: 'Extruder Line A',
       hours: 3.0,
+      machinesDown: 1,
       reason: 'Nozzle clog',
     ),
     (
       daysAgo: 52,
       machineName: 'Packaging Unit',
       hours: 2.0,
+      machinesDown: 1,
       reason: 'Conveyor belt slipped',
     ),
     (
       daysAgo: 30,
       machineName: 'Extruder Line A',
       hours: 6.0,
+      machinesDown: 1,
       reason: 'Scheduled maintenance',
     ),
     (
       daysAgo: 14,
       machineName: 'Packaging Unit',
       hours: 4.0,
-      reason: 'Sensor fault',
+      machinesDown: 2,
+      reason: 'Sensor fault (2 of 3 units)',
     ),
     (
       daysAgo: 1,
       machineName: 'Extruder Line B',
       hours: 5.0,
+      machinesDown: 1,
       reason: 'Hydraulic pressure drop',
     ),
   ];
@@ -159,14 +165,17 @@ class SeedService {
   }
 
   Future<List<Machine>> _seedMachines(int factoryId, int productId) async {
+    // (name, rated/hr, hours/day, unit_count, status). "Packaging Unit" is a
+    // group of 3 identical machines — the demo's example of one row standing
+    // for several units.
     final specs = [
-      ('Extruder Line A', 50.0, 16.0, 'Active'),
-      ('Extruder Line B', 40.0, 16.0, 'Active'),
-      ('Packaging Unit', 100.0, 16.0, 'Active'),
-      ('Old Mixer', 20.0, 8.0, 'Under Maintenance'),
+      ('Extruder Line A', 50.0, 16.0, 1, 'Active'),
+      ('Extruder Line B', 40.0, 16.0, 1, 'Active'),
+      ('Packaging Unit', 100.0, 16.0, 3, 'Active'),
+      ('Old Mixer', 20.0, 8.0, 1, 'Under Maintenance'),
     ];
     final created = <Machine>[];
-    for (final (name, rated, hours, status) in specs) {
+    for (final (name, rated, hours, unitCount, status) in specs) {
       created.add(
         await _machineService.createMachine(
           Machine(
@@ -176,6 +185,7 @@ class SeedService {
             machineName: name,
             ratedOutputPerHour: rated,
             operatingHoursPerDay: hours,
+            unitCount: unitCount,
             status: status,
             isSimulated: true,
           ),
@@ -342,6 +352,7 @@ class SeedService {
             machineId: byName[event.machineName]!.machineId,
             logDate: now.subtract(Duration(days: event.daysAgo)),
             hours: event.hours,
+            machinesDown: event.machinesDown,
             reason: event.reason,
             repairStartedAt: now
                 .subtract(Duration(days: event.daysAgo))
@@ -354,10 +365,13 @@ class SeedService {
     );
 
     final open = _downtimeEvents.last;
+    final openMachine = byName[open.machineName]!;
     await _downtimeService.logDowntime(
-      machineId: byName[open.machineName]!.machineId,
+      machineId: openMachine.machineId,
       factoryId: factoryId,
       hours: open.hours,
+      machinesDown: open.machinesDown,
+      unitCount: openMachine.unitCount,
       reason: open.reason,
       date: now.subtract(Duration(days: open.daysAgo)),
       isSimulated: true,

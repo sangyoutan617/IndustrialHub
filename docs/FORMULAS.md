@@ -57,19 +57,30 @@ are directly comparable.
 ### C1 · Machine capacity
 
 ```
-machineCapacity = Σ ( ratedOutputPerHour × operatingHoursPerDay )
+machineCapacity = Σ ( ratedOutputPerHour × operatingHoursPerDay × unitCount )
 
 over machines where status == 'Active'
 ```
 
+A `machines` row is a **group** of `unit_count` identical machines that share
+one rate, schedule and status (`unit_count` defaults to 1, so a plain single
+machine is a group of one). All units in the group are counted.
+
 Only machines whose `status` is exactly `'Active'` contribute. Every other
 status — under maintenance, retired, downtime, repair — is excluded outright
-rather than derated, so a machine flipped out of Active drops its full share
-of the ceiling. There is no uptime-percentage derate: a machine either counts
+rather than derated, so a group flipped out of Active drops its full share
+of the ceiling. There is no uptime-percentage derate: a group either counts
 at its full nameplate rate or not at all. Actual stoppages are tracked as
 discrete events instead — see `machine_downtime_log` and the
 Active → Downtime → Repair → Active workflow on the machine detail screen —
 rather than folded into this formula as an estimated percentage.
+
+`machine_downtime_log.machines_down` records how many of a group's units a
+given event took down. It is **informational only** — displayed on the
+machine page, never folded into this sum. Logging downtime flips the group's
+`status` to `'Downtime'` (and so out of C1) **only when the whole group is
+down** (`machines_down >= unit_count`); a partial stoppage leaves the group
+Active and its C1 contribution unchanged.
 
 > `lib/services/capacity_service.dart` · `computeMachineCapacity`
 
@@ -904,9 +915,11 @@ not-yet-product-scoped admin/report call sites) and
 `compute_bottleneck(p_factory_id, p_product_id)` (the one everything else
 calls) — has been read directly via the Supabase MCP connection during this
 session, most recently while removing `uptime_percent` and again while
-verifying C5's BOM join. C5–C10 above match that live SQL as of this
-writing; if the function is redefined again later, re-read it rather than
-assuming these formulas still hold.
+verifying C5's BOM join, and again when the machine-capacity sum was
+changed from `SUM(rated × hours)` to `SUM(rated × hours × unit_count)` on
+both overloads (the `machines.unit_count` group-size column). C5–C10 above
+match that live SQL as of this writing; if the function is redefined again
+later, re-read it rather than assuming these formulas still hold.
 
 **Demand-to-stock matching is by name (S2).** There is no foreign key between
 `demand_forecast.product_name` and `finished_stock.product_name`. A typo in

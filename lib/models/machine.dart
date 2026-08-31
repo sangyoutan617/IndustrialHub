@@ -19,6 +19,12 @@ class Machine {
   final String machineName;
   final double ratedOutputPerHour;
   final double operatingHoursPerDay;
+
+  /// How many identical physical machines this one row stands for. A row is
+  /// a *group*: `unit_count` units that share a rate, a schedule and a
+  /// status. Defaults to 1, so a plain single machine is just a group of one.
+  /// Capacity (C1) counts `rated × hours × unitCount`.
+  final int unitCount;
   final String status;
   final bool isSimulated;
 
@@ -29,6 +35,7 @@ class Machine {
     required this.machineName,
     required this.ratedOutputPerHour,
     required this.operatingHoursPerDay,
+    this.unitCount = 1,
     required this.status,
     required this.isSimulated,
   });
@@ -36,6 +43,10 @@ class Machine {
   bool get isActive => status == MachineStatus.active;
   bool get isDowntime => status == MachineStatus.downtime;
   bool get isRepair => status == MachineStatus.repair;
+
+  /// True when this row stands for more than one physical machine — the
+  /// signal the UI uses to show unit counts and the "machines down" field.
+  bool get isGroup => unitCount > 1;
 
   factory Machine.fromJson(Map<String, dynamic> json) {
     return Machine(
@@ -45,6 +56,7 @@ class Machine {
       machineName: json['machine_name'] as String,
       ratedOutputPerHour: (json['rated_output_per_hour'] as num).toDouble(),
       operatingHoursPerDay: (json['operating_hours_per_day'] as num).toDouble(),
+      unitCount: (json['unit_count'] as num?)?.toInt() ?? 1,
       status: json['status'] as String,
       isSimulated: json['is_simulated'] as bool? ?? false,
     );
@@ -57,6 +69,7 @@ class Machine {
       'machine_name': machineName,
       'rated_output_per_hour': ratedOutputPerHour,
       'operating_hours_per_day': operatingHoursPerDay,
+      'unit_count': unitCount,
       'status': status,
     };
   }

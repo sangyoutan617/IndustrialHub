@@ -9,6 +9,11 @@ class MachineDowntimeLog {
   final int factoryId;
   final DateTime logDate;
   final double downtimeHours;
+
+  /// How many of the machine group's units this event took down. 1 for a
+  /// single machine. Recorded for information only — it is **not** folded
+  /// into the capacity ceiling (C1); see `docs/FORMULAS.md`.
+  final int machinesDown;
   final String? reason;
   final DateTime? repairStartedAt;
   final DateTime? repairedAt;
@@ -20,6 +25,7 @@ class MachineDowntimeLog {
     required this.factoryId,
     required this.logDate,
     required this.downtimeHours,
+    this.machinesDown = 1,
     this.reason,
     this.repairStartedAt,
     this.repairedAt,
@@ -35,6 +41,7 @@ class MachineDowntimeLog {
       factoryId: json['factory_id'] as int,
       logDate: DateTime.parse(json['log_date'] as String),
       downtimeHours: (json['downtime_hours'] as num).toDouble(),
+      machinesDown: (json['machines_down'] as num?)?.toInt() ?? 1,
       reason: json['reason'] as String?,
       repairStartedAt: json['repair_started_at'] != null
           ? DateTime.parse(json['repair_started_at'] as String)

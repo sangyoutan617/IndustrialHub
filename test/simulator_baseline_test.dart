@@ -7,6 +7,7 @@ Machine _machine({
   required int id,
   required double rated,
   required double hours,
+  int unitCount = 1,
   String status = 'Active',
 }) {
   return Machine(
@@ -16,6 +17,7 @@ Machine _machine({
     machineName: 'Machine $id',
     ratedOutputPerHour: rated,
     operatingHoursPerDay: hours,
+    unitCount: unitCount,
     status: status,
     isSimulated: false,
   );
@@ -74,11 +76,12 @@ void main() {
     test(
       'the app\'s own demo fleet — the case the old averaging got 31% wrong',
       () {
-        // Mirrors SeedService._seedMachines / _seedManpower exactly.
+        // Mirrors SeedService._seedMachines / _seedManpower exactly —
+        // including the Packaging Unit being a group of 3 identical machines.
         final machines = [
           _machine(id: 1, rated: 50, hours: 16),
           _machine(id: 2, rated: 40, hours: 16),
-          _machine(id: 3, rated: 100, hours: 16),
+          _machine(id: 3, rated: 100, hours: 16, unitCount: 3),
           _machine(id: 4, rated: 20, hours: 8, status: 'Under Maintenance'),
         ];
         final shifts = [
@@ -123,6 +126,24 @@ void main() {
         );
       },
     );
+
+    test('a grouped row still reproduces the real ceiling at rest', () {
+      // One row of 4 identical machines + one single. machineCapacity is
+      // 50×16×4 + 30×16 = 3200 + 480 = 3680, over 2 rows.
+      final snapshot = _snapshot([
+        _machine(id: 1, rated: 50, hours: 16, unitCount: 4),
+        _machine(id: 2, rated: 30, hours: 16),
+      ], const []);
+      final baseline = SimulatorBaseline.from(snapshot);
+
+      expect(snapshot.machineCapacity, 3680);
+      expect(baseline.activeMachines, 2);
+      expect(baseline.machineNameplate, closeTo(1840, 0.01));
+      expect(
+        _simMachineCapacity(baseline),
+        closeTo(snapshot.machineCapacity, snapshot.machineCapacity * 0.01),
+      );
+    });
 
     test('inactive machines never drag the per-machine rate', () {
       final withIdleJunk = _snapshot([

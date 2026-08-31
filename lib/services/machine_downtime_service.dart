@@ -38,6 +38,7 @@ class MachineDowntimeService {
         int machineId,
         DateTime logDate,
         double hours,
+        int machinesDown,
         String reason,
         DateTime repairStartedAt,
         DateTime repairedAt,
@@ -53,6 +54,7 @@ class MachineDowntimeService {
           'factory_id': factoryId,
           'log_date': e.logDate.toIso8601String().substring(0, 10),
           'downtime_hours': e.hours,
+          'machines_down': e.machinesDown,
           'reason': e.reason,
           'repair_started_at': e.repairStartedAt.toUtc().toIso8601String(),
           'repaired_at': e.repairedAt.toUtc().toIso8601String(),
@@ -62,12 +64,17 @@ class MachineDowntimeService {
     _notify(factoryId);
   }
 
-  /// Opens a new downtime event and flips the machine to `Downtime`. Call
-  /// this from `Active` or `Under Maintenance` when a machine actually stops.
+  /// Opens a new downtime event. Flips the machine to `Downtime` — and so
+  /// out of the capacity ceiling — **only when the whole group is down**
+  /// (`machinesDown >= unitCount`). A partial stoppage is recorded for
+  /// information but leaves `machines.status` (and C1) untouched; see
+  /// `docs/FORMULAS.md`. Call this from `Active` or `Under Maintenance`.
   Future<void> logDowntime({
     required int machineId,
     required int factoryId,
     required double hours,
+    int machinesDown = 1,
+    int unitCount = 1,
     String? reason,
     required DateTime date,
     bool isSimulated = false,
@@ -77,10 +84,36 @@ class MachineDowntimeService {
       'factory_id': factoryId,
       'log_date': date.toIso8601String().substring(0, 10),
       'downtime_hours': hours,
+      'machines_down': machinesDown,
       'reason': reason,
       if (isSimulated) 'is_simulated': true,
     });
-    await _setStatus(machineId, MachineStatus.downtime);
+    if (machinesDown >= unitCount) {
+      await _setStatus(machineId, MachineStatus.downtime);
+    }
+    _notify(factoryId);
+  }
+
+  /// Edits an existing event's hours, reason and unit count in place. Does
+  /// not touch `machines.status` or the repair timestamps — status is the
+  /// repair workflow's job (or a manual correction on the machine form), so
+  /// correcting a count across the full/partial line won't move a machine
+  /// in or out of the ceiling on its own.
+  Future<void> updateDowntimeLog({
+    required int logId,
+    required int factoryId,
+    required double hours,
+    required int machinesDown,
+    String? reason,
+  }) async {
+    await _client
+        .from('machine_downtime_log')
+        .update({
+          'downtime_hours': hours,
+          'machines_down': machinesDown,
+          'reason': reason,
+        })
+        .eq('log_id', logId);
     _notify(factoryId);
   }
 

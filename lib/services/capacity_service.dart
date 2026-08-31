@@ -118,9 +118,15 @@ class SimulatorBaseline {
     // at what one machine is worth.
     final basis = active.isNotEmpty ? active : snapshot.machines;
 
+    // Weight by unitCount so a grouped row contributes all its units, but
+    // divide by the row count — the simulator's "Active machines" field is
+    // capped at the number of rows, so one added machine there is worth an
+    // average *group's* output. At the untouched baseline this still
+    // reproduces computeMachineCapacity exactly.
     final nameplateTotal = basis.fold<double>(
       0,
-      (sum, m) => sum + m.ratedOutputPerHour * m.operatingHoursPerDay,
+      (sum, m) =>
+          sum + m.ratedOutputPerHour * m.operatingHoursPerDay * m.unitCount,
     );
     final machineNameplate = basis.isEmpty
         ? 0.0
@@ -164,7 +170,7 @@ class CapacityService {
 
   static double computeMachineCapacity(Iterable<Machine> machines) {
     return machines.where((m) => m.isActive).fold<double>(0, (sum, m) {
-      return sum + m.ratedOutputPerHour * m.operatingHoursPerDay;
+      return sum + m.ratedOutputPerHour * m.operatingHoursPerDay * m.unitCount;
     });
   }
 

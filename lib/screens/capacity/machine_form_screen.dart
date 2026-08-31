@@ -35,6 +35,9 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
   late final _hoursController = TextEditingController(
     text: widget.machine?.operatingHoursPerDay.toString(),
   );
+  late final _unitCountController = TextEditingController(
+    text: (widget.machine?.unitCount ?? 1).toString(),
+  );
   late String _status = widget.machine?.status ?? MachineStatus.active;
   int? _selectedProductId;
   bool _isSaving = false;
@@ -80,6 +83,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
     _nameController.dispose();
     _ratedController.dispose();
     _hoursController.dispose();
+    _unitCountController.dispose();
     super.dispose();
   }
 
@@ -95,6 +99,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
         machineName: _nameController.text.trim(),
         ratedOutputPerHour: double.parse(_ratedController.text),
         operatingHoursPerDay: double.parse(_hoursController.text),
+        unitCount: int.parse(_unitCountController.text.trim()),
         status: _status,
         isSimulated: false,
       );
@@ -121,6 +126,14 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
     if (parsed == null) return 'Enter a valid number';
     if (parsed < min) return 'Must be at least $min';
     if (max != null && parsed > max) return 'Must be at most $max';
+    return null;
+  }
+
+  String? _requiredInt(String? value, {int min = 1}) {
+    if (value == null || value.trim().isEmpty) return 'Required';
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null) return 'Enter a whole number';
+    if (parsed < min) return 'Must be at least $min';
     return null;
   }
 
@@ -212,6 +225,19 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                   labelText: 'Operating hours per day',
                 ),
                 validator: (v) => _requiredNumber(v, min: 0, max: 24),
+              ),
+              const SizedBox(height: AppSpacing.l),
+              TextFormField(
+                controller: _unitCountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Number of machines in this group',
+                  helperText:
+                      'Use one row for a group of identical machines — '
+                      'capacity counts all of them. Leave as 1 for a single '
+                      'machine.',
+                ),
+                validator: (v) => _requiredInt(v, min: 1),
               ),
               const SizedBox(height: AppSpacing.l),
               DropdownButtonFormField<String>(
