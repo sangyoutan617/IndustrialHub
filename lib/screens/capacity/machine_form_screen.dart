@@ -35,10 +35,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
   late final _hoursController = TextEditingController(
     text: widget.machine?.operatingHoursPerDay.toString(),
   );
-  late final _uptimeController = TextEditingController(
-    text: (widget.machine?.uptimePercent ?? 100).toString(),
-  );
-  late String _status = widget.machine?.status ?? 'Active';
+  late String _status = widget.machine?.status ?? MachineStatus.active;
   int? _selectedProductId;
   bool _isSaving = false;
 
@@ -83,7 +80,6 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
     _nameController.dispose();
     _ratedController.dispose();
     _hoursController.dispose();
-    _uptimeController.dispose();
     super.dispose();
   }
 
@@ -99,7 +95,6 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
         machineName: _nameController.text.trim(),
         ratedOutputPerHour: double.parse(_ratedController.text),
         operatingHoursPerDay: double.parse(_hoursController.text),
-        uptimePercent: double.parse(_uptimeController.text),
         status: _status,
         isSimulated: false,
       );
@@ -219,27 +214,21 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 validator: (v) => _requiredNumber(v, min: 0, max: 24),
               ),
               const SizedBox(height: AppSpacing.l),
-              TextFormField(
-                controller: _uptimeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(labelText: 'Uptime %'),
-                validator: (v) => _requiredNumber(v, min: 0, max: 100),
-              ),
-              const SizedBox(height: AppSpacing.l),
               DropdownButtonFormField<String>(
                 initialValue: _status,
-                decoration: const InputDecoration(labelText: 'Status'),
-                items: const [
-                  DropdownMenuItem(value: 'Active', child: Text('Active')),
-                  DropdownMenuItem(
-                    value: 'Under Maintenance',
-                    child: Text('Under Maintenance'),
-                  ),
+                decoration: const InputDecoration(
+                  labelText: 'Status',
+                  helperText:
+                      'Downtime and Repair are normally set from the '
+                      'machine\'s own page — pick them here only to '
+                      'correct a stuck status',
+                ),
+                items: [
+                  for (final value in MachineStatus.all)
+                    DropdownMenuItem(value: value, child: Text(value)),
                 ],
                 onChanged: (value) =>
-                    setState(() => _status = value ?? 'Active'),
+                    setState(() => _status = value ?? MachineStatus.active),
               ),
               const SizedBox(height: AppSpacing.xl),
               FormBreak(

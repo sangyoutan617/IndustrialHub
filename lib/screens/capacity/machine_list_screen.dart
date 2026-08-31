@@ -12,6 +12,7 @@ import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_grid_list.dart';
 import '../../widgets/status.dart';
+import 'machine_detail_screen.dart';
 import 'machine_form_screen.dart';
 
 class MachineListScreen extends StatefulWidget {
@@ -57,6 +58,18 @@ class _MachineListScreenState extends State<MachineListScreen> {
     } catch (_) {
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  Future<void> _openDetail(Machine machine) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MachineDetailScreen(
+          factoryId: widget.factoryId,
+          machineId: machine.machineId,
+        ),
+      ),
+    );
+    _load();
   }
 
   Future<void> _openForm({Machine? machine}) async {
@@ -114,6 +127,16 @@ class _MachineListScreenState extends State<MachineListScreen> {
     );
   }
 
+  (AppStatus, String) _statusStyle(String status) {
+    return switch (status) {
+      MachineStatus.active => (AppStatus.success, 'Active'),
+      MachineStatus.underMaintenance => (AppStatus.warning, 'Maintenance'),
+      MachineStatus.downtime => (AppStatus.danger, 'Downtime'),
+      MachineStatus.repair => (AppStatus.warning, 'Repair'),
+      _ => (AppStatus.neutral, status),
+    };
+  }
+
   Widget _buildBody() {
     switch (_state) {
       case _LoadState.loading:
@@ -152,8 +175,10 @@ class _MachineListScreenState extends State<MachineListScreen> {
               final contribution = isActive
                   ? CapacityService.computeMachineCapacity([machine])
                   : 0.0;
+              final (chipStatus, chipLabel) = _statusStyle(machine.status);
               return Card(
                 child: ListTile(
+                  onTap: () => _openDetail(machine),
                   title: Text(
                     machine.machineName,
                     maxLines: 1,
@@ -167,10 +192,8 @@ class _MachineListScreenState extends State<MachineListScreen> {
                         Row(
                           children: [
                             StatusChip(
-                              label: isActive ? 'Active' : 'Maintenance',
-                              status: isActive
-                                  ? AppStatus.success
-                                  : AppStatus.warning,
+                              label: chipLabel,
+                              status: chipStatus,
                               dense: true,
                             ),
                             const SizedBox(width: AppSpacing.s),

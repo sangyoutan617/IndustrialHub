@@ -66,6 +66,78 @@ class DailyProductionService {
     return result;
   }
 
+  /// Bulk-writes many days of production in one round trip, reusing a single
+  /// bottleneck snapshot for all of them instead of the one-`compute_bottleneck`-
+  /// call-per-day [logProduction] makes for a single live entry. Only valid
+  /// when capacity genuinely doesn't change across the whole batch (e.g.
+  /// backfilling demo history immediately after machines/manpower were
+  /// seeded, before anything about them could have changed) — a real
+  /// day-by-day log always goes through [logProduction] instead, since a
+  /// machine going down partway through *should* change later days' ceiling.
+  Future<void> logHistoricalBatch({
+    required int factoryId,
+    required int productId,
+    required List<({DateTime logDate, int actualOutput, double downtimeHours})>
+    days,
+  }) async {
+    if (days.isEmpty) return;
+    final bottleneck = await _bottleneckService.computeForProduct(
+      factoryId,
+      productId,
+    );
+    final effectiveCeiling = bottleneck.hasData ? bottleneck.achievable : null;
+
+    final rows = [
+      for (final day in days)
+        {
+          'factory_id': factoryId,
+          'product_id': productId,
+          'log_date': day.logDate.toIso8601String().substring(0, 10),
+          'actual_output': day.actualOutput,
+          'machine_capacity': bottleneck.hasData
+              ? bottleneck.machineCapacity
+              : null,
+          'manpower_capacity': bottleneck.hasData
+              ? bottleneck.manpowerCapacity
+              : null,
+          'effective_ceiling': effectiveCeiling,
+          'bottleneck': bottleneck.hasData
+              ? (bottleneck.limiter ?? bottleneck.bottleneckResource)
+              : null,
+          'utilisation_percent':
+              (effectiveCeiling != null && effectiveCeiling > 0)
+              ? (day.actualOutput / effectiveCeiling) * 100
+              : null,
+          'downtime_hours': day.downtimeHours,
+          'is_simulated': true,
+        },
+    ];
+    await _client.from('daily_production').insert(rows);
+    DataEventService.instance.notifyChanged(
+      factoryId: factoryId,
+      source: DataChangeSource.production,
+    );
+  }
+
+  /// The row already logged for one product on one day, if any — used to
+  /// find the previously logged output before overwriting it, so a caller
+  /// can deduct/return only the *change* in material consumption rather
+  /// than the whole new total again.
+  Future<DailyProduction?> getForDate({
+    required int factoryId,
+    required int productId,
+    required DateTime logDate,
+  }) async {
+    final row = await _client
+        .from('daily_production')
+        .select()
+        .eq('factory_id', factoryId)
+        .eq('product_id', productId)
+        .eq('log_date', logDate.toIso8601String().substring(0, 10))
+        .maybeSingle();
+    return row == null ? null : DailyProduction.fromJson(row);
+  }
+
   /// One product's trend — the chart and downtime summary on
   /// production_trend_screen.dart are both scoped to a single product at a
   /// time, since a factory-wide sum would mix output figures across

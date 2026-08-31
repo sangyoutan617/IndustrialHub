@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/bom_entry.dart';
 import '../../models/daily_production.dart';
 import '../../models/factory.dart';
@@ -137,6 +138,16 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 
     setState(() => _isLogging = true);
     try {
+      // Captured before the upsert overwrites it — the delta against this
+      // is what actually gets deducted/returned, so re-logging (correcting)
+      // an already-logged day doesn't double-deduct.
+      final previous = await _service.getForDate(
+        factoryId: widget.factory.factoryId,
+        productId: result.productId,
+        logDate: result.logDate,
+      );
+      final previousOutput = previous?.actualOutput ?? 0;
+
       await _service.logProduction(
         factoryId: widget.factory.factoryId,
         productId: result.productId,
@@ -144,12 +155,9 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         actualOutput: result.actualOutput,
         downtimeHours: result.downtimeHours,
       );
-      if (result.deductMaterials && result.actualOutput > 0) {
-        await _consumeMaterials(
-          result.productId,
-          result.actualOutput,
-          result.logDate,
-        );
+      final delta = result.actualOutput - previousOutput;
+      if (delta != 0) {
+        await _consumeMaterials(result.productId, delta, result.logDate);
       }
       // Switch the view to whichever product was just logged, so the new
       // entry is immediately visible rather than possibly landing on a
@@ -172,11 +180,16 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     }
   }
 
-  /// Deducts the raw material this product's recipe says this output
-  /// consumed, and warns (non-blocking) about any material that didn't have
-  /// enough stock. Best-effort — a consumption failure never undoes the
+  /// Deducts — or returns, if [unitsDelta] is negative — the raw material
+  /// this product's recipe says the *change* in output implies, and warns
+  /// (non-blocking) about any material that didn't have enough stock to
+  /// consume. Best-effort — a consumption failure never undoes the
   /// already-logged production.
-  Future<void> _consumeMaterials(int productId, int units, DateTime date) async {
+  Future<void> _consumeMaterials(
+    int productId,
+    int unitsDelta,
+    DateTime date,
+  ) async {
     try {
       final results = await Future.wait<dynamic>([
         _materialService.getMaterials(widget.factory.factoryId),
@@ -188,7 +201,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         factoryId: widget.factory.factoryId,
         materials: materials,
         bom: bom,
-        unitsProduced: units,
+        unitsDelta: unitsDelta,
         date: date,
       );
       if (!mounted || skipped.isEmpty) return;
@@ -662,14 +675,12 @@ class _LogProductionResult {
   final DateTime logDate;
   final int actualOutput;
   final double downtimeHours;
-  final bool deductMaterials;
 
   const _LogProductionResult({
     required this.productId,
     required this.logDate,
     required this.actualOutput,
     required this.downtimeHours,
-    required this.deductMaterials,
   });
 }
 
@@ -693,7 +704,6 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
   final _downtimeController = TextEditingController(text: '0');
   final _formKey = GlobalKey<FormState>();
   DateTime _logDate = DateTime.now();
-  bool _deductMaterials = true;
   late int? _selectedProductId =
       widget.initialProductId ??
       (widget.products.isEmpty ? null : widget.products.first.productId);
@@ -725,7 +735,6 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
         logDate: _logDate,
         actualOutput: int.parse(_outputController.text.trim()),
         downtimeHours: double.tryParse(_downtimeController.text.trim()) ?? 0,
-        deductMaterials: _deductMaterials,
       ),
     );
   }
@@ -778,7 +787,11 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
               TextFormField(
                 controller: _outputController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Actual output'),
+                decoration: const InputDecoration(
+                  labelText: 'Actual output',
+                  helperText: 'Deducts this recipe\'s materials automatically',
+                  helperMaxLines: 2,
+                ),
                 validator: (v) {
                   final parsed = int.tryParse((v ?? '').trim());
                   if (parsed == null || parsed < 0) {
@@ -787,6 +800,7 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                   return null;
                 },
               ),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _downtimeController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -802,13 +816,6 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                   }
                   return null;
                 },
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: _deductMaterials,
-                onChanged: (v) => setState(() => _deductMaterials = v ?? true),
-                title: const Text('Deduct raw materials used'),
               ),
             ],
           ),

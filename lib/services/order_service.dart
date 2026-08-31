@@ -117,6 +117,34 @@ class OrderService {
     }
   }
 
+  /// Marks the order delivered as of a specific past [deliveredAt] date and
+  /// adds its quantity to the material's stock — used only for seeding
+  /// historical demo data. [receiveDelivery] always stamps `delivered_at` as
+  /// *today* (correct for a real live delivery), which would make a 60-day-
+  /// old backfilled order look like it just arrived; this sets the date
+  /// directly instead. Not idempotent/transactional like [receiveDelivery] —
+  /// fine for one-time seeding, not for a live user-facing action.
+  Future<void> markDeliveredAt(
+    PurchaseOrder order,
+    DateTime deliveredAt, {
+    int? factoryId,
+  }) async {
+    await _client
+        .from('purchase_orders')
+        .update({
+          'status': PurchaseOrderStatus.delivered,
+          'delivered_at': deliveredAt.toIso8601String().substring(0, 10),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('po_id', order.poId);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.order,
+      );
+    }
+  }
+
   /// Marks the order delivered and adds its quantity to the material's
   /// stock. Goes through the `receive_delivery` RPC so both writes happen
   /// in one transaction and a repeat call on an already-delivered order

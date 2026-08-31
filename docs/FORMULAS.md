@@ -57,16 +57,19 @@ are directly comparable.
 ### C1 · Machine capacity
 
 ```
-machineCapacity = Σ ( ratedOutputPerHour
-                    × operatingHoursPerDay
-                    × uptimePercent / 100 )
+machineCapacity = Σ ( ratedOutputPerHour × operatingHoursPerDay )
 
 over machines where status == 'Active'
 ```
 
 Only machines whose `status` is exactly `'Active'` contribute. Every other
-status — under maintenance, retired — is excluded outright rather than
-derated, so a machine flipped inactive drops its full share of the ceiling.
+status — under maintenance, retired, downtime, repair — is excluded outright
+rather than derated, so a machine flipped out of Active drops its full share
+of the ceiling. There is no uptime-percentage derate: a machine either counts
+at its full nameplate rate or not at all. Actual stoppages are tracked as
+discrete events instead — see `machine_downtime_log` and the
+Active → Downtime → Repair → Active workflow on the machine detail screen —
+rather than folded into this formula as an estimated percentage.
 
 > `lib/services/capacity_service.dart` · `computeMachineCapacity`
 
@@ -122,18 +125,24 @@ stock physically permits, and what the demand plan actually asks for.
 ### C5 · Material ceiling
 
 ```
-materialCeiling = min( currentStock / consumptionPerUnit )
+materialCeiling = min( rawMaterial.currentStock / bomEntry.quantityPerUnit )
 
-over materials where consumptionPerUnit > 0
-null when no material qualifies
+over this product's own product_materials (BOM) rows
+where quantityPerUnit > 0
+null when no BOM row qualifies
 ```
 
-The scarcest material governs, since one exhausted input halts the line
-regardless of the others. Materials with a non-positive consumption rate are
+Scoped to the one product `compute_bottleneck()` was called for — each
+product has its own bill of materials (`product_materials`), so a material
+shared by several products can be scarce for one and plentiful for another.
+The scarcest ingredient governs, since one exhausted input halts that
+product's line regardless of the others. Rows with a non-positive rate are
 skipped rather than treated as infinite — dividing by zero would poison the
 minimum.
 
-> `compute_bottleneck()` — see [Provenance](#provenance-and-caveats)
+> `compute_bottleneck(p_factory_id, p_product_id)` — joins
+> `product_materials`/`raw_materials` directly in SQL; see
+> [Provenance](#provenance-and-caveats)
 
 ### C6 · Required per day
 
@@ -261,33 +270,26 @@ outputPerWorkerHour = C2 / Σ( workerCount × shiftHours )
 
 Baseline field values — chosen so an untouched simulator reproduces C1 and C2:
 
-uptimePercent = Σ( rated × hours × uptime ) / Σ( rated × hours )
-shiftHours    = Σ( workerCount × shiftHours ) / totalWorkers
+shiftHours = Σ( workerCount × shiftHours ) / totalWorkers
 
 The simulation itself:
 
-simMachineCapacity  = activeMachines × machineNameplate × uptimePercent / 100
+simMachineCapacity  = activeMachines × machineNameplate
 simManpowerCapacity = workers × shiftHours × outputPerWorkerHour
 simEffective        = min( the two )
 ```
 
 The simulator needs a *per-machine* rate because it prices machine counts that
-don't exist yet — but every mean above is weighted so that, at the untouched
-baseline, the arithmetic collapses back onto C1 and C2. An added machine is
+don't exist yet — but `machineNameplate` is weighted so that, at the untouched
+baseline, the arithmetic collapses back onto C1 exactly (no uptime term means
+no rounding source either — `activeMachines × mean(rated × hours)` reproduces
+`Σ(rated × hours)` precisely, not just approximately). An added machine is
 therefore worth what an average active machine is worth, and the starting
 number matches the dashboard.
 
-Two details carry the weighting:
-
-- `machineNameplate` is the mean of the **product** `rated × hours`, not the
-  product of the two means — the latter drops the covariance and understates
-  any fleet where the faster machines also run the longer days.
-- Uptime is **capacity-weighted**, not a per-machine mean, so a low-uptime
-  minor machine cannot drag the whole fleet down.
-
-Residual error is bounded by the whole-number-only input fields: measured at
-**+0.06%** on live data (simulator 1 428.8 vs dashboard 1 428), entirely from
-rounding uptime to 94%.
+`machineNameplate` is the mean of the **product** `rated × hours`, not the
+product of the two means — the latter drops the covariance and understates
+any fleet where the faster machines also run the longer days.
 
 > `lib/services/capacity_service.dart` · `SimulatorBaseline.from`
 > `lib/screens/capacity/simulator_screen.dart`
@@ -516,25 +518,24 @@ range regardless of absolute volume.
 # Module 3 — Supply (Mini-MRP)
 
 ```
-planned production (C19)
-        │
-        ├─→ burn rate (M1) ─→ reorder level (M2)
-        │        │
-        │        ├─────────────────┐
-suppliers ─→ effective lead (M3)   │
-        └─→ best supplier (M4)     │
-                  │                │
-open POs ─→ inbound (M5, M6) ──────┤
-                                   ↓
-                          projection walk (M7)
-                                   │
-                    ┌──────────────┼──────────────┐
-              days of cover    stock-out     order-by date
-                  (M8)           (M7)            (M9)
-                                   │              │
-                                   └──→ risk (M10) ←┘
-                                          │
-                                   suggested qty (M11, M12)
+planned production per product (C19), fanned in
+across every product via the BOM ─→ burn rate (M1) ─→ reorder level (M2)
+                                            │
+                                            ├─────────────────┐
+suppliers ─→ effective lead (M3)                              │
+        └─→ best supplier (M4)                                │
+                  │                                            │
+open POs ─→ inbound (M5, M6) ──────────────────────────────────┤
+                                                                ↓
+                                                       projection walk (M7)
+                                                                │
+                                  ┌──────────────┬──────────────┤
+                            days of cover    stock-out     order-by date
+                                (M8)           (M7)            (M9)
+                                                 │              │
+                                                 └──→ risk (M10) ←┘
+                                                        │
+                                                 suggested qty (M11, M12)
 ```
 
 ## Stage A: Burn and thresholds
@@ -542,16 +543,27 @@ open POs ─→ inbound (M5, M6) ──────┤
 ### M1 · Burn rate
 
 ```
-burnRatePerDay = consumptionPerUnit × plannedProductionPerDay
+burnRatePerDay = Σ ( plannedPerProduct[bomEntry.productId]
+                    × bomEntry.quantityPerUnit )
+
+over every product_materials (BOM) row for this material,
+across every product in the factory
 ```
 
-The single bridge from Capacity into Supply. `plannedProductionPerDay` is C19,
-so demand and capacity both feed every downstream supply number.
+The bridge from Capacity into Supply — but no longer a single rate, since a
+material can be shared by several products' recipes at different rates.
+`plannedPerProduct[productId]` is that product's own C19
+(`plannedProductionPerDayFor`, clamped to *that product's* achievable
+output), so every product using this material contributes its own share of
+the burn rate, not one factory-wide number.
+
+> `lib/services/mrp_service.dart` · `aggregateBurnRate`
+> `lib/services/supply_service.dart` · `SupplyOverview.load`
 
 ### M2 · Reorder level
 
 ```
-reorderLevel      = consumptionPerUnit × plannedProductionPerDay × 7 × 0.20
+reorderLevel      = burnRatePerDay (M1) × 7 × 0.20
 belowReorderLevel = currentStock <= reorderLevel
 ```
 
@@ -757,24 +769,53 @@ Primary key matches M4 so the recommended row always sorts to the top.
 ### M17 · Production consumption
 
 ```
-consumption[materialId] = consumptionPerUnit × unitsProduced
+consumption[materialId] = Σ bomEntry.quantityPerUnit × unitsProduced
 
-materials with a zero rate are omitted
+over that product's own product_materials (BOM) rows,
+BOM lines with a zero rate are omitted
 ```
 
-The bill of materials for one run. In the single-product capacity model every
-material is consumed in proportion to uniform output. Feeds the auto-decrement
-when production is logged.
+That product's own bill of materials for one run — the underlying math is
+unchanged from before multi-product, just scoped to one product's BOM rows
+instead of a single factory-wide rate. This is **never invoked from a
+manually typed quantity** — the only caller is the automatic deduction that
+runs whenever production is logged (M17a below), driven entirely by
+`unitsProduced`, which the product's recipe then converts per material.
+
+> `lib/services/mrp_service.dart` · `computeProductionConsumption`
+
+### M17a · Automatic deduction on a logged (or re-logged) day
+
+```
+unitsDelta = newActualOutput − previouslyLoggedActualOutput (0 if none)
+
+unitsDelta > 0 → consume  M17's consumption[materialId], at magnitude unitsDelta
+unitsDelta < 0 → return   M17's consumption[materialId], at magnitude |unitsDelta|
+unitsDelta = 0 → no movement written
+```
+
+Always automatic, never optional — there is no manual "record usage" input
+for production consumption any more. Comparing against what was
+*previously* logged for that exact (factory, product, day) — rather than
+always deducting the full new total — means correcting an already-logged
+day's output (e.g. fixing a typo) deducts or returns only the difference,
+instead of double-counting the original amount. A downward correction
+therefore returns stock rather than consuming more.
+
+> `lib/services/daily_production_service.dart` · `getForDate`
+> `lib/services/material_movement_service.dart` · `recordProductionConsumption`
+> `lib/screens/capacity/production_trend_screen.dart` · `_openLogDialog`
 
 ### M18 · Insufficient materials
 
 ```
-insufficient = materials where consumptionPerUnit × unitsProduced > currentStock
+insufficient = BOM materials where quantityPerUnit × unitsProduced > currentStock
 ```
 
 A real *"you could not have made this many"* signal, surfaced as a warning when
 logging production. Non-blocking — a consumption failure never undoes the
-already-logged production.
+already-logged production. Only ever evaluated on the consuming (positive
+`unitsDelta`) side of M17a — a return can't fail for insufficient stock.
 
 ### M19 · Order total
 
@@ -819,9 +860,9 @@ Three numbers cross module boundaries. Everything else stays local.
 
 | Value | Produced by | Consumed by | Effect |
 | --- | --- | --- | --- |
-| `effectiveCapacity` (C3) | Capacity | Supply, via C19 | Caps planned production |
-| `plannedProductionPerDay` (C19) | Supply | Supply M1, M2 | Sets every material's burn rate |
-| `materialCeiling` (C5) | Supply data | Capacity C7, C10 | Can override the bottleneck with `RAW MATERIAL` |
+| `effectiveCapacity` (C3) | Capacity | Supply, via C19 | Caps one product's planned production |
+| `plannedProductionPerDay` (C19), per product | Supply | Supply M1, M2 | Fanned across the BOM (`product_materials`) into every material that product's recipe uses — no longer a single factory-wide rate |
+| `materialCeiling` (C5) | Supply data | Capacity C7, C10 | Can override the bottleneck with `RAW MATERIAL`, scoped to that product's own BOM |
 
 The loop is worth noting: raw material stock constrains Capacity's achievable
 output (C5 → C7), while Capacity's ceiling constrains Supply's planned
@@ -852,17 +893,20 @@ while S2 and C19 filter to rows in effect today.
 
 # Provenance and caveats
 
-**C5–C10 are transcribed, not read from source.** Since commit `d92312f` the
-authoritative bottleneck math runs server-side in the `compute_bottleneck()`
-Postgres function (SECURITY INVOKER, so RLS still applies). That function's
-body is **not checked into this repository**, and the Supabase MCP connection
-available during transcription pointed at a different project.
-
-C5–C10 above come from the client-side implementation the RPC replaced,
-recovered from `d92312f^`. Their outputs match what the running app reports on
-device (machine 1 428 / labour 2 500 → ceiling 1 428, limiter `MACHINE`), which
-is consistent with these formulas — but treat them as **verified by behaviour,
-not verified by source** until the SQL body is read back.
+**C5–C10 now verified against source.** The authoritative bottleneck math
+runs server-side in the `compute_bottleneck()` Postgres function (SECURITY
+INVOKER, so RLS still applies). Its body is still **not checked into this
+repository** (no `supabase/migrations` folder — schema/function changes are
+applied live and recorded in commit/PR descriptions instead, see the
+project's migration workflow), but the live SQL for both overloads —
+`compute_bottleneck(p_factory_id)` (factory-wide, used by a couple of
+not-yet-product-scoped admin/report call sites) and
+`compute_bottleneck(p_factory_id, p_product_id)` (the one everything else
+calls) — has been read directly via the Supabase MCP connection during this
+session, most recently while removing `uptime_percent` and again while
+verifying C5's BOM join. C5–C10 above match that live SQL as of this
+writing; if the function is redefined again later, re-read it rather than
+assuming these formulas still hold.
 
 **Demand-to-stock matching is by name (S2).** There is no foreign key between
 `demand_forecast.product_name` and `finished_stock.product_name`. A typo in
@@ -898,4 +942,8 @@ build. C11, C13, C15, C16, C17, S1, S4, S6, S7 and M21 are reached only through
 the screens or services that call them — several are thin DB wrappers where a
 unit test would assert little, but C13 (utilisation), C15 (trend averaging) and
 S1/M21 (the two ledger deltas) carry real branching logic and are the strongest
-candidates if coverage is extended.
+candidates if coverage is extended. M17a (the delta-vs-previous-log direction
+switch) is the newest of these: `recordProductionConsumption`'s sign-selects-
+direction logic is thin enough that its correctness rests on M17's own
+(covered) math plus manual/on-device verification of the delta calculation
+itself, rather than a unit test of the DB-touching wrapper.
