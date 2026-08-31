@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../core/theme.dart';
 import '../../models/bom_entry.dart';
 import '../../models/daily_production.dart';
 import '../../models/factory.dart';
@@ -788,9 +789,8 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Actual output',
-                  helperText:
-                      'Raw materials for this product\'s recipe are '
-                      'deducted automatically',
+                  helperText: 'Deducts this recipe\'s materials automatically',
+                  helperMaxLines: 2,
                 ),
                 validator: (v) {
                   final parsed = int.tryParse((v ?? '').trim());
@@ -800,6 +800,7 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                   return null;
                 },
               ),
+              const SizedBox(height: AppSpacing.l),
               TextFormField(
                 controller: _downtimeController,
                 keyboardType: const TextInputType.numberWithOptions(

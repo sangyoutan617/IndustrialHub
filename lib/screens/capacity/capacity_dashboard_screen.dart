@@ -528,6 +528,23 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         : 6.0;
     return Column(
       children: [
+        // Placed above the value/bar (not below the label) deliberately:
+        // the two bars share a bottom baseline via the parent Row's
+        // CrossAxisAlignment.end, and only one side ever carries this chip.
+        // Appending it after the label would make that column taller,
+        // pushing the *other* column's bar/label down to keep the bottoms
+        // aligned — breaking the shared baseline. Extra content above the
+        // value doesn't have that effect: the other column's top-padding
+        // (from the same end-alignment) absorbs it instead.
+        if (isLimiter)
+          const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.xs),
+            child: StatusChip(
+              label: 'Limiter',
+              status: AppStatus.warning,
+              dense: true,
+            ),
+          ),
         // FittedBox so a wide space-formatted value doesn't clip when this
         // bar sits inside a half-width landscape column.
         FittedBox(
@@ -557,15 +574,6 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
-        if (isLimiter)
-          const Padding(
-            padding: EdgeInsets.only(top: AppSpacing.xs),
-            child: StatusChip(
-              label: 'Limiter',
-              status: AppStatus.warning,
-              dense: true,
-            ),
-          ),
       ],
     );
   }
