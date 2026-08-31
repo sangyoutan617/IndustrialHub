@@ -165,17 +165,21 @@ class SeedService {
   }
 
   Future<List<Machine>> _seedMachines(int factoryId, int productId) async {
-    // (name, rated/hr, hours/day, unit_count, status). "Packaging Unit" is a
-    // group of 3 identical machines — the demo's example of one row standing
-    // for several units.
+    // (name, rated/hr, hours/day, unit_count, stage, status). The line is a
+    // flow: Mixing → Extrusion → Packaging. Machines in the same stage run in
+    // parallel (their capacity adds); the slowest stage caps the line. Here
+    // Packaging (20 × 16 × 3 = 960/day) is the machine bottleneck, just above
+    // the labour ceiling so the demo stays manpower-bound. "Packaging Unit"
+    // is also the group-of-3 example for unit_count.
     final specs = [
-      ('Extruder Line A', 50.0, 16.0, 1, 'Active'),
-      ('Extruder Line B', 40.0, 16.0, 1, 'Active'),
-      ('Packaging Unit', 100.0, 16.0, 3, 'Active'),
-      ('Old Mixer', 20.0, 8.0, 1, 'Under Maintenance'),
+      ('Mixer 1', 65.0, 16.0, 1, 'Mixing', 'Active'),
+      ('Extruder Line A', 45.0, 16.0, 1, 'Extrusion', 'Active'),
+      ('Extruder Line B', 40.0, 16.0, 1, 'Extrusion', 'Active'),
+      ('Packaging Unit', 20.0, 16.0, 3, 'Packaging', 'Active'),
+      ('Old Mixer', 20.0, 8.0, 1, 'Mixing', 'Under Maintenance'),
     ];
     final created = <Machine>[];
-    for (final (name, rated, hours, unitCount, status) in specs) {
+    for (final (name, rated, hours, unitCount, stage, status) in specs) {
       created.add(
         await _machineService.createMachine(
           Machine(
@@ -186,6 +190,7 @@ class SeedService {
             ratedOutputPerHour: rated,
             operatingHoursPerDay: hours,
             unitCount: unitCount,
+            stage: stage,
             status: status,
             isSimulated: true,
           ),
@@ -197,7 +202,13 @@ class SeedService {
   }
 
   Future<List<Manpower>> _seedManpower(int factoryId, int productId) async {
-    final specs = [('Day Shift', 15, 8.0, 5.0), ('Night Shift', 8, 8.0, 4.0)];
+    // Labour is a flow of task stations, not time shifts — the slowest
+    // station caps the line. "Wrapping & packing" (14 × 8 × 7.7 ≈ 862/day) is
+    // the labour bottleneck and the overall ceiling for this product.
+    final specs = [
+      ('Filling & capping', 16, 8.0, 8.0),
+      ('Wrapping & packing', 14, 8.0, 7.7),
+    ];
     final created = <Manpower>[];
     for (final (name, workers, hours, perHour) in specs) {
       created.add(

@@ -40,24 +40,33 @@
   documented manual procedure — there is no in-app refresh action.
 - **Two separate downtime figures, deliberately not reconciled.**
   `daily_production.downtime_hours` is one manually-entered total per
-  factory/product per day, feeding the "worst day" flag on the production
-  trend screen (Priority 7.5). `machine_downtime_log` is a separate,
-  per-machine event ledger — each machine's own page
-  (`machine_detail_screen.dart`) walks it through Active → Downtime →
-  Repair → Active, and a machine in Downtime or Repair is excluded from the
-  capacity ceiling exactly like Under Maintenance. The per-machine log is
-  not summed into `daily_production.downtime_hours`; rolling the two
-  together is a reasonable future step but isn't built here. There is also
-  no uptime-percentage field on a machine any more — capacity uses each
-  Active machine's full nameplate rate (`rated × hours × unit_count`), and
-  real stoppages are what the downtime log is for.
+  factory/product per day — **total machine-hours lost** across every
+  machine that was down (e.g. 2 machines down 2h + 3 down 1h = 7), keyed in
+  when logging production and feeding the "worst day" flag on the trend
+  screen. `machine_downtime_log` is a separate, per-machine event ledger
+  (`machine_detail_screen.dart`, Active → Downtime → Repair → Active). The
+  two are not rolled together; that's a reasonable future step.
+- **Capacity is a production flow, not a sum.** Each machine has a `stage`
+  (Mixing → Extrusion → Packaging …); machines at the same stage run in
+  parallel (capacities add), and the product's machine ceiling is the
+  **slowest stage**. Each `manpower` row is a **task station** in the labour
+  flow (Filling, Wrapping …) and the slowest station caps labour. A blank
+  stage = that machine is its own stage. Capacity still uses each Active
+  machine's full nameplate rate (`rated × hours × unit_count`) — no
+  uptime-percentage derate — and real stoppages are what the downtime log is
+  for. *The what-if simulator still uses the older summed model and
+  over-states multi-stage ceilings — a tracked follow-up.*
 - **A machine row is a group.** `machines.unit_count` (default 1) lets one
-  row stand for several identical machines; capacity counts all of them.
-  A downtime event records `machines_down` — how many units the breakdown
-  took out — which is shown on the machine page but is **informational
-  only**: it does not derate the ceiling, and the group is only flipped
-  wholesale to Downtime when every unit is down. Hours, reason and unit
-  count on a logged event are editable from the machine page.
+  row stand for several identical machines; its stage counts all of them.
+  A downtime event records `machines_down` — shown on the machine page but
+  **informational only**: it doesn't derate the ceiling, and the group flips
+  to Downtime only when every unit is down. Hours, reason and unit count on a
+  logged event are editable from the machine page.
+- **Logging production updates finished stock.** Recording a day's output on
+  the production trend screen adds a `production_in` finished-stock movement
+  for the *change* vs any previously logged figure (a downward correction
+  posts a signed `adjustment`), alongside the existing recipe-material
+  deduction.
 
 ## Government data refresh
 

@@ -8,7 +8,6 @@ import '../../services/product_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
-import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import 'manpower_form_screen.dart';
 
@@ -69,7 +68,7 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(shift == null ? 'Shift added' : 'Shift updated'),
+          content: Text(shift == null ? 'Station added' : 'Station updated'),
         ),
       );
     }
@@ -78,7 +77,7 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
   Future<void> _delete(Manpower shift) async {
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Remove shift?',
+      title: 'Remove station?',
       message:
           'This removes "${shift.shiftName}" permanently. This cannot be undone.',
     );
@@ -89,12 +88,12 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Shift removed')));
+      ).showSnackBar(const SnackBar(content: Text('Station removed')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not delete shift. Please try again.'),
+          content: Text('Could not delete station. Please try again.'),
         ),
       );
     }
@@ -130,28 +129,21 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
                 const SizedBox(height: 80),
                 EmptyState(
                   icon: Icons.groups_outlined,
-                  title: 'No shifts yet',
-                  subtitle: 'Add your first shift to track labour capacity.',
-                  actionLabel: 'Add shift',
+                  title: 'No stations yet',
+                  subtitle:
+                      'Add your first labour station to track capacity.',
+                  actionLabel: 'Add station',
                   onAction: () => _openForm(),
                 ),
               ],
             ),
           );
         }
-        final totalCapacity = CapacityService.computeManpowerCapacity(_shifts);
         return RefreshIndicator(
           onRefresh: _load,
           child: ListView(
             padding: const EdgeInsets.all(8),
             children: [
-              KpiCard(
-                icon: Icons.groups,
-                label: 'Total labour capacity',
-                value: formatUnits(totalCapacity),
-                unit: '/day',
-              ),
-              const SizedBox(height: 8),
               OrientationBuilder(
                 builder: (context, orientation) {
                   if (orientation == Orientation.landscape) {
@@ -191,7 +183,8 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
           children: [
             Text(
               '${shift.workerCount} workers × ${shift.shiftHours}h × '
-              '${shift.outputPerWorkerHour}/worker-hour',
+              '${shift.outputPerWorkerHour}/worker-hour  ·  '
+              '${formatUnits(CapacityService.stationCapacity(shift))}/day',
             ),
             Text(
               _productNames[shift.productId] ?? 'Unknown product',

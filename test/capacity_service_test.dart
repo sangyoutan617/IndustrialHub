@@ -4,19 +4,22 @@ import 'package:industrial_hub/models/manpower.dart';
 import 'package:industrial_hub/services/capacity_service.dart';
 
 Machine _machine({
+  int id = 1,
   double rated = 10,
   double hours = 8,
   int unitCount = 1,
+  String? stage,
   String status = 'Active',
 }) {
   return Machine(
-    machineId: 1,
+    machineId: id,
     factoryId: 1,
     productId: 1,
-    machineName: 'Test machine',
+    machineName: 'Machine $id',
     ratedOutputPerHour: rated,
     operatingHoursPerDay: hours,
     unitCount: unitCount,
+    stage: stage,
     status: status,
     isSimulated: false,
   );
@@ -61,19 +64,58 @@ CapacitySnapshot _snapshot({
 }
 
 void main() {
-  group('CapacityService.computeMachineCapacity', () {
-    test('sums rated output * hours for active machines', () {
+  group('CapacityService.computeMachineCapacity — flow (min across stages)', () {
+    test('two machines at the same stage run in parallel and add up', () {
       final capacity = CapacityService.computeMachineCapacity([
-        _machine(rated: 10, hours: 8),
-        _machine(rated: 5, hours: 10),
+        _machine(id: 1, rated: 10, hours: 8, stage: 'Filling'), // 80
+        _machine(id: 2, rated: 5, hours: 8, stage: 'Filling'), // 40
       ]);
-      expect(capacity, 130);
+      expect(capacity, 120);
     });
 
-    test('excludes machines under maintenance', () {
+    test('distinct stages run in series — the slowest stage governs', () {
       final capacity = CapacityService.computeMachineCapacity([
-        _machine(rated: 10, hours: 8),
-        _machine(rated: 100, hours: 24, status: 'Under Maintenance'),
+        _machine(id: 1, rated: 100, hours: 10, stage: 'Extrusion'), // 1000
+        _machine(id: 2, rated: 50, hours: 10, stage: 'Packaging'), // 500
+      ]);
+      expect(capacity, 500);
+    });
+
+    test('a blank stage means the machine is its own stage', () {
+      // Two unstaged machines → two one-machine stages → the slower one wins.
+      final capacity = CapacityService.computeMachineCapacity([
+        _machine(id: 1, rated: 10, hours: 8), // 80
+        _machine(id: 2, rated: 5, hours: 8), // 40
+      ]);
+      expect(capacity, 40);
+    });
+
+    test('unitCount multiplies a stage total; inactive rows are excluded', () {
+      final capacity = CapacityService.computeMachineCapacity([
+        _machine(id: 1, rated: 10, hours: 8, unitCount: 3, stage: 'A'), // 240
+        _machine(
+          id: 2,
+          rated: 100,
+          hours: 24,
+          unitCount: 5,
+          stage: 'A',
+          status: 'Under Maintenance',
+        ), // excluded
+        _machine(id: 3, rated: 20, hours: 8, stage: 'B'), // 160
+      ]);
+      expect(capacity, 160); // min(stage A 240, stage B 160)
+    });
+
+    test('a stage whose only machine is down drops out of the min', () {
+      final capacity = CapacityService.computeMachineCapacity([
+        _machine(id: 1, rated: 10, hours: 8, stage: 'A'), // 80
+        _machine(
+          id: 2,
+          rated: 5,
+          hours: 8,
+          stage: 'B',
+          status: 'Downtime',
+        ), // whole stage gone
       ]);
       expect(capacity, 80);
     });
@@ -81,34 +123,38 @@ void main() {
     test('empty list yields zero capacity', () {
       expect(CapacityService.computeMachineCapacity([]), 0);
     });
-
-    test('a group counts every unit — unitCount multiplies the contribution', () {
-      final single = CapacityService.computeMachineCapacity([
-        _machine(rated: 10, hours: 8),
-      ]);
-      final groupOfThree = CapacityService.computeMachineCapacity([
-        _machine(rated: 10, hours: 8, unitCount: 3),
-      ]);
-      expect(single, 80);
-      expect(groupOfThree, 240);
-    });
-
-    test('an under-maintenance group is excluded regardless of unitCount', () {
-      final capacity = CapacityService.computeMachineCapacity([
-        _machine(rated: 10, hours: 8, unitCount: 2),
-        _machine(rated: 100, hours: 24, unitCount: 5, status: 'Under Maintenance'),
-      ]);
-      expect(capacity, 160);
-    });
   });
 
-  group('CapacityService.computeManpowerCapacity', () {
-    test('sums worker_count * shift_hours * output_per_worker_hour', () {
+  group('CapacityService.computeManpowerCapacity — slowest station', () {
+    test('the slowest task station caps labour', () {
       final capacity = CapacityService.computeManpowerCapacity([
-        _shift(workers: 5, hours: 8, perHour: 2),
-        _shift(workers: 3, hours: 6, perHour: 1),
+        _shift(workers: 5, hours: 8, perHour: 2), // 80
+        _shift(workers: 3, hours: 6, perHour: 1), // 18
       ]);
-      expect(capacity, 98);
+      expect(capacity, 18);
+    });
+
+    test('a single station is its own capacity', () {
+      expect(
+        CapacityService.computeManpowerCapacity([
+          _shift(workers: 5, hours: 8, perHour: 2),
+        ]),
+        80,
+      );
+    });
+
+    test('no stations yields zero', () {
+      expect(CapacityService.computeManpowerCapacity(const []), 0);
+    });
+
+    test('sumManpowerCapacity still adds every station (simulator only)', () {
+      expect(
+        CapacityService.sumManpowerCapacity([
+          _shift(workers: 5, hours: 8, perHour: 2),
+          _shift(workers: 3, hours: 6, perHour: 1),
+        ]),
+        98,
+      );
     });
   });
 

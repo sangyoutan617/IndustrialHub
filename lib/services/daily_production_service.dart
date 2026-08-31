@@ -160,6 +160,48 @@ class DailyProductionService {
         .toList();
   }
 
+  /// Every product's trend combined — the production_trend_screen's "All
+  /// products" view. Rows are collapsed to one synthetic record per
+  /// `log_date`, summing `actual_output`, `effective_ceiling` (products
+  /// without a ceiling contribute 0; the sum is null only when *no* product
+  /// that day had one) and `downtime_hours`. Mixed product units are added
+  /// regardless — the caller opted into a combined figure. `productId` on the
+  /// returned records is 0 (not a real product).
+  Future<List<DailyProduction>> getTrendAllProducts(
+    int factoryId, {
+    int days = 30,
+  }) async {
+    final since = DateTime.now().subtract(Duration(days: days - 1));
+    final rows = await _client
+        .from('daily_production')
+        .select()
+        .eq('factory_id', factoryId)
+        .gte('log_date', since.toIso8601String().substring(0, 10))
+        .order('log_date', ascending: true);
+
+    final byDate = <String, DailyProduction>{};
+    for (final raw in rows as List) {
+      final dp = DailyProduction.fromJson(raw as Map<String, dynamic>);
+      final key = dp.logDate.toIso8601String().substring(0, 10);
+      final prev = byDate[key];
+      final ceiling = dp.effectiveCeiling == null && prev?.effectiveCeiling == null
+          ? null
+          : (prev?.effectiveCeiling ?? 0) + (dp.effectiveCeiling ?? 0);
+      byDate[key] = DailyProduction(
+        dailyId: prev?.dailyId ?? dp.dailyId,
+        factoryId: factoryId,
+        productId: 0,
+        logDate: dp.logDate,
+        actualOutput: (prev?.actualOutput ?? 0) + dp.actualOutput,
+        effectiveCeiling: ceiling,
+        downtimeHours: (prev?.downtimeHours ?? 0) + dp.downtimeHours,
+        isSimulated: false,
+      );
+    }
+    return byDate.values.toList()
+      ..sort((a, b) => a.logDate.compareTo(b.logDate));
+  }
+
   /// Average *factory-wide* output per logged day, grouped by calendar
   /// month — feeds the sector (IPI) benchmark, which compares total factory
   /// output, not any one product. A factory can now log several rows per

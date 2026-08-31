@@ -400,6 +400,11 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
                       label: 'Machines in group',
                       value: '${machine.unitCount}',
                     ),
+                  if (machine.stageLabel != null)
+                    MetricRow(
+                      label: 'Stage',
+                      value: machine.stageLabel!,
+                    ),
                   MetricRow(
                     label: 'Capacity contribution',
                     value: machine.isActive

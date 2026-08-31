@@ -221,7 +221,10 @@ class _MachineListScreenState extends State<MachineListScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _productNames[machine.productId] ?? 'Unknown product',
+                          machine.stageLabel != null
+                              ? '${_productNames[machine.productId] ?? 'Unknown product'} · ${machine.stageLabel} stage'
+                              : (_productNames[machine.productId] ??
+                                    'Unknown product'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(

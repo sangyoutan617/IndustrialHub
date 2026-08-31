@@ -6,11 +6,13 @@ import '../../models/daily_production.dart';
 import '../../models/factory.dart';
 import '../../models/product.dart';
 import '../../models/raw_material.dart';
+import '../../models/stock_movement.dart';
 import '../../services/bom_service.dart';
 import '../../services/daily_production_service.dart';
 import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
 import '../../services/product_service.dart';
+import '../../services/stock_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
@@ -42,6 +44,10 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   final _movementService = MaterialMovementService();
   final _productService = ProductService();
   final _bomService = BomService();
+  final _stockService = StockService();
+
+  /// Dropdown sentinel meaning "combine every product into one line".
+  static const _allProductsId = -1;
 
   _LoadState _state = _LoadState.loading;
   _Granularity _granularity = _Granularity.day;
@@ -49,6 +55,8 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   List<Product> _products = [];
   int? _selectedProductId;
   bool _isLogging = false;
+
+  bool get _isViewingAll => _selectedProductId == _allProductsId;
 
   @override
   void initState() {
@@ -90,11 +98,16 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       final productId =
           _selectedProductId ??
           products.firstWhere((p) => !p.isGeneral, orElse: () => products.first).productId;
-      final rows = await _service.getTrend(
-        widget.factory.factoryId,
-        productId: productId,
-        days: _fetchDays,
-      );
+      final rows = productId == _allProductsId
+          ? await _service.getTrendAllProducts(
+              widget.factory.factoryId,
+              days: _fetchDays,
+            )
+          : await _service.getTrend(
+              widget.factory.factoryId,
+              productId: productId,
+              days: _fetchDays,
+            );
       if (!mounted) return;
       setState(() {
         _products = products;
@@ -131,7 +144,9 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       context: context,
       builder: (_) => _LogProductionDialog(
         products: _products,
-        initialProductId: _selectedProductId,
+        // "All products" isn't a thing you can log against — default the
+        // dialog to the first real product instead.
+        initialProductId: _isViewingAll ? null : _selectedProductId,
       ),
     );
     if (result == null) return;
@@ -158,6 +173,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       final delta = result.actualOutput - previousOutput;
       if (delta != 0) {
         await _consumeMaterials(result.productId, delta, result.logDate);
+        await _updateFinishedStock(result.productId, delta, result.logDate);
       }
       // Switch the view to whichever product was just logged, so the new
       // entry is immediately visible rather than possibly landing on a
@@ -214,6 +230,56 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       );
     } catch (e) {
       debugPrint('capacity: material consumption failed: $e');
+    }
+  }
+
+  /// Mirrors [_consumeMaterials] on the finished-goods side: the *change* in
+  /// logged output is added to (or, for a downward correction, removed from)
+  /// this product's finished stock. Best-effort — a failure never undoes the
+  /// already-logged production. A downward correction that would push stock
+  /// below zero is surfaced (non-blocking) rather than silently dropped.
+  Future<void> _updateFinishedStock(
+    int productId,
+    int unitsDelta,
+    DateTime date,
+  ) async {
+    try {
+      final product = _products.firstWhere((p) => p.productId == productId);
+      final stock = await _stockService.getOrCreateStockForProduct(
+        widget.factory.factoryId,
+        product,
+      );
+      if (unitsDelta > 0) {
+        await _stockService.recordMovement(
+          stockId: stock.stockId,
+          movementType: StockMovementType.productionIn,
+          quantity: unitsDelta,
+          movementDate: date,
+          note: 'Logged production',
+          factoryId: widget.factory.factoryId,
+        );
+      } else {
+        await _stockService.recordMovement(
+          stockId: stock.stockId,
+          movementType: StockMovementType.adjustment,
+          quantity: unitsDelta, // negative — signed as entered
+          movementDate: date,
+          note: 'Production correction',
+          factoryId: widget.factory.factoryId,
+        );
+      }
+    } catch (e) {
+      if (mounted && e.toString().contains('below zero')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Output lowered, but finished stock is already too low to '
+              'match — adjust stock manually.',
+            ),
+          ),
+        );
+      }
+      debugPrint('capacity: finished-stock update failed: $e');
     }
   }
 
@@ -398,6 +464,10 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Product'),
           items: [
+            const DropdownMenuItem(
+              value: _allProductsId,
+              child: Text('All products (combined)'),
+            ),
             for (final product in _products)
               DropdownMenuItem(
                 value: product.productId,
@@ -469,11 +539,12 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     );
   }
 
-  /// Factory-level daily downtime — the spec's own wording asks for this
-  /// "per machine," but downtime_hours only exists on daily_production (one
-  /// total per factory per day, from Priority 3). There's no per-machine
-  /// downtime data anywhere in the schema, so this is a daily total with a
-  /// "worst day" flag instead of a per-machine breakdown.
+  /// The manually-entered daily downtime total (`daily_production
+  /// .downtime_hours`) — machine-hours lost across every machine that was
+  /// down, keyed in by the user when logging production. Separate from the
+  /// per-machine `machine_downtime_log` ledger; this figure is what the user
+  /// typed, not a roll-up of that. Shown as a daily total with a "worst day"
+  /// flag.
   List<DailyProduction> get _downtimeRows {
     final since = DateTime.now().subtract(const Duration(days: 30));
     return _raw.where((row) => row.logDate.isAfter(since)).toList()
@@ -500,12 +571,12 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Downtime (last 30 days)',
+              'Total downtime (last 30 days)',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
             Text(
-              'Factory-level daily total — no per-machine breakdown exists in the schema.',
+              'Machine-hours lost per day, as keyed in when logging production.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -789,7 +860,9 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: 'Actual output',
-                  helperText: 'Deducts this recipe\'s materials automatically',
+                  helperText:
+                      'Deducts this recipe\'s materials and adds to finished '
+                      'stock automatically',
                   helperMaxLines: 2,
                 ),
                 validator: (v) {
@@ -806,7 +879,13 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(labelText: 'Downtime hours'),
+                decoration: const InputDecoration(
+                  labelText: 'Total downtime hours',
+                  helperText:
+                      'Machine-hours lost across every machine that was '
+                      'down — e.g. 2 machines down 2h + 3 machines down 1h = 7.',
+                  helperMaxLines: 3,
+                ),
                 validator: (v) {
                   final trimmed = (v ?? '').trim();
                   if (trimmed.isEmpty) return null;

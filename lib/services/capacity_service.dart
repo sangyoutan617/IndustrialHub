@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/ipi_benchmark.dart';
 import '../models/machine.dart';
@@ -141,7 +143,7 @@ class SimulatorBaseline {
       (sum, s) => sum + s.workerCount * s.shiftHours,
     );
     final outputPerWorkerHour = workerHours > 0
-        ? CapacityService.computeManpowerCapacity(snapshot.shifts) / workerHours
+        ? CapacityService.sumManpowerCapacity(snapshot.shifts) / workerHours
         : _mean(snapshot.shifts.map((s) => s.outputPerWorkerHour));
     final shiftHours = totalWorkers > 0
         ? workerHours / totalWorkers
@@ -168,16 +170,61 @@ class CapacityService {
   final ManpowerService _manpowerService = ManpowerService();
   final SupabaseClient _client = Supabase.instance.client;
 
-  static double computeMachineCapacity(Iterable<Machine> machines) {
-    return machines.where((m) => m.isActive).fold<double>(0, (sum, m) {
-      return sum + m.ratedOutputPerHour * m.operatingHoursPerDay * m.unitCount;
-    });
+  /// Full-uptime output of one machine row: `rated × hours × unitCount`.
+  static double machineRowCapacity(Machine m) =>
+      m.ratedOutputPerHour * m.operatingHoursPerDay * m.unitCount;
+
+  /// Output of one labour station: `workers × hours × perWorkerHour`.
+  static double stationCapacity(Manpower s) =>
+      s.workerCount * s.shiftHours * s.outputPerWorkerHour;
+
+  /// Each distinct machine **stage** and the capacity it can sustain — the
+  /// sum of its Active rows (machines sharing a stage run in parallel). Keyed
+  /// by [Machine.stageKey]; the value's `label` is the first human-readable
+  /// stage name seen (null for an unstaged, standalone machine).
+  static Map<String, ({String? label, double capacity})> machineStages(
+    Iterable<Machine> machines,
+  ) {
+    final stages = <String, ({String? label, double capacity})>{};
+    for (final m in machines.where((m) => m.isActive)) {
+      final existing = stages[m.stageKey];
+      stages[m.stageKey] = (
+        label: existing?.label ?? m.stageLabel,
+        capacity: (existing?.capacity ?? 0) + machineRowCapacity(m),
+      );
+    }
+    return stages;
   }
 
+  /// A product's machine ceiling: the **slowest stage** in the flow. Machines
+  /// in the same stage add up; the minimum across stages governs. 0 when
+  /// there are no Active machines. (C1)
+  static double computeMachineCapacity(Iterable<Machine> machines) {
+    final caps = machineStages(machines).values.map((s) => s.capacity);
+    return caps.isEmpty ? 0 : caps.reduce(math.min);
+  }
+
+  /// A product's labour ceiling: the **slowest task station**. Each manpower
+  /// row is one station in the flow; the minimum governs. 0 when there are no
+  /// stations. (C2)
   static double computeManpowerCapacity(Iterable<Manpower> shifts) {
-    return shifts.fold<double>(0, (sum, s) {
-      return sum + s.workerCount * s.shiftHours * s.outputPerWorkerHour;
-    });
+    final list = shifts.toList();
+    if (list.isEmpty) return 0;
+    return list.map(stationCapacity).reduce(math.min);
+  }
+
+  /// Old additive totals — every row's output added together. No longer the
+  /// ceiling (see [computeMachineCapacity]/[computeManpowerCapacity]); kept
+  /// only for the what-if simulator, which extrapolates a rough
+  /// parallel-capacity what-if rather than modelling the flow.
+  static double sumManpowerCapacity(Iterable<Manpower> shifts) {
+    return shifts.fold<double>(0, (sum, s) => sum + stationCapacity(s));
+  }
+
+  static double sumMachineCapacity(Iterable<Machine> machines) {
+    return machines
+        .where((m) => m.isActive)
+        .fold<double>(0, (sum, m) => sum + machineRowCapacity(m));
   }
 
   static String bottleneckResourceFor(

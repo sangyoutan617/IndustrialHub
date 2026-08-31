@@ -109,7 +109,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not save shift. Please try again.'),
+          content: Text('Could not save station. Please try again.'),
         ),
       );
     } finally {
@@ -120,7 +120,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Edit shift' : 'Add shift')),
+      appBar: AppBar(title: Text(_isEditing ? 'Edit station' : 'Add station')),
       body: SafeArea(child: _buildBody()),
     );
   }
@@ -136,7 +136,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
           return const EmptyState(
             icon: Icons.category_outlined,
             message:
-                'No products yet — add a product first, a shift must be '
+                'No products yet — add a product first, a station must be '
                 'assigned to one.',
           );
         }
@@ -154,7 +154,11 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
             children: [
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Shift name'),
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Station name',
+                  helperText: 'e.g. Filling, Wrapping, Packing',
+                ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
@@ -165,8 +169,8 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Product',
                   helperText:
-                      'This shift\'s full capacity counts toward this '
-                      'product only',
+                      'This station is one step in this product\'s labour '
+                      'flow — the slowest station caps the line',
                 ),
                 items: [
                   for (final product in _products)
@@ -184,7 +188,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                     setState(() => _selectedProductId = value),
                 validator: (v) => v == null ? 'Required' : null,
               ),
-              const FormBreak(SectionHeader(title: 'Shift details')),
+              const FormBreak(SectionHeader(title: 'Station details')),
               TextFormField(
                 controller: _workersController,
                 keyboardType: TextInputType.number,
@@ -202,7 +206,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(labelText: 'Shift hours'),
+                decoration: const InputDecoration(labelText: 'Hours per day'),
                 validator: (v) {
                   final parsed = double.tryParse(v ?? '');
                   if (parsed == null) return 'Enter a valid number';

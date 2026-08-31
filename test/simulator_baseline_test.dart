@@ -8,6 +8,7 @@ Machine _machine({
   required double rated,
   required double hours,
   int unitCount = 1,
+  String? stage,
   String status = 'Active',
 }) {
   return Machine(
@@ -18,6 +19,7 @@ Machine _machine({
     ratedOutputPerHour: rated,
     operatingHoursPerDay: hours,
     unitCount: unitCount,
+    stage: stage,
     status: status,
     isSimulated: false,
   );
@@ -41,9 +43,11 @@ Manpower _shift({
   );
 }
 
+// The simulator models a rough parallel-capacity what-if, not the flow (min)
+// ceiling — so its baseline is validated against the *summed* totals.
 CapacitySnapshot _snapshot(List<Machine> machines, List<Manpower> shifts) {
-  final machineCapacity = CapacityService.computeMachineCapacity(machines);
-  final manpowerCapacity = CapacityService.computeManpowerCapacity(shifts);
+  final machineCapacity = CapacityService.sumMachineCapacity(machines);
+  final manpowerCapacity = CapacityService.sumManpowerCapacity(shifts);
   return CapacitySnapshot(
     machines: machines,
     shifts: shifts,
@@ -74,25 +78,32 @@ double _simManpowerCapacity(SimulatorBaseline b, {int? workers, int? hours}) {
 void main() {
   group('SimulatorBaseline reproduces the real ceiling at rest', () {
     test(
-      'the app\'s own demo fleet — the case the old averaging got 31% wrong',
+      'the app\'s own demo fleet — nameplate keeps the rated×hours covariance',
       () {
-        // Mirrors SeedService._seedMachines / _seedManpower exactly —
-        // including the Packaging Unit being a group of 3 identical machines.
+        // Mirrors SeedService._seedMachines / _seedManpower — Packaging Unit
+        // is the group of 3; Old Mixer is under maintenance.
         final machines = [
-          _machine(id: 1, rated: 50, hours: 16),
-          _machine(id: 2, rated: 40, hours: 16),
-          _machine(id: 3, rated: 100, hours: 16, unitCount: 3),
-          _machine(id: 4, rated: 20, hours: 8, status: 'Under Maintenance'),
+          _machine(id: 1, rated: 65, hours: 16, stage: 'Mixing'),
+          _machine(id: 2, rated: 45, hours: 16, stage: 'Extrusion'),
+          _machine(id: 3, rated: 40, hours: 16, stage: 'Extrusion'),
+          _machine(id: 4, rated: 20, hours: 16, unitCount: 3, stage: 'Packaging'),
+          _machine(
+            id: 5,
+            rated: 20,
+            hours: 8,
+            stage: 'Mixing',
+            status: 'Under Maintenance',
+          ),
         ];
         final shifts = [
-          _shift(id: 1, workers: 15, hours: 8, perHour: 5),
-          _shift(id: 2, workers: 8, hours: 8, perHour: 4),
+          _shift(id: 1, workers: 16, hours: 8, perHour: 8),
+          _shift(id: 2, workers: 14, hours: 8, perHour: 7.7),
         ];
         final snapshot = _snapshot(machines, shifts);
         final baseline = SimulatorBaseline.from(snapshot);
 
-        expect(baseline.activeMachines, 3);
-        expect(baseline.workers, 23);
+        expect(baseline.activeMachines, 4);
+        expect(baseline.workers, 30);
         expect(baseline.shiftHours, 8);
 
         expect(

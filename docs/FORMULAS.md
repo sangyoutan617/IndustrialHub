@@ -57,14 +57,24 @@ are directly comparable.
 ### C1 · Machine capacity
 
 ```
-machineCapacity = Σ ( ratedOutputPerHour × operatingHoursPerDay × unitCount )
+stageCapacity(s) = Σ ( ratedOutputPerHour × operatingHoursPerDay × unitCount )
+                   over Active machines whose stage == s
 
-over machines where status == 'Active'
+machineCapacity  = min( stageCapacity(s) )  over the product's distinct stages
+                   0 when no Active machine exists
 ```
 
-A `machines` row is a **group** of `unit_count` identical machines that share
-one rate, schedule and status (`unit_count` defaults to 1, so a plain single
-machine is a group of one). All units in the group are counted.
+A line is a **flow**. Each machine belongs to a `stage` (Mixing → Extrusion →
+Packaging …). Machines **in the same stage run in parallel** — their
+capacities add. Distinct stages run in **series**, so the product can only go
+as fast as its **slowest stage**. A blank `stage` means "its own stage": an
+unstaged machine is a standalone step keyed by its own id, so a factory that
+never assigns stages gets `min` over one-machine stages (each machine its own
+bottleneck) rather than the old factory-wide sum.
+
+A `machines` row is also a **group** of `unit_count` identical machines that
+share one rate, schedule, stage and status (`unit_count` defaults to 1). All
+units in the group count toward their stage's parallel total.
 
 Only machines whose `status` is exactly `'Active'` contribute. Every other
 status — under maintenance, retired, downtime, repair — is excluded outright
@@ -87,16 +97,21 @@ Active and its C1 contribution unchanged.
 ### C2 · Manpower capacity
 
 ```
-manpowerCapacity = Σ ( workerCount
-                     × shiftHours
-                     × outputPerWorkerHour )
+stationCapacity = workerCount × shiftHours × outputPerWorkerHour
 
-over every shift — no status filter
+manpowerCapacity = min( stationCapacity )  over the product's manpower rows
+                   0 when there are no rows
 ```
 
-Note the asymmetry with C1: shifts have no active/inactive concept, so all of
-them count. Shifts **sum** rather than max because they are sequential within a
-day — two 8-hour shifts genuinely produce for 16 hours.
+Each `manpower` row is a **task station** in the labour flow (Filling,
+Wrapping, Packing …), not a time shift. The stations run in series, so the
+**slowest station** caps the line — the same flow logic as C1. Adding people
+to a station raises that row's `workerCount`. There is no active/inactive
+concept for stations.
+
+`CapacityService.sumManpowerCapacity` (the old additive total) still exists
+but is used **only** by the what-if simulator (C14), which models a rough
+parallel what-if rather than the flow.
 
 > `lib/services/capacity_service.dart` · `computeManpowerCapacity`
 
@@ -108,8 +123,11 @@ day — two 8-hour shifts genuinely produce for 16 hours.
 effectiveCapacity = min( machineCapacity, manpowerCapacity )
 ```
 
-A day's output cannot exceed either resource, so the lower one governs. This is
-the figure shown as **Daily production ceiling** on the Capacity dashboard.
+A day's output cannot exceed either resource, so the lower one governs. Both
+inputs are now themselves bottleneck minima (C1 across machine stages, C2
+across labour stations), so `effectiveCapacity` is really "the slowest step
+anywhere in the machine **or** labour flow". This is the figure shown as
+**Daily production ceiling** on the Capacity dashboard.
 
 > `lib/services/capacity_service.dart` · `getSnapshot`
 
@@ -268,16 +286,23 @@ correct after machines or shifts later change.
 
 The simulator is the one place that re-derives capacity on the client rather
 than reading `compute_bottleneck()`. That is deliberate — it is read-only and
-needs instant feedback as fields change. Its rates are weighted so the
-untouched baseline still lands on C1 and C2.
+needs instant feedback as fields change.
+
+> **Not yet updated for the flow model.** C1/C2 became stage/station *minima*;
+> the simulator still models a single summed "parallel capacity" what-if
+> (`activeMachines × machineNameplate` vs `workers × hours × rate`) built from
+> `sumMachineCapacity` / `sumManpowerCapacity`. Its numbers therefore
+> **over-state** the real ceiling whenever a product has more than one stage
+> or station. Reworking it to target the bottleneck stage is a tracked
+> follow-up; treat its output as a rough upper bound until then.
 
 ### C14 · Simulated capacities
 
 ```
 Rates, derived once from the active fleet:
 
-machineNameplate    = mean( rated × hours )          active machines only
-outputPerWorkerHour = C2 / Σ( workerCount × shiftHours )
+machineNameplate    = mean( rated × hours × unitCount )   active machines only
+outputPerWorkerHour = sumManpowerCapacity / Σ( workerCount × shiftHours )
 
 Baseline field values — chosen so an untouched simulator reproduces C1 and C2:
 
@@ -435,7 +460,18 @@ floor rarely has reliable Wi-Fi. A below-zero failure is a real conflict, not a
 connectivity problem, so it is surfaced immediately rather than retried
 forever.
 
-> `lib/services/stock_service.dart` · `recordMovement`, `recordMovementQueued`
+**Logging production writes here too.** When a day's output is logged (or
+re-logged) on the production trend screen, the *change* vs the previously
+logged output is applied to that product's finished stock — `production_in`
+for an increase, a signed `adjustment` for a downward correction (mirroring
+M17a's delta-aware material deduction). The finished-stock row is created at 0
+if it doesn't exist yet. Best-effort: a failure never undoes the logged
+production, and a downward correction that would push stock below zero is
+surfaced rather than applied.
+
+> `lib/services/stock_service.dart` · `recordMovement`, `recordMovementQueued`,
+> `getOrCreateStockForProduct`
+> `lib/screens/capacity/production_trend_screen.dart` · `_updateFinishedStock`
 
 ### S2 · Active demand, matched by product name
 
@@ -867,13 +903,14 @@ material does not fail the whole run.
 
 # Cross-module flow
 
-Three numbers cross module boundaries. Everything else stays local.
+Numbers that cross module boundaries. Everything else stays local.
 
 | Value | Produced by | Consumed by | Effect |
 | --- | --- | --- | --- |
 | `effectiveCapacity` (C3) | Capacity | Supply, via C19 | Caps one product's planned production |
 | `plannedProductionPerDay` (C19), per product | Supply | Supply M1, M2 | Fanned across the BOM (`product_materials`) into every material that product's recipe uses — no longer a single factory-wide rate |
 | `materialCeiling` (C5) | Supply data | Capacity C7, C10 | Can override the bottleneck with `RAW MATERIAL`, scoped to that product's own BOM |
+| logged `actual_output` delta | Capacity (production trend) | Stock (S1) + raw materials (M21) | Adds a `production_in` finished-stock movement **and** deducts recipe materials — both delta-aware, so re-logging corrects rather than double-counts |
 
 The loop is worth noting: raw material stock constrains Capacity's achievable
 output (C5 → C7), while Capacity's ceiling constrains Supply's planned
@@ -915,11 +952,16 @@ not-yet-product-scoped admin/report call sites) and
 `compute_bottleneck(p_factory_id, p_product_id)` (the one everything else
 calls) — has been read directly via the Supabase MCP connection during this
 session, most recently while removing `uptime_percent` and again while
-verifying C5's BOM join, and again when the machine-capacity sum was
-changed from `SUM(rated × hours)` to `SUM(rated × hours × unit_count)` on
-both overloads (the `machines.unit_count` group-size column). C5–C10 above
-match that live SQL as of this writing; if the function is redefined again
-later, re-read it rather than assuming these formulas still hold.
+verifying C5's BOM join, then when the machine-capacity sum gained the
+`× unit_count` factor, and most recently when **both** capacity aggregates
+changed from `SUM` to bottleneck `MIN`: machine capacity is now
+`MIN` over stage-grouped sums
+(`GROUP BY COALESCE(NULLIF(lower(btrim(stage)),''), 'machine:'||machine_id)`)
+and manpower capacity is `MIN(worker_count × shift_hours × output_per_worker_hour)`
+over the rows. The factory-wide overload keeps the same MIN logic across all
+products (no worse than the old cross-product SUM blend). C5–C10 above match
+that live SQL as of this writing; if the function is redefined again later,
+re-read it rather than assuming these formulas still hold.
 
 **Demand-to-stock matching is by name (S2).** There is no foreign key between
 `demand_forecast.product_name` and `finished_stock.product_name`. A typo in

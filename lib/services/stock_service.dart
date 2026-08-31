@@ -51,6 +51,25 @@ class StockService {
     return result;
   }
 
+  /// The finished-stock row for one product, creating it at quantity 0 if it
+  /// doesn't exist yet. Used by the production log so output always lands
+  /// somewhere even for a product the user never opened the Stock screen for.
+  Future<FinishedStock> getOrCreateStockForProduct(
+    int factoryId,
+    Product product,
+  ) async {
+    final existing = await _client
+        .from('finished_stock')
+        .select(_selectWithProduct)
+        .eq('factory_id', factoryId)
+        .eq('product_id', product.productId)
+        .maybeSingle();
+    if (existing != null) {
+      return FinishedStock.fromJson(existing);
+    }
+    return createStock(factoryId, product, 0);
+  }
+
   Future<void> deleteStock(int stockId, {int? factoryId}) async {
     await _client.from('finished_stock').delete().eq('stock_id', stockId);
     if (factoryId != null) {

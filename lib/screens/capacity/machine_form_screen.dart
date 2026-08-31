@@ -38,6 +38,9 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
   late final _unitCountController = TextEditingController(
     text: (widget.machine?.unitCount ?? 1).toString(),
   );
+  late final _stageController = TextEditingController(
+    text: widget.machine?.stageLabel,
+  );
   late String _status = widget.machine?.status ?? MachineStatus.active;
   int? _selectedProductId;
   bool _isSaving = false;
@@ -84,6 +87,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
     _ratedController.dispose();
     _hoursController.dispose();
     _unitCountController.dispose();
+    _stageController.dispose();
     super.dispose();
   }
 
@@ -100,6 +104,9 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
         ratedOutputPerHour: double.parse(_ratedController.text),
         operatingHoursPerDay: double.parse(_hoursController.text),
         unitCount: int.parse(_unitCountController.text.trim()),
+        stage: _stageController.text.trim().isEmpty
+            ? null
+            : _stageController.text.trim(),
         status: _status,
         isSimulated: false,
       );
@@ -238,6 +245,20 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                       'machine.',
                 ),
                 validator: (v) => _requiredInt(v, min: 1),
+              ),
+              const SizedBox(height: AppSpacing.l),
+              TextFormField(
+                controller: _stageController,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Stage / process step (optional)',
+                  helperText:
+                      'Machines at the same stage run in parallel and add '
+                      'up. Different stages form a flow — the slowest one '
+                      'caps the line. Leave blank if this is the only '
+                      'machine at its step.',
+                  helperMaxLines: 3,
+                ),
               ),
               const SizedBox(height: AppSpacing.l),
               DropdownButtonFormField<String>(
