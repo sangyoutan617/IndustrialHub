@@ -144,7 +144,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
     if (result == null) return;
     try {
-      await _bomService.upsertEntry(result, factoryId: _product.factoryId);
+      await _bomService.upsertEntry(
+        BomEntry(
+          productId: _product.productId,
+          materialId: result.materialId,
+          quantityPerUnit: result.quantityPerUnit,
+        ),
+        factoryId: _product.factoryId,
+      );
       if (!mounted) return;
       _load();
     } catch (_) {
