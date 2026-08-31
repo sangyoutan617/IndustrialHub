@@ -78,37 +78,61 @@ class MaterialMovementService {
     );
   }
 
-  /// Deducts the raw material one product's production run consumed
-  /// ([MrpService.computeProductionConsumption], using that product's own
-  /// [bom]). Any material without enough stock is skipped (its id returned)
-  /// rather than driving stock negative, so the caller can warn without the
-  /// whole run failing. Never throws for insufficient stock.
+  /// Deducts — or returns, when [unitsDelta] is negative, e.g. a downward
+  /// correction to a previously-logged day — the raw material one product's
+  /// production delta implies, per that product's own [bom]
+  /// ([MrpService.computeProductionConsumption] does the pure per-BOM-line
+  /// math on the magnitude; this wrapper picks the direction from the sign).
+  /// This is always called automatically from the production-logging flow —
+  /// there is no manual "record usage" path any more, only stock
+  /// [RawMaterialMovementType.adjustment]s for corrections/waste on a
+  /// material's own page.
+  ///
+  /// Any material without enough stock to *consume* is skipped (its id
+  /// returned) rather than driving stock negative, so the caller can warn
+  /// without the whole run failing. A return can never be skipped for
+  /// insufficient stock — adding stock back can't go negative. [unitsDelta]
+  /// of zero is a no-op; callers should simply not call this when nothing
+  /// changed.
   Future<List<int>> recordProductionConsumption({
     required int factoryId,
     required List<RawMaterial> materials,
     required List<BomEntry> bom,
-    required int unitsProduced,
+    required int unitsDelta,
     required DateTime date,
   }) async {
+    if (unitsDelta == 0) return const [];
+    final isReturn = unitsDelta < 0;
     final consumption = MrpService.computeProductionConsumption(
       bom,
-      unitsProduced,
+      unitsDelta.abs(),
     );
     final byId = {for (final m in materials) m.materialId: m};
     final skipped = <int>[];
     for (final entry in consumption.entries) {
       final material = byId[entry.key];
-      if (material == null || entry.value > material.currentStock) {
+      if (material == null) {
+        skipped.add(entry.key);
+        continue;
+      }
+      if (!isReturn && entry.value > material.currentStock) {
         skipped.add(entry.key);
         continue;
       }
       await recordMovement(
         materialId: entry.key,
         factoryId: factoryId,
-        movementType: RawMaterialMovementType.consumption,
+        movementType: isReturn
+            ? RawMaterialMovementType.adjustment
+            : RawMaterialMovementType.consumption,
+        // Consumption normalises the sign itself (recordMovement negates
+        // it); adjustment applies this positive value as-entered, so it
+        // adds the returned quantity back to stock.
         quantity: entry.value,
         movementDate: date,
-        note: 'Production of $unitsProduced units',
+        note: isReturn
+            ? 'Correction: production reduced by ${unitsDelta.abs()} units'
+            : 'Production of $unitsDelta units',
       );
     }
     return skipped;

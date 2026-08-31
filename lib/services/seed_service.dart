@@ -133,7 +133,7 @@ class SeedService {
       ('Packaging Boxes', 10000.0, 'boxes', 1.0, 0.8),
     ];
     final created = <RawMaterial>[];
-    for (final (name, stock, unit, consumptionPerUnit, unitCost) in specs) {
+    for (final (name, stock, unit, quantityPerUnit, unitCost) in specs) {
       final material = await _materialService.createMaterial(
         RawMaterial(
           materialId: 0,
@@ -149,7 +149,7 @@ class SeedService {
         BomEntry(
           productId: productId,
           materialId: material.materialId,
-          quantityPerUnit: consumptionPerUnit,
+          quantityPerUnit: quantityPerUnit,
         ),
         factoryId: factoryId,
       );

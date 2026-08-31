@@ -66,6 +66,25 @@ class DailyProductionService {
     return result;
   }
 
+  /// The row already logged for one product on one day, if any — used to
+  /// find the previously logged output before overwriting it, so a caller
+  /// can deduct/return only the *change* in material consumption rather
+  /// than the whole new total again.
+  Future<DailyProduction?> getForDate({
+    required int factoryId,
+    required int productId,
+    required DateTime logDate,
+  }) async {
+    final row = await _client
+        .from('daily_production')
+        .select()
+        .eq('factory_id', factoryId)
+        .eq('product_id', productId)
+        .eq('log_date', logDate.toIso8601String().substring(0, 10))
+        .maybeSingle();
+    return row == null ? null : DailyProduction.fromJson(row);
+  }
+
   /// One product's trend — the chart and downtime summary on
   /// production_trend_screen.dart are both scoped to a single product at a
   /// time, since a factory-wide sum would mix output figures across
