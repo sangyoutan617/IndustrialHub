@@ -11,6 +11,57 @@ import 'mrp_service.dart';
 class MaterialMovementService {
   final SupabaseClient _client = Supabase.instance.client;
 
+  /// Bulk-writes many historical ledger rows in one round trip and sets each
+  /// material's final `current_stock` directly, rather than the incremental
+  /// read-then-write [recordMovement] does per call. Used only for seeding a
+  /// large historical ledger (e.g. 90 days of production consumption plus a
+  /// few delivery receipts) where one sequential call per row would be
+  /// impractical — the caller is responsible for computing correct deltas
+  /// (including keeping every running total non-negative) themselves, since
+  /// this performs no validation.
+  Future<void> recordBulkMovements({
+    required int factoryId,
+    required List<
+      ({
+        int materialId,
+        String movementType,
+        double quantity,
+        DateTime movementDate,
+        String? note,
+      })
+    >
+    movements,
+    required Map<int, double> finalStockByMaterialId,
+  }) async {
+    if (movements.isNotEmpty) {
+      await _client.from('raw_material_movements').insert([
+        for (final m in movements)
+          {
+            'material_id': m.materialId,
+            'factory_id': factoryId,
+            'movement_type': m.movementType,
+            'quantity': m.quantity,
+            'movement_date': m.movementDate.toIso8601String().substring(0, 10),
+            'note': m.note,
+            'is_simulated': true,
+          },
+      ]);
+    }
+    for (final entry in finalStockByMaterialId.entries) {
+      await _client
+          .from('raw_materials')
+          .update({
+            'current_stock': entry.value,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('material_id', entry.key);
+    }
+    DataEventService.instance.notifyChanged(
+      factoryId: factoryId,
+      source: DataChangeSource.supply,
+    );
+  }
+
   Future<List<RawMaterialMovement>> getMovements(int materialId) async {
     final rows = await _client
         .from('raw_material_movements')

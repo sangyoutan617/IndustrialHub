@@ -22,6 +22,46 @@ class MachineDowntimeService {
         .toList();
   }
 
+  /// Bulk-writes several already-resolved downtime events in one round trip
+  /// — used only for seeding historical demo data. Deliberately bypasses
+  /// [logDowntime]/[startRepair]/[markRepaired]: those stamp `repair_started_at`/
+  /// `repaired_at` with `DateTime.now()`, which is right for a live event but
+  /// would make a 60-day-old backfilled event look repaired today. Every
+  /// event here is already closed, so it has no effect on the machine's
+  /// current live status — for a still-open historical event, call
+  /// [logDowntime] itself with a past [DateTime] instead, which does need
+  /// the live status flip.
+  Future<void> logHistoricalResolvedEvents({
+    required int factoryId,
+    required List<
+      ({
+        int machineId,
+        DateTime logDate,
+        double hours,
+        String reason,
+        DateTime repairStartedAt,
+        DateTime repairedAt,
+      })
+    >
+    events,
+  }) async {
+    if (events.isEmpty) return;
+    await _client.from('machine_downtime_log').insert([
+      for (final e in events)
+        {
+          'machine_id': e.machineId,
+          'factory_id': factoryId,
+          'log_date': e.logDate.toIso8601String().substring(0, 10),
+          'downtime_hours': e.hours,
+          'reason': e.reason,
+          'repair_started_at': e.repairStartedAt.toUtc().toIso8601String(),
+          'repaired_at': e.repairedAt.toUtc().toIso8601String(),
+          'is_simulated': true,
+        },
+    ]);
+    _notify(factoryId);
+  }
+
   /// Opens a new downtime event and flips the machine to `Downtime`. Call
   /// this from `Active` or `Under Maintenance` when a machine actually stops.
   Future<void> logDowntime({
@@ -30,6 +70,7 @@ class MachineDowntimeService {
     required double hours,
     String? reason,
     required DateTime date,
+    bool isSimulated = false,
   }) async {
     await _client.from('machine_downtime_log').insert({
       'machine_id': machineId,
@@ -37,6 +78,7 @@ class MachineDowntimeService {
       'log_date': date.toIso8601String().substring(0, 10),
       'downtime_hours': hours,
       'reason': reason,
+      if (isSimulated) 'is_simulated': true,
     });
     await _setStatus(machineId, MachineStatus.downtime);
     _notify(factoryId);

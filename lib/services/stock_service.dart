@@ -85,6 +85,54 @@ class StockService {
         .toList();
   }
 
+  /// Bulk-writes many historical movements for one stock row in one round
+  /// trip and sets its final `current_quantity` directly, rather than the
+  /// incremental read-then-write [recordMovement] does per call — used only
+  /// for seeding a large historical ledger (e.g. 90 days of production/
+  /// shipments) where one sequential call per row would be impractical. The
+  /// caller is responsible for computing correct deltas (including keeping
+  /// the running quantity non-negative) themselves; this performs no
+  /// validation.
+  Future<void> recordBulkMovements({
+    required int stockId,
+    required int factoryId,
+    required List<
+      ({
+        String movementType,
+        int quantity,
+        DateTime movementDate,
+        String? note,
+      })
+    >
+    movements,
+    required int finalQuantity,
+  }) async {
+    if (movements.isNotEmpty) {
+      await _client.from('stock_movements').insert([
+        for (final m in movements)
+          {
+            'stock_id': stockId,
+            'movement_type': m.movementType,
+            'quantity': m.quantity,
+            'movement_date': m.movementDate.toIso8601String().substring(0, 10),
+            'note': m.note,
+            'is_simulated': true,
+          },
+      ]);
+    }
+    await _client
+        .from('finished_stock')
+        .update({
+          'current_quantity': finalQuantity,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('stock_id', stockId);
+    DataEventService.instance.notifyChanged(
+      factoryId: factoryId,
+      source: DataChangeSource.stock,
+    );
+  }
+
   Future<void> recordMovement({
     required int stockId,
     required String movementType,
