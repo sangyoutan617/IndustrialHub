@@ -96,7 +96,6 @@ class SimulatorBaseline {
   final double outputPerWorkerHour;
 
   final int activeMachines;
-  final int uptimePercent;
   final int workers;
   final int shiftHours;
 
@@ -104,7 +103,6 @@ class SimulatorBaseline {
     required this.machineNameplate,
     required this.outputPerWorkerHour,
     required this.activeMachines,
-    required this.uptimePercent,
     required this.workers,
     required this.shiftHours,
   });
@@ -128,21 +126,6 @@ class SimulatorBaseline {
         ? 0.0
         : nameplateTotal / basis.length;
 
-    // Capacity-weighted, so nameplateTotal × uptime/100 lands back on
-    // Σ(rated × hours × uptime/100) rather than on a plain per-machine mean
-    // that ignores how much capacity each machine's uptime applies to.
-    final uptimePercent = nameplateTotal > 0
-        ? basis.fold<double>(
-                0,
-                (sum, m) =>
-                    sum +
-                    m.ratedOutputPerHour *
-                        m.operatingHoursPerDay *
-                        m.uptimePercent,
-              ) /
-              nameplateTotal
-        : 100.0;
-
     final totalWorkers = snapshot.shifts.fold<int>(
       0,
       (sum, s) => sum + s.workerCount,
@@ -162,7 +145,6 @@ class SimulatorBaseline {
       machineNameplate: machineNameplate,
       outputPerWorkerHour: outputPerWorkerHour,
       activeMachines: active.length,
-      uptimePercent: uptimePercent.round().clamp(0, 100),
       workers: totalWorkers,
       shiftHours: shiftHours.round(),
     );
@@ -182,10 +164,7 @@ class CapacityService {
 
   static double computeMachineCapacity(Iterable<Machine> machines) {
     return machines.where((m) => m.isActive).fold<double>(0, (sum, m) {
-      return sum +
-          m.ratedOutputPerHour *
-              m.operatingHoursPerDay *
-              (m.uptimePercent / 100);
+      return sum + m.ratedOutputPerHour * m.operatingHoursPerDay;
     });
   }
 

@@ -7,7 +7,6 @@ Machine _machine({
   required int id,
   required double rated,
   required double hours,
-  required double uptime,
   String status = 'Active',
 }) {
   return Machine(
@@ -17,7 +16,6 @@ Machine _machine({
     machineName: 'Machine $id',
     ratedOutputPerHour: rated,
     operatingHoursPerDay: hours,
-    uptimePercent: uptime,
     status: status,
     isSimulated: false,
   );
@@ -61,10 +59,8 @@ CapacitySnapshot _snapshot(List<Machine> machines, List<Manpower> shifts) {
 
 /// What the simulator screen itself computes from the baseline, mirrored here
 /// so a change to that arithmetic has to be made in both places deliberately.
-double _simMachineCapacity(SimulatorBaseline b, {int? machines, int? uptime}) {
-  return (machines ?? b.activeMachines) *
-      b.machineNameplate *
-      ((uptime ?? b.uptimePercent) / 100);
+double _simMachineCapacity(SimulatorBaseline b, {int? machines}) {
+  return (machines ?? b.activeMachines) * b.machineNameplate;
 }
 
 double _simManpowerCapacity(SimulatorBaseline b, {int? workers, int? hours}) {
@@ -80,16 +76,10 @@ void main() {
       () {
         // Mirrors SeedService._seedMachines / _seedManpower exactly.
         final machines = [
-          _machine(id: 1, rated: 50, hours: 16, uptime: 95),
-          _machine(id: 2, rated: 40, hours: 16, uptime: 90),
-          _machine(id: 3, rated: 100, hours: 16, uptime: 98),
-          _machine(
-            id: 4,
-            rated: 20,
-            hours: 8,
-            uptime: 80,
-            status: 'Under Maintenance',
-          ),
+          _machine(id: 1, rated: 50, hours: 16),
+          _machine(id: 2, rated: 40, hours: 16),
+          _machine(id: 3, rated: 100, hours: 16),
+          _machine(id: 4, rated: 20, hours: 8, status: 'Under Maintenance'),
         ];
         final shifts = [
           _shift(id: 1, workers: 15, hours: 8, perHour: 5),
@@ -102,7 +92,6 @@ void main() {
         expect(baseline.workers, 23);
         expect(baseline.shiftHours, 8);
 
-        // Within the rounding the whole-number-only uptime field forces.
         expect(
           _simMachineCapacity(baseline),
           closeTo(snapshot.machineCapacity, snapshot.machineCapacity * 0.01),
@@ -118,9 +107,9 @@ void main() {
       'a fleet whose running hours vary — where product-of-means diverges',
       () {
         final machines = [
-          _machine(id: 1, rated: 50, hours: 16, uptime: 95),
-          _machine(id: 2, rated: 40, hours: 8, uptime: 90),
-          _machine(id: 3, rated: 100, hours: 20, uptime: 98),
+          _machine(id: 1, rated: 50, hours: 16),
+          _machine(id: 2, rated: 40, hours: 8),
+          _machine(id: 3, rated: 100, hours: 20),
         ];
         final snapshot = _snapshot(machines, const []);
         final baseline = SimulatorBaseline.from(snapshot);
@@ -137,18 +126,17 @@ void main() {
 
     test('inactive machines never drag the per-machine rate', () {
       final withIdleJunk = _snapshot([
-        _machine(id: 1, rated: 100, hours: 16, uptime: 100),
-        _machine(id: 2, rated: 1, hours: 1, uptime: 10, status: 'Retired'),
+        _machine(id: 1, rated: 100, hours: 16),
+        _machine(id: 2, rated: 1, hours: 1, status: 'Retired'),
       ], const []);
       final activeOnly = _snapshot([
-        _machine(id: 1, rated: 100, hours: 16, uptime: 100),
+        _machine(id: 1, rated: 100, hours: 16),
       ], const []);
 
       expect(
         SimulatorBaseline.from(withIdleJunk).machineNameplate,
         SimulatorBaseline.from(activeOnly).machineNameplate,
       );
-      expect(SimulatorBaseline.from(withIdleJunk).uptimePercent, 100);
     });
 
     test('shift hours are worker-weighted, not counted once per shift', () {
@@ -172,8 +160,8 @@ void main() {
   group('SimulatorBaseline extrapolation', () {
     test('an added machine is worth what an average active one is worth', () {
       final snapshot = _snapshot([
-        _machine(id: 1, rated: 50, hours: 16, uptime: 100),
-        _machine(id: 2, rated: 30, hours: 16, uptime: 100),
+        _machine(id: 1, rated: 50, hours: 16),
+        _machine(id: 2, rated: 30, hours: 16),
       ], const []);
       final baseline = SimulatorBaseline.from(snapshot);
 
@@ -183,26 +171,14 @@ void main() {
       expect(atThree - atTwo, closeTo(baseline.machineNameplate, 0.001));
       expect(_simMachineCapacity(baseline, machines: 0), 0);
     });
-
-    test('uptime scales machine capacity linearly', () {
-      final snapshot = _snapshot([
-        _machine(id: 1, rated: 50, hours: 10, uptime: 100),
-      ], const []);
-      final baseline = SimulatorBaseline.from(snapshot);
-
-      expect(_simMachineCapacity(baseline, uptime: 100), closeTo(500, 0.001));
-      expect(_simMachineCapacity(baseline, uptime: 50), closeTo(250, 0.001));
-      expect(_simMachineCapacity(baseline, uptime: 0), 0);
-    });
   });
 
   group('SimulatorBaseline degenerate inputs', () {
-    test('no machines at all: a zero rate, and uptime defaults to 100', () {
+    test('no machines at all: a zero rate', () {
       final baseline = SimulatorBaseline.from(_snapshot(const [], const []));
 
       expect(baseline.machineNameplate, 0);
       expect(baseline.activeMachines, 0);
-      expect(baseline.uptimePercent, 100);
       expect(baseline.workers, 0);
       expect(baseline.shiftHours, 0);
     });
@@ -211,13 +187,13 @@ void main() {
         'reactivating one still moves the number', () {
       final baseline = SimulatorBaseline.from(
         _snapshot([
-          _machine(id: 1, rated: 50, hours: 16, uptime: 90, status: 'Retired'),
+          _machine(id: 1, rated: 50, hours: 16, status: 'Retired'),
         ], const []),
       );
 
       expect(baseline.activeMachines, 0);
       expect(baseline.machineNameplate, closeTo(800, 0.001));
-      expect(_simMachineCapacity(baseline, machines: 1), closeTo(720, 0.001));
+      expect(_simMachineCapacity(baseline, machines: 1), closeTo(800, 0.001));
     });
 
     test('shifts staffed by nobody do not divide by zero', () {

@@ -77,13 +77,13 @@ class SeedService {
 
   Future<List<Machine>> _seedMachines(int factoryId, int productId) async {
     final specs = [
-      ('Extruder Line A', 50.0, 16.0, 95.0, 'Active'),
-      ('Extruder Line B', 40.0, 16.0, 90.0, 'Active'),
-      ('Packaging Unit', 100.0, 16.0, 98.0, 'Active'),
-      ('Old Mixer', 20.0, 8.0, 80.0, 'Under Maintenance'),
+      ('Extruder Line A', 50.0, 16.0, 'Active'),
+      ('Extruder Line B', 40.0, 16.0, 'Active'),
+      ('Packaging Unit', 100.0, 16.0, 'Active'),
+      ('Old Mixer', 20.0, 8.0, 'Under Maintenance'),
     ];
     final created = <Machine>[];
-    for (final (name, rated, hours, uptime, status) in specs) {
+    for (final (name, rated, hours, status) in specs) {
       created.add(
         await _machineService.createMachine(
           Machine(
@@ -93,7 +93,6 @@ class SeedService {
             machineName: name,
             ratedOutputPerHour: rated,
             operatingHoursPerDay: hours,
-            uptimePercent: uptime,
             status: status,
             isSimulated: true,
           ),

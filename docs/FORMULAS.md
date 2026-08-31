@@ -57,16 +57,19 @@ are directly comparable.
 ### C1 · Machine capacity
 
 ```
-machineCapacity = Σ ( ratedOutputPerHour
-                    × operatingHoursPerDay
-                    × uptimePercent / 100 )
+machineCapacity = Σ ( ratedOutputPerHour × operatingHoursPerDay )
 
 over machines where status == 'Active'
 ```
 
 Only machines whose `status` is exactly `'Active'` contribute. Every other
-status — under maintenance, retired — is excluded outright rather than
-derated, so a machine flipped inactive drops its full share of the ceiling.
+status — under maintenance, retired, downtime, repair — is excluded outright
+rather than derated, so a machine flipped out of Active drops its full share
+of the ceiling. There is no uptime-percentage derate: a machine either counts
+at its full nameplate rate or not at all. Actual stoppages are tracked as
+discrete events instead — see `machine_downtime_log` and the
+Active → Downtime → Repair → Active workflow on the machine detail screen —
+rather than folded into this formula as an estimated percentage.
 
 > `lib/services/capacity_service.dart` · `computeMachineCapacity`
 
@@ -261,33 +264,26 @@ outputPerWorkerHour = C2 / Σ( workerCount × shiftHours )
 
 Baseline field values — chosen so an untouched simulator reproduces C1 and C2:
 
-uptimePercent = Σ( rated × hours × uptime ) / Σ( rated × hours )
-shiftHours    = Σ( workerCount × shiftHours ) / totalWorkers
+shiftHours = Σ( workerCount × shiftHours ) / totalWorkers
 
 The simulation itself:
 
-simMachineCapacity  = activeMachines × machineNameplate × uptimePercent / 100
+simMachineCapacity  = activeMachines × machineNameplate
 simManpowerCapacity = workers × shiftHours × outputPerWorkerHour
 simEffective        = min( the two )
 ```
 
 The simulator needs a *per-machine* rate because it prices machine counts that
-don't exist yet — but every mean above is weighted so that, at the untouched
-baseline, the arithmetic collapses back onto C1 and C2. An added machine is
+don't exist yet — but `machineNameplate` is weighted so that, at the untouched
+baseline, the arithmetic collapses back onto C1 exactly (no uptime term means
+no rounding source either — `activeMachines × mean(rated × hours)` reproduces
+`Σ(rated × hours)` precisely, not just approximately). An added machine is
 therefore worth what an average active machine is worth, and the starting
 number matches the dashboard.
 
-Two details carry the weighting:
-
-- `machineNameplate` is the mean of the **product** `rated × hours`, not the
-  product of the two means — the latter drops the covariance and understates
-  any fleet where the faster machines also run the longer days.
-- Uptime is **capacity-weighted**, not a per-machine mean, so a low-uptime
-  minor machine cannot drag the whole fleet down.
-
-Residual error is bounded by the whole-number-only input fields: measured at
-**+0.06%** on live data (simulator 1 428.8 vs dashboard 1 428), entirely from
-rounding uptime to 94%.
+`machineNameplate` is the mean of the **product** `rated × hours`, not the
+product of the two means — the latter drops the covariance and understates
+any fleet where the faster machines also run the longer days.
 
 > `lib/services/capacity_service.dart` · `SimulatorBaseline.from`
 > `lib/screens/capacity/simulator_screen.dart`

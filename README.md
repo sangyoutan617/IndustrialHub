@@ -38,15 +38,19 @@
   feed.** Chosen for demo reliability and to avoid a runtime dependency on
   external API availability. See "Government data refresh" below for the
   documented manual procedure — there is no in-app refresh action.
-- **Downtime tracking is factory-level, not per-machine.** `downtime_hours`
-  (Priority 3's `daily_production` table) is one total per factory per day.
-  There is no per-machine downtime column or table anywhere in the schema,
-  so the downtime trend on the production trend screen (Priority 7.5) shows
-  a daily total with a "worst day" flag rather than a per-machine
-  breakdown. Real per-machine tracking would need a new table (e.g.
-  `machine_downtime_log(machine_id, factory_id, log_date, downtime_hours)`)
-  plus a logging entry point on the machine screens — identified as future
-  work, not built here.
+- **Two separate downtime figures, deliberately not reconciled.**
+  `daily_production.downtime_hours` is one manually-entered total per
+  factory/product per day, feeding the "worst day" flag on the production
+  trend screen (Priority 7.5). `machine_downtime_log` is a separate,
+  per-machine event ledger — each machine's own page
+  (`machine_detail_screen.dart`) walks it through Active → Downtime →
+  Repair → Active, and a machine in Downtime or Repair is excluded from the
+  capacity ceiling exactly like Under Maintenance. The per-machine log is
+  not summed into `daily_production.downtime_hours`; rolling the two
+  together is a reasonable future step but isn't built here. There is also
+  no uptime-percentage field on a machine any more — capacity uses each
+  Active machine's full nameplate rate (`rated × hours`), and real
+  stoppages are what the downtime log is for.
 
 ## Government data refresh
 

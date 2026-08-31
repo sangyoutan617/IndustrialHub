@@ -1153,7 +1153,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
           _SmartAction(
             icon: Icons.precision_manufacturing,
             title: 'Review Machine Status',
-            subtitle: 'Check uptime and maintenance across machines',
+            subtitle: 'Check status and downtime across machines',
             color: pal.alert,
             builder: () => MachineListScreen(factoryId: factoryId),
           ),

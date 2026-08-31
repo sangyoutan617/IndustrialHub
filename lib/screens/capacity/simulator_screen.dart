@@ -37,14 +37,12 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   int _workers = 0;
   int _shiftHours = 0;
   int _activeMachines = 0;
-  int _uptimePercent = 100;
 
   // Controllers are late final so their text (and therefore any partially
   // typed value) survives orientation changes without re-fetching data.
   late final TextEditingController _workersCtrl;
   late final TextEditingController _shiftHoursCtrl;
   late final TextEditingController _activeMachinesCtrl;
-  late final TextEditingController _uptimePercentCtrl;
 
   String? _lastBottleneck;
   bool _justFlipped = false;
@@ -55,7 +53,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     _workersCtrl = TextEditingController();
     _shiftHoursCtrl = TextEditingController();
     _activeMachinesCtrl = TextEditingController();
-    _uptimePercentCtrl = TextEditingController();
     _load();
   }
 
@@ -64,7 +61,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     _workersCtrl.dispose();
     _shiftHoursCtrl.dispose();
     _activeMachinesCtrl.dispose();
-    _uptimePercentCtrl.dispose();
     super.dispose();
   }
 
@@ -116,7 +112,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     final baseline = _baseline;
     _workers = baseline?.workers ?? 0;
     _shiftHours = baseline?.shiftHours ?? 0;
-    _uptimePercent = baseline?.uptimePercent ?? 100;
     _activeMachines = baseline?.activeMachines ?? 0;
     _lastBottleneck = null;
     _justFlipped = false;
@@ -125,13 +120,12 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     _workersCtrl.text = '$_workers';
     _shiftHoursCtrl.text = '$_shiftHours';
     _activeMachinesCtrl.text = '$_activeMachines';
-    _uptimePercentCtrl.text = '$_uptimePercent';
   }
 
   double get _machineCapacity {
     final baseline = _baseline;
     if (baseline == null) return 0;
-    return _activeMachines * baseline.machineNameplate * (_uptimePercent / 100);
+    return _activeMachines * baseline.machineNameplate;
   }
 
   double get _manpowerCapacity {
@@ -245,14 +239,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
               hint: _machines.isEmpty ? 'e.g. 5' : '0 – ${_machines.length}',
               max: _machines.isEmpty ? 9999 : _machines.length,
               onValid: (v) => _onFieldChanged(() => _activeMachines = v),
-            ),
-            const SizedBox(height: 12),
-            _buildIntField(
-              label: 'Uptime %',
-              controller: _uptimePercentCtrl,
-              hint: '0 – 100',
-              max: 100,
-              onValid: (v) => _onFieldChanged(() => _uptimePercent = v),
             ),
           ],
         );

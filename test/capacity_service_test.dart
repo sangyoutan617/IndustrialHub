@@ -6,7 +6,6 @@ import 'package:industrial_hub/services/capacity_service.dart';
 Machine _machine({
   double rated = 10,
   double hours = 8,
-  double uptime = 100,
   String status = 'Active',
 }) {
   return Machine(
@@ -16,7 +15,6 @@ Machine _machine({
     machineName: 'Test machine',
     ratedOutputPerHour: rated,
     operatingHoursPerDay: hours,
-    uptimePercent: uptime,
     status: status,
     isSimulated: false,
   );
@@ -62,23 +60,18 @@ CapacitySnapshot _snapshot({
 
 void main() {
   group('CapacityService.computeMachineCapacity', () {
-    test('sums rated output * hours * uptime for active machines', () {
+    test('sums rated output * hours for active machines', () {
       final capacity = CapacityService.computeMachineCapacity([
-        _machine(rated: 10, hours: 8, uptime: 100),
-        _machine(rated: 5, hours: 10, uptime: 50),
+        _machine(rated: 10, hours: 8),
+        _machine(rated: 5, hours: 10),
       ]);
-      expect(capacity, 105);
+      expect(capacity, 130);
     });
 
     test('excludes machines under maintenance', () {
       final capacity = CapacityService.computeMachineCapacity([
-        _machine(rated: 10, hours: 8, uptime: 100),
-        _machine(
-          rated: 100,
-          hours: 24,
-          uptime: 100,
-          status: 'Under Maintenance',
-        ),
+        _machine(rated: 10, hours: 8),
+        _machine(rated: 100, hours: 24, status: 'Under Maintenance'),
       ]);
       expect(capacity, 80);
     });
