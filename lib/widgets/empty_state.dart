@@ -3,21 +3,13 @@ import 'package:flutter/material.dart';
 class EmptyState extends StatelessWidget {
   final IconData icon;
 
-  /// Original single-line form. Still fully supported — pass this alone and
-  /// the widget renders exactly as it always has.
   final String? message;
 
-  /// Newer title/subtitle form. When [title] is given it takes over as the
-  /// heading (bold, titleMedium) and [subtitle] renders as a second line
-  /// underneath; [message] is ignored in that case.
   final String? title;
   final String? subtitle;
   final String? actionLabel;
   final VoidCallback? onAction;
 
-  /// Optional second, less-prominent action (e.g. "Load demo data" next to
-  /// a primary "Create factory"). Rendered as an OutlinedButton below the
-  /// primary action; [secondaryActionLoading] swaps its label for a spinner.
   final String? secondaryActionLabel;
   final VoidCallback? onSecondaryAction;
   final bool secondaryActionLoading;

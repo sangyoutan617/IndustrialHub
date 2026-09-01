@@ -9,11 +9,6 @@ import 'product_service.dart';
 class FactoryStat {
   final Factory factory;
 
-  /// Every product this factory has, each with its own bottleneck verdict.
-  /// Summing achievable/demand across products stopped being meaningful the
-  /// moment a factory could have more than one product — they can be in
-  /// different units — so this is the per-product source every rollup below
-  /// counts from, rather than a single blended factory-wide number.
   final List<ProductBottleneck> products;
   final double? outputPerWorker;
   final String? msicCategory;
@@ -35,9 +30,6 @@ class FactoryStat {
 
   int get productsShort => productsWithData - productsMeetingDemand;
 
-  /// The limiting resource behind the most of this factory's shortfalls —
-  /// a rough single-glance signal for the summary table. Null when nothing
-  /// is short (nothing to attribute a bottleneck to).
   String? get dominantBottleneckResource {
     final short = _withData.where((p) => !p.bottleneck.canMeetDemand);
     if (short.isEmpty) return null;
@@ -118,8 +110,6 @@ class AdminService {
     return row != null;
   }
 
-  /// Per-factory, per-product bottleneck stats — reuses [BottleneckService]
-  /// and [CapacityService] rather than re-deriving the capacity math here.
   Future<CrossFactoryStats> crossFactoryStats() async {
     final factories = await _factoryService.getFactories();
 
@@ -178,14 +168,6 @@ class AdminService {
       }
     }
 
-    // DOSM's productivity benchmark is RM value-added/worker/year — a
-    // different unit to this app's physical units/day/worker, and there is
-    // no selling price in the schema to convert between them (see
-    // benchmark_screen's own disclaimer for the same limitation). So
-    // "below the productivity benchmark" is computed as below the peer
-    // median output/worker among factories that share the same MSIC
-    // category, not against the DOSM RM figure directly. The DOSM figure is
-    // still shown alongside, for context only.
     final categories = <String>{
       for (final s in stats)
         if (s.msicCategory != null) s.msicCategory!,

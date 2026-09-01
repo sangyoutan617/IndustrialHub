@@ -37,10 +37,6 @@ class SeedResult {
   const SeedResult(this.outcome, this.factory);
 }
 
-/// One scripted downtime event, used to build both the machine's own
-/// downtime log and the day it happened's factory-level `downtime_hours`
-/// figure — kept in one place so the two stay in sync rather than drifting
-/// apart as separate magic numbers.
 typedef _DowntimeEvent = ({
   int daysAgo,
   String machineName,
@@ -52,19 +48,10 @@ typedef _DowntimeEvent = ({
 class SeedService {
   static const _demoFactoryName = 'Demo Beverage Factory';
 
-  /// The product every seeded machine, shift, material recipe, stock row,
-  /// and 90 days of history belongs to — a real factory's whole line is
-  /// tied to what it actually makes, not to the auto-created "General"
-  /// catch-all every factory also gets (left empty here, same as a real
-  /// factory that hasn't reassigned its legacy data to a real product yet).
   static const _flagshipProductName = 'Sparkling Water 500ml';
 
   static const _historyDays = 90;
 
-  /// Every downtime event in the demo's history. The last one is
-  /// deliberately still open (no resolution here) — see
-  /// [_seedDowntimeHistory], which is the one place that decides how each
-  /// event is closed out.
   static final List<_DowntimeEvent> _downtimeEvents = [
     (
       daysAgo: 75,
@@ -165,12 +152,6 @@ class SeedService {
   }
 
   Future<List<Machine>> _seedMachines(int factoryId, int productId) async {
-    // (name, rated/hr, hours/day, unit_count, stage, status). The line is a
-    // flow: Mixing → Extrusion → Packaging. Machines in the same stage run in
-    // parallel (their capacity adds); the slowest stage caps the line. Here
-    // Packaging (20 × 16 × 3 = 960/day) is the machine bottleneck, just above
-    // the labour ceiling so the demo stays manpower-bound. "Packaging Unit"
-    // is also the group-of-3 example for unit_count.
     final specs = [
       ('Mixer 1', 65.0, 16.0, 1, 'Mixing', 'Active'),
       ('Extruder Line A', 45.0, 16.0, 1, 'Extrusion', 'Active'),
@@ -202,9 +183,6 @@ class SeedService {
   }
 
   Future<List<Manpower>> _seedManpower(int factoryId, int productId) async {
-    // Labour is a flow of task stations, not time shifts — the slowest
-    // station caps the line. "Wrapping & packing" (14 × 8 × 7.7 ≈ 862/day) is
-    // the labour bottleneck and the overall ceiling for this product.
     final specs = [
       ('Filling & capping', 16, 8.0, 8.0),
       ('Wrapping & packing', 14, 8.0, 7.7),
@@ -230,12 +208,6 @@ class SeedService {
     return created;
   }
 
-  /// [productId] receives each material's demo consumption rate as a
-  /// product_materials (BOM) row. Rates are sized so 90 days of realistic
-  /// output (see [_seedProductionAndConsumptionHistory]) draws each
-  /// material's stock down gradually rather than instantly — enough to be
-  /// worth replenishing partway through (see [_simulateOrders]) without
-  /// ever needing to actually hit zero.
   Future<List<RawMaterial>> _seedMaterials(int factoryId, int productId) async {
     final specs = [
       ('Plastic Resin', 20000.0, 'kg', 0.25, 4.5),
@@ -324,10 +296,6 @@ class SeedService {
   }
 
   Future<void> _seedDemand(int factoryId, Product product) async {
-    // Set a little above the factory's manpower-bound ceiling (856/day —
-    // see _seedProductionAndConsumptionHistory) so the demo consistently
-    // shows a modest, realistic shortfall rather than either comfortably
-    // meeting demand every day or missing it by a wide margin.
     await _demandService.createForecast(
       DemandForecast(
         demandId: 0,
@@ -339,14 +307,6 @@ class SeedService {
     );
   }
 
-  /// Writes every event in [_downtimeEvents]: every one but the last as an
-  /// already-resolved historical entry (bulk-written directly, since
-  /// [MachineDowntimeService]'s own start/mark-repaired calls stamp
-  /// `DateTime.now()` — right for a live event, wrong for backfilling one
-  /// from months ago), and the last one as a genuinely still-open event via
-  /// [MachineDowntimeService.logDowntime] itself — the one machine this demo
-  /// leaves mid-repair, so there's a live Start repair / Mark repaired
-  /// action to walk through.
   Future<void> _seedDowntimeHistory(
     int factoryId,
     List<Machine> machines,
@@ -389,15 +349,6 @@ class SeedService {
     );
   }
 
-  /// The core of the demo: [_historyDays] (90 = roughly 3 months) of daily
-  /// production, each day's raw-material consumption drawn straight from
-  /// this product's own BOM (mirroring exactly what the real automatic-
-  /// deduction path computes — see MrpService.computeProductionConsumption),
-  /// a matching finished-goods ledger, and a handful of restocking
-  /// deliveries so materials never actually run dry. All the heavy DB
-  /// writes are batched (see the `logHistoricalBatch`/`recordBulkMovements`
-  /// methods this calls) — 90 individual round trips per table would make
-  /// "Run seed" take minutes.
   Future<void> _seedProductionAndConsumptionHistory({
     required int factoryId,
     required int productId,
@@ -407,7 +358,7 @@ class SeedService {
     required FinishedStock stock,
   }) async {
     final manpowerCapacity = CapacityService.computeManpowerCapacity(shifts);
-    final random = Random(42); // fixed seed: same demo data every time
+    final random = Random(42);
     final now = DateTime.now();
     final start = DateTime(
       now.year,
@@ -420,10 +371,6 @@ class SeedService {
         _dateKey(now.subtract(Duration(days: event.daysAgo))): event.hours,
     };
 
-    // Replenishment deliveries: (materialName, daysAgo, quantity). Timed and
-    // sized so the running stock computed below never needs its safety
-    // clamp in practice — see _simulateOrders, which creates matching
-    // purchase-order records for these same deliveries.
     const replenishments = [
       ('Plastic Resin', 66, 3500.0),
       ('Plastic Resin', 33, 3500.0),
@@ -467,8 +414,6 @@ class SeedService {
       final day = start.add(Duration(days: i));
       final key = _dateKey(day);
 
-      // Sundays run a skeleton crew; every other day runs close to (and
-      // occasionally right at) the manpower-bound ceiling.
       final isSunday = day.weekday == DateTime.sunday;
       final utilisation = isSunday
           ? 0.15 + random.nextDouble() * 0.15
@@ -486,10 +431,6 @@ class SeedService {
         output,
       ).entries) {
         final available = materialStock[entry.key] ?? 0;
-        // Same guard the live automatic-deduction path has: never drive
-        // stock negative. Only ever bites if the replenishment schedule
-        // above turns out to be too conservative for how a given random
-        // seed's daily outputs land.
         final qty = entry.value > available ? available : entry.value;
         if (qty <= 0) continue;
         materialStock[entry.key] = available - qty;
@@ -522,14 +463,6 @@ class SeedService {
         movementDate: day,
         note: null,
       ));
-      // A share of *that day's* output, not of the flat demand figure —
-      // demand (900/day) is well above the weekend-inclusive daily average
-      // output (~600/day, once Sunday's skeleton-crew days are folded in),
-      // so shipping close to demand every day would drain stock to zero and
-      // pin it there. Shipping a fraction of what actually came off the
-      // line instead leaves a modest, realistic buffer that grows slowly —
-      // consistent with the demand-exceeds-capacity story told elsewhere in
-      // this demo, without the finished-stock screen reading as broken.
       final shipTarget = (output * (0.65 + random.nextDouble() * 0.2)).round();
       final shipped = shipTarget > stockQty ? stockQty : shipTarget;
       if (shipped > 0) {
@@ -563,13 +496,6 @@ class SeedService {
 
   String _dateKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
 
-  /// Purchase-order history: a handful of past cycles per material, already
-  /// delivered (their quantities match the receipts folded into the
-  /// raw-material ledger in [_seedProductionAndConsumptionHistory] — same
-  /// events, two different tables, exactly like a real delivery is both a
-  /// PO record and a stock-ledger entry), plus the original three
-  /// currently-in-flight orders so the demo still has active/overdue cases
-  /// to show.
   Future<void> _simulateOrders(
     int factoryId,
     List<RawMaterial> materials,
@@ -585,10 +511,6 @@ class SeedService {
     final resin = materialNamed('Plastic Resin');
     final boxes = materialNamed('Packaging Boxes');
 
-    // (material, quantity, daysAgo the delivery landed, unit price). Must
-    // match the `replenishments` list in
-    // _seedProductionAndConsumptionHistory so the two tables tell the same
-    // story.
     final historical = [
       (resin, 3500.0, 66, 4.6),
       (resin, 3500.0, 33, 4.6),

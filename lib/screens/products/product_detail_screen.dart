@@ -16,11 +16,6 @@ import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
 import 'product_form_screen.dart';
 
-/// One product's detail view: basic info, edit/delete, and its bill of
-/// materials — how much of each raw material one unit of this product
-/// consumes. Lives here (not on the material's own screen) because a
-/// product's recipe is one coherent thing a manager edits together;
-/// material_detail_screen.dart only shows the reverse, read-only lookup.
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
 
@@ -82,9 +77,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
     );
     if (!mounted || saved != true) return;
-    // The form only returns true/updates server-side; pop back to the list
-    // and let it reload — simplest correct behaviour given this screen has
-    // no getById to re-fetch its own now-stale widget.product from.
     Navigator.of(context).pop(true);
   }
 
@@ -332,10 +324,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 }
 
-/// Add/edit one bill-of-materials line. Controllers live in this dialog's
-/// own State (created and disposed here) — the same pattern used
-/// throughout the app for every other input dialog, avoiding the
-/// rotation-during-dialog crash class an ad-hoc controller lifecycle can hit.
 class _BomEntryDialog extends StatefulWidget {
   final List<RawMaterial> materials;
   final int? initialMaterialId;
@@ -373,7 +361,7 @@ class _BomEntryDialogState extends State<_BomEntryDialog> {
     Navigator.pop(
       context,
       BomEntry(
-        productId: 0, // filled in by the caller, which knows the product
+        productId: 0,
         materialId: _selectedMaterialId!,
         quantityPerUnit: double.parse(_quantityController.text.trim()),
       ),
@@ -404,9 +392,6 @@ class _BomEntryDialogState extends State<_BomEntryDialog> {
                     child: Text(m.materialName, overflow: TextOverflow.ellipsis),
                   ),
               ],
-              // Locked once editing an existing line — changing the
-              // material would silently orphan the old rate instead of
-              // editing it; removing and re-adding is the explicit way.
               onChanged: _isEditing
                   ? null
                   : (value) => setState(() => _selectedMaterialId = value),

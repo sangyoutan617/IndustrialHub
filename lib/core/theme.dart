@@ -1,39 +1,17 @@
 import 'package:flutter/material.dart';
 
-/// IndustrialHub's design system: color, spacing, radius and card tokens.
-///
-/// Everything else in the app should read colors via `Theme.of(context)`
-/// (`colorScheme`, `textTheme`) rather than these constants directly — the
-/// constants exist so [AppTheme] itself, and the handful of places that
-/// genuinely need a brand literal (an icon badge, a chart line color), have
-/// one place to draw from. Reading `Theme.of(context).colorScheme.primary`
-/// instead of [AppColors.primary] is what keeps a widget correct in dark
-/// mode, where the "usable primary" swaps to [AppColors.primaryAccent].
 class AppColors {
-  // ---- Brand — IndustrialHub teal, the app's exclusive identity color
-  // (AppBar, primary buttons, active nav, selected states, links). Used
-  // deliberately, not on every component — see AppTheme's neutral surface
-  // roles for everything else. ----
   static const primary = Color(0xFF0F766E);
   static const primaryDark = Color(0xFF115E59);
   static const primaryLight = Color(0xFFCCFBF1);
   static const primaryAccent = Color(0xFF14B8A6);
 
-  // ---- Secondary — a muted slate, deliberately NOT another teal, so
-  // secondary emphasis (e.g. the capacity dashboard's "Labour" bar next to
-  // the primary "Machine" bar) reads as a distinct, calmer accent instead
-  // of doubling down on the brand color. ----
   static const secondary = Color(0xFF475569);
   static const secondaryDark = Color(0xFF334155);
   static const secondaryLight = Color(0xFFE2E8F0);
 
-  // ---- Accent — the brighter teal reserved for standout calls-to-action
-  // (FABs, "generate insight" sparkles) that need to read as actionable. ----
   static const accent = Color(0xFF14B8A6);
 
-  // ---- Neutral surfaces/text — the slate scale used for page background,
-  // card surfaces, and text hierarchy so the app reads as calm/professional
-  // rather than colorful. ----
   static const background = Color(0xFFF8FAFC);
   static const surface = Color(0xFFFFFFFF);
   static const textPrimary = Color(0xFF0F172A);
@@ -41,11 +19,6 @@ class AppColors {
   static const textMuted = Color(0xFF64748B);
   static const border = Color(0xFFE2E8F0);
 
-  // ---- Semantic status colors — the single source of truth for status/risk
-  // language app-wide (stock health, supply risk, order status, bottleneck
-  // alerts). Each has a light "container" tint for pill/badge backgrounds.
-  // Never assign status colors ad hoc per screen — always go through these
-  // (see StatusChip in lib/widgets/status.dart). ----
   static const success = Color(0xFF16A34A);
   static const successLight = Color(0xFFDCFCE7);
   static const warning = Color(0xFFD97706);
@@ -55,19 +28,12 @@ class AppColors {
   static const info = Color(0xFF0284C7);
   static const infoLight = Color(0xFFE0F2FE);
 
-  // ---- Neutral scale — for borders, muted icons and secondary text that
-  // need a fixed gray beyond what ColorScheme provides (prefer
-  // colorScheme.onSurfaceVariant/outline when a theme-aware gray will do;
-  // reach for these when a screen needs a literal outside that role).
-  // Aligned to the same slate scale as background/border/text above. ----
   static const neutral100 = background;
   static const neutral300 = border;
   static const neutral500 = textMuted;
   static const neutral700 = textSecondary;
 }
 
-/// Shared spacing scale — use these instead of ad hoc SizedBox/padding
-/// numbers so gaps stay consistent across modules.
 class AppSpacing {
   static const xs = 4.0;
   static const s = 8.0;
@@ -77,9 +43,6 @@ class AppSpacing {
   static const xxl = 32.0;
 }
 
-/// Shared corner-radius scale. `sm` for small chips/pills-adjacent controls,
-/// `md` for inputs/buttons, `lg` for cards, `pill` for fully-rounded status
-/// chips and badges.
 class AppRadius {
   static const sm = 8.0;
   static const md = 12.0;
@@ -87,8 +50,6 @@ class AppRadius {
   static const pill = 999.0;
 }
 
-/// Card look shared by every module's cardTheme, pulled out so the values
-/// are named instead of buried as literals inside [AppTheme.light].
 class AppCardStyle {
   static const borderRadius = AppRadius.lg;
   static const elevation = 0.0;
@@ -106,9 +67,6 @@ class AppTheme {
       brightness: brightness,
     );
 
-    // Teal stays the brand identity in both modes, but in dark mode the
-    // usable "primary" is the brighter accent teal so it reads on a dark
-    // surface; the deep teal becomes a container fill instead.
     final colorScheme = isDark
         ? seeded.copyWith(
             primary: AppColors.primaryAccent,
@@ -131,9 +89,6 @@ class AppTheme {
             onSecondary: Colors.white,
             secondaryContainer: AppColors.secondaryLight,
             onSecondaryContainer: AppColors.secondaryDark,
-            // Pinned so ColorScheme.fromSeed never auto-generates a stray
-            // tertiary — every screen that reads scheme.tertiary (e.g. the
-            // stock dashboard's "Overstocked" label) stays on-palette.
             tertiary: AppColors.accent,
             onTertiary: Colors.white,
             tertiaryContainer: AppColors.secondaryLight,
@@ -141,19 +96,11 @@ class AppTheme {
             error: AppColors.danger,
             errorContainer: AppColors.dangerLight,
             onErrorContainer: AppColors.danger,
-            // Exact slate text/surface roles from the design spec — every
-            // screen reading colorScheme.onSurface/.onSurfaceVariant/.outline
-            // (the large majority of the app) picks these up automatically.
             surface: AppColors.surface,
             onSurface: AppColors.textPrimary,
             onSurfaceVariant: AppColors.textSecondary,
             outline: AppColors.border,
             outlineVariant: AppColors.border,
-            // ColorScheme.fromSeed derives its "surfaceContainer*" family
-            // (chip backgrounds, the ResponsiveShell gutter on wide/landscape
-            // layouts) from the seed hue — with a teal seed that comes out as
-            // a faint yellow-green rather than a clean neutral. Pin them to
-            // the same slate scale as everything else instead.
             surfaceContainerLowest: Colors.white,
             surfaceContainerLow: const Color(0xFFF6F8FA),
             surfaceContainer: const Color(0xFFEEF1F4),
@@ -161,9 +108,6 @@ class AppTheme {
             surfaceContainerHighest: const Color(0xFFE2E8F0),
           );
 
-    // Page background is a step darker than card surfaces (slate-50 vs.
-    // white) so cards read as elevated content without needing shadows —
-    // in dark mode the seeded surface seat already provides that contrast.
     final scaffoldBg = isDark ? colorScheme.surface : AppColors.background;
     final cardColor = isDark ? colorScheme.surfaceContainerHigh : Colors.white;
     final fieldFill = isDark
@@ -186,9 +130,6 @@ class AppTheme {
           TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
         },
       ),
-      // Clear typographic hierarchy: bold, tight titles for screen/section
-      // headings; a slightly heavier titleMedium for card titles; body text
-      // untouched from Material defaults (already tuned for readability).
       textTheme: baseTextTheme.copyWith(
         headlineSmall: baseTextTheme.headlineSmall?.copyWith(
           fontWeight: FontWeight.w700,
@@ -208,7 +149,6 @@ class AppTheme {
           fontWeight: FontWeight.w600,
         ),
       ),
-      // The app bar keeps the brand navy in both modes.
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         backgroundColor: AppColors.primary,
@@ -291,9 +231,6 @@ class AppTheme {
           );
         }),
       ),
-      // Mirrors navigationBarTheme above so the landscape NavigationRail
-      // (HomeScreen) reads as the same nav, just repositioned — same teal
-      // selected indicator, same selected/unselected text weight.
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: colorScheme.surface,
         indicatorColor: colorScheme.primaryContainer,

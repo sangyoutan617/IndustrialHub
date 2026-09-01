@@ -64,9 +64,6 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
       if (!mounted) return;
       setState(() {
         _products = products;
-        // Default a new machine to the first non-General product if one
-        // exists — a machine dedicated to nothing in particular should
-        // still nudge toward a real product over the migration catch-all.
         _selectedProductId ??= products.isEmpty
             ? null
             : products.firstWhere(

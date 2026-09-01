@@ -12,11 +12,6 @@ import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
 
-/// One machine's own page: its capacity contribution, current status, and
-/// the Active → Downtime → Repair → Active workflow — the guided path for
-/// logging a breakdown through to repair. Reached by tapping a machine on
-/// [MachineListScreen]; editing the raw fields still happens on
-/// [MachineFormScreen] via the app bar action.
 class MachineDetailScreen extends StatefulWidget {
   final int factoryId;
   final int machineId;
@@ -80,12 +75,10 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
             )
             .productName;
       } catch (_) {
-        // Nice-to-have — don't block the page on it.
       }
       try {
         log = await _downtimeService.getLog(widget.machineId);
       } catch (_) {
-        // Same — the page is still useful without history.
       }
 
       if (!mounted || token != _loadToken) return;
@@ -174,10 +167,6 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
     }
   }
 
-  /// Shared hours / machines-down / reason form for logging and editing a
-  /// downtime event. The "Machines down" field only appears for a group
-  /// (`unitCount > 1`) — a single machine is always 1 down. Returns null if
-  /// the user cancels.
   Future<({double hours, int machinesDown, String? reason})?> _downtimeDialog({
     required String title,
     required String confirmLabel,
@@ -473,9 +462,6 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
     return Align(alignment: Alignment.centerLeft, child: button);
   }
 
-  /// Units currently down across still-open events, but only while the group
-  /// itself is still Active — once it's flipped wholesale to Downtime/Repair
-  /// the status chip already says everything and this note would double up.
   int _openPartialUnitsDown(Machine machine) {
     if (!machine.isGroup || !machine.isActive) return 0;
     return _log

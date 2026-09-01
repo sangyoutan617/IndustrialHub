@@ -12,10 +12,6 @@ class AdminHomeScreen extends StatelessWidget {
     try {
       await AuthService().signOut();
       if (!context.mounted) return;
-      // This screen was pushed on top of AuthGate (the admin login flow
-      // reaches it via Navigator.push, not via AuthGate's own conditional
-      // render), so signing out alone doesn't make AuthGate's rebuilt
-      // LoginScreen visible — pop back down to it explicitly.
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (_) {
       if (!context.mounted) return;

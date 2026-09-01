@@ -10,11 +10,6 @@ import '../../widgets/kpi_card.dart';
 import '../../widgets/status.dart';
 import 'order_form_screen.dart';
 
-/// Decision-focused detail view for one purchase order — every field the
-/// list card used to pack into one dense row, plus the status-transition
-/// actions that used to live inline in that row. Reuses the exact same
-/// OrderService calls and status-transition rules as the list screen; only
-/// the presentation moved.
 class PurchaseOrderDetailScreen extends StatefulWidget {
   final int factoryId;
   final PurchaseOrder order;
@@ -90,11 +85,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     Navigator.of(context).pop(true);
   }
 
-  // Pops back to the list (with a "changed" result) on every successful
-  // transition, the same as _receiveDelivery/_deletePermanently/_edit
-  // below — a plain back-button tap after a status change would otherwise
-  // leave the list showing the pre-change status, since Navigator.pop()
-  // from the system back gesture returns null, not true.
   Future<void> _advanceStatus(String newStatus) async {
     setState(() => _busy = true);
     try {
@@ -238,7 +228,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     final theme = Theme.of(context);
     final status = _statusFor(_order.status);
     final isOpen = _openStatuses.contains(_order.status);
-    
+
     final header = Row(
       children: [
         Expanded(
@@ -252,7 +242,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
         StatusChip(label: _order.status, status: status),
       ],
     );
-    
+
     final deliveryText = isOpen && _order.expectedDelivery != null ? Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xs),
       child: Text(
@@ -260,7 +250,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
         style: theme.textTheme.bodyMedium?.copyWith(color: status.color),
       ),
     ) : const SizedBox.shrink();
-    
+
     final detailsCard = Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -299,7 +289,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
         ),
       ),
     );
-    
+
     final actionsSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -311,7 +301,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
         ),
       ],
     );
-    
+
     return Scaffold(
       appBar: AppBar(title: Text(formatPoNumber(_order.poId))),
       body: ListView(

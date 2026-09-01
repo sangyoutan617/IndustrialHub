@@ -45,8 +45,6 @@ class SupplierService {
     return Supplier.fromJson(row);
   }
 
-  /// Single-field patch for the quick-rate action, so updating a
-  /// supplier's reliability doesn't require reopening the full form.
   Future<Supplier> updateRating(int supplierId, double rating) async {
     final row = await _client
         .from('suppliers')
@@ -61,12 +59,6 @@ class SupplierService {
   }
 
   Future<void> deleteSupplier(int supplierId) async {
-    // Blocks on ANY purchase order history, not just open ones — matching
-    // MaterialService.deleteMaterial's rule. A supplier with only
-    // Delivered/Cancelled orders looked safe to remove, but deleting it
-    // orphans those orders (they'd render "Unknown supplier") and erases
-    // the delivery history that on-time-rate and supplier comparison
-    // depend on.
     final linkedOrders = await _client
         .from('purchase_orders')
         .select('po_id')
@@ -79,8 +71,6 @@ class SupplierService {
         'in use permanently.',
       );
     }
-    // Friendly fast path above; the database's foreign-key constraint is
-    // the real guarantee against an order inserted in between.
     try {
       await _client.from('suppliers').delete().eq('supplier_id', supplierId);
     } on PostgrestException catch (e) {

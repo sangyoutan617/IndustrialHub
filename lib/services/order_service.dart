@@ -19,12 +19,6 @@ class OrderService {
         .toList();
   }
 
-  /// Best-effort preview of the PO number a new order would likely get —
-  /// current max `po_id` + 1. This is NOT reserved and NOT guaranteed: a
-  /// concurrent insert from another device can still take it first, so the
-  /// real number only ever comes from the row [createOrder] actually
-  /// returns. Purely a "here's roughly what to expect" preview shown before
-  /// saving. Returns 1 when there are no orders yet.
   Future<int> getNextPoIdPreview() async {
     final rows = await _client
         .from('purchase_orders')
@@ -117,13 +111,6 @@ class OrderService {
     }
   }
 
-  /// Marks the order delivered as of a specific past [deliveredAt] date and
-  /// adds its quantity to the material's stock — used only for seeding
-  /// historical demo data. [receiveDelivery] always stamps `delivered_at` as
-  /// *today* (correct for a real live delivery), which would make a 60-day-
-  /// old backfilled order look like it just arrived; this sets the date
-  /// directly instead. Not idempotent/transactional like [receiveDelivery] —
-  /// fine for one-time seeding, not for a live user-facing action.
   Future<void> markDeliveredAt(
     PurchaseOrder order,
     DateTime deliveredAt, {
@@ -145,15 +132,6 @@ class OrderService {
     }
   }
 
-  /// Marks the order delivered and adds its quantity to the material's
-  /// stock. Goes through the `receive_delivery` RPC so both writes happen
-  /// in one transaction and a repeat call on an already-delivered order
-  /// is a no-op (idempotent — a double tap can't double-count stock).
-  ///
-  /// Falls back to the old two-step read-then-write only when the RPC
-  /// genuinely doesn't exist yet (pre-migration database) — any other
-  /// Postgrest failure (RLS denial, constraint violation) is a real error
-  /// and should surface as one rather than silently degrading.
   Future<void> receiveDelivery(PurchaseOrder order, {int? factoryId}) async {
     try {
       await _client.rpc('receive_delivery', params: {'p_po_id': order.poId});
@@ -169,12 +147,6 @@ class OrderService {
     }
   }
 
-  /// Non-transactional fallback used only when the `receive_delivery` RPC
-  /// hasn't been created yet. Updates the order's status first, filtered
-  /// to orders that aren't already closed, so a repeat call (or a double
-  /// tap racing the first request) finds no matching row the second time
-  /// and skips the stock update — mirroring the RPC's idempotency instead
-  /// of double-counting stock on a retry.
   Future<void> _receiveDeliveryFallback(PurchaseOrder order) async {
     final today = DateTime.now().toUtc().toIso8601String().substring(0, 10);
     final updated = await _client

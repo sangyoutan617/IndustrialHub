@@ -98,10 +98,6 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         widget.factory.factoryId,
         productId: selected.productId,
       );
-      // Every product's own verdict — not just the picked one — so the AI
-      // insight can narrate the whole factory the way the Stock/Supply
-      // dashboards already do, rather than only the currently viewed
-      // product's numbers.
       final bottlenecks = await Future.wait(
         products.map(
           (p) => _bottleneckService.computeForProduct(
@@ -185,17 +181,11 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
 
   Widget _buildReady() {
     final snapshot = _snapshot!;
-    // Null when there's no capacity data at all (no machines and no shifts
-    // configured) — both capacities are then 0, and `0 <= 0` would always
-    // tag Machine as "limiting" even though nothing is actually limiting
-    // anything yet. Null means "don't show a limiter chip on either bar".
     final isMachineLimiting =
         snapshot.machineCapacity <= 0 && snapshot.manpowerCapacity <= 0
         ? null
         : snapshot.machineCapacity <= snapshot.manpowerCapacity;
 
-    // Built once and handed to whichever layout (portrait/landscape) is
-    // active below, so rotating never recreates — and re-fetches — it.
     final aiInsight = AiInsightCard(
       buildPrompt: () => _buildBottleneckPrompt(snapshot),
       system: _bottleneckSystem,
@@ -246,8 +236,6 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
     required bool? isMachineLimiting,
     required Widget aiInsight,
   }) {
-    // Same single vertical flow as portrait, just wider padding — landscape
-    // gives this screen more breathing room, not a left/right split.
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -427,10 +415,6 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
     ];
   }
 
-  // Deterministic figures only, built here in Dart. The AI insight card
-  // only narrates them — it never computes the bottleneck or the hiring
-  // number itself. See the "Shared AI service" section of the README for
-  // this design principle.
   static const _bottleneckSystem =
       'You are a factory capacity assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. '
@@ -453,13 +437,6 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
     }
   }
 
-  // Enumerates every product's own verdict — sorted by urgency, most-short
-  // first — the same template stock_dashboard_screen.dart's
-  // _buildStockPrompt established for this app's other multi-item
-  // dashboards, rather than narrating only the currently picked product.
-  // The hiring-gap sizing at the end stays scoped to the picked product
-  // ([snapshot]) since compute_bottleneck doesn't size a hiring
-  // recommendation itself — that math is this screen's own.
   String _buildBottleneckPrompt(CapacitySnapshot snapshot) {
     final withData = _allBottlenecks.where((p) => p.bottleneck.hasData).toList();
     final noDataCount = _allBottlenecks.length - withData.length;
@@ -528,14 +505,6 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         : 6.0;
     return Column(
       children: [
-        // Placed above the value/bar (not below the label) deliberately:
-        // the two bars share a bottom baseline via the parent Row's
-        // CrossAxisAlignment.end, and only one side ever carries this chip.
-        // Appending it after the label would make that column taller,
-        // pushing the *other* column's bar/label down to keep the bottoms
-        // aligned — breaking the shared baseline. Extra content above the
-        // value doesn't have that effect: the other column's top-padding
-        // (from the same end-alignment) absorbs it instead.
         if (isLimiter)
           const Padding(
             padding: EdgeInsets.only(bottom: AppSpacing.xs),
@@ -545,8 +514,6 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
               dense: true,
             ),
           ),
-        // FittedBox so a wide space-formatted value doesn't clip when this
-        // bar sits inside a half-width landscape column.
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(

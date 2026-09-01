@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 
-/// The icon-badge + title + subtitle header repeated at the top of every
-/// auth screen (login, signup, forgot/reset password). Theme-aware (reads
-/// `colorScheme.primaryContainer`) so the badge stays legible in dark mode,
-/// unlike the previous per-screen copies that hardcoded [AppColors.primary].
 class AuthHeader extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -53,9 +49,6 @@ class AuthHeader extends StatelessWidget {
   }
 }
 
-/// The scrollable, centered, padded `Form` shell shared by every auth
-/// screen. Screens supply their own fields/buttons as [children] — this
-/// only standardizes the surrounding layout.
 class AuthFormShell extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final List<Widget> children;
@@ -86,8 +79,6 @@ class AuthFormShell extends StatelessWidget {
   }
 }
 
-/// The "or" divider between the email/password form and the Google
-/// sign-in button, used on both login and signup.
 class AuthOrDivider extends StatelessWidget {
   final String label;
   const AuthOrDivider({super.key, this.label = 'or'});

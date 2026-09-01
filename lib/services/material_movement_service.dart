@@ -5,20 +5,9 @@ import '../models/raw_material_movement.dart';
 import 'data_event_service.dart';
 import 'mrp_service.dart';
 
-/// Writes the raw-material stock ledger and keeps `raw_materials.current_stock`
-/// in step. The raw-material equivalent of [StockService.recordMovement] for
-/// finished goods — the two ledgers are deliberately separate.
 class MaterialMovementService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  /// Bulk-writes many historical ledger rows in one round trip and sets each
-  /// material's final `current_stock` directly, rather than the incremental
-  /// read-then-write [recordMovement] does per call. Used only for seeding a
-  /// large historical ledger (e.g. 90 days of production consumption plus a
-  /// few delivery receipts) where one sequential call per row would be
-  /// impractical — the caller is responsible for computing correct deltas
-  /// (including keeping every running total non-negative) themselves, since
-  /// this performs no validation.
   Future<void> recordBulkMovements({
     required int factoryId,
     required List<
@@ -74,11 +63,6 @@ class MaterialMovementService {
         .toList();
   }
 
-  /// Records one ledger entry and applies its signed delta to the material's
-  /// current stock. `consumption` subtracts, `receipt` adds, `adjustment` adds
-  /// the signed [quantity] as given (pass a negative number to remove stock).
-  /// Throws before writing anything if the result would go below zero, so a
-  /// mistyped consumption can't push stock negative.
   Future<void> recordMovement({
     required int materialId,
     required int factoryId,
@@ -129,22 +113,6 @@ class MaterialMovementService {
     );
   }
 
-  /// Deducts — or returns, when [unitsDelta] is negative, e.g. a downward
-  /// correction to a previously-logged day — the raw material one product's
-  /// production delta implies, per that product's own [bom]
-  /// ([MrpService.computeProductionConsumption] does the pure per-BOM-line
-  /// math on the magnitude; this wrapper picks the direction from the sign).
-  /// This is always called automatically from the production-logging flow —
-  /// there is no manual "record usage" path any more, only stock
-  /// [RawMaterialMovementType.adjustment]s for corrections/waste on a
-  /// material's own page.
-  ///
-  /// Any material without enough stock to *consume* is skipped (its id
-  /// returned) rather than driving stock negative, so the caller can warn
-  /// without the whole run failing. A return can never be skipped for
-  /// insufficient stock — adding stock back can't go negative. [unitsDelta]
-  /// of zero is a no-op; callers should simply not call this when nothing
-  /// changed.
   Future<List<int>> recordProductionConsumption({
     required int factoryId,
     required List<RawMaterial> materials,
@@ -176,9 +144,6 @@ class MaterialMovementService {
         movementType: isReturn
             ? RawMaterialMovementType.adjustment
             : RawMaterialMovementType.consumption,
-        // Consumption normalises the sign itself (recordMovement negates
-        // it); adjustment applies this positive value as-entered, so it
-        // adds the returned quantity back to stock.
         quantity: entry.value,
         movementDate: date,
         note: isReturn

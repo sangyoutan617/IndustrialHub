@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 
-/// Centered error icon + user-readable message + Retry button. Callers
-/// should pass a friendly [message], not raw exception text.
 class ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;

@@ -1,8 +1,3 @@
-/// One entry in a machine's downtime ledger. Mirrors [RawMaterialMovement]'s
-/// shape — an immutable-once-written row, except this one gets exactly two
-/// later stamps as the workflow advances: [repairStartedAt] when repair
-/// begins, [repairedAt] when it's done. While [repairedAt] is null the
-/// machine is still Down or in Repair; once set, the event is closed.
 class MachineDowntimeLog {
   final int logId;
   final int machineId;
@@ -10,9 +5,6 @@ class MachineDowntimeLog {
   final DateTime logDate;
   final double downtimeHours;
 
-  /// How many of the machine group's units this event took down. 1 for a
-  /// single machine. Recorded for information only — it is **not** folded
-  /// into the capacity ceiling (C1); see `docs/FORMULAS.md`.
   final int machinesDown;
   final String? reason;
   final DateTime? repairStartedAt;

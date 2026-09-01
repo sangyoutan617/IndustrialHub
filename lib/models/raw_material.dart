@@ -6,9 +6,6 @@ class RawMaterial {
   final String unit;
   final int safetyStockDays;
 
-  /// Cost of one [unit] of this material on hand, in the factory's currency
-  /// (RM). Null when no cost has been recorded — older rows predate cost
-  /// tracking, so callers must treat it as unknown rather than zero.
   final double? unitCost;
 
   const RawMaterial({
@@ -28,11 +25,7 @@ class RawMaterial {
       materialName: json['material_name'] as String,
       currentStock: (json['current_stock'] as num).toDouble(),
       unit: json['unit'] as String? ?? 'kg',
-      // Falls back to 3 when the column hasn't been migrated yet, so the
-      // app keeps working against an older database schema.
       safetyStockDays: (json['safety_stock_days'] as num?)?.toInt() ?? 3,
-      // Nullable and absent on an un-migrated database — stays null rather
-      // than defaulting to a misleading zero cost.
       unitCost: (json['unit_cost'] as num?)?.toDouble(),
     );
   }

@@ -11,19 +11,11 @@ import 'mrp_service.dart';
 import 'product_service.dart';
 import 'supply_service.dart';
 
-/// Builds a one-page PDF summary of a factory — the per-product bottleneck
-/// verdict, finished-goods stock, and supply risk — from figures the
-/// deterministic engines already computed. Nothing here recalculates: it
-/// reads [BottleneckService] (once per product), [loadStockOverview] and
-/// [SupplyService] and lays their numbers out. Loops every product rather
-/// than offering a picker — a PDF read offline later doesn't benefit from
-/// one, unlike the live capacity dashboard.
 class ReportService {
   final BottleneckService _bottleneckService = BottleneckService();
   final SupplyService _supplyService = SupplyService();
   final ProductService _productService = ProductService();
 
-  // Matches the app's teal brand (lib/core/theme.dart AppColors).
   static const _green = PdfColor.fromInt(0xFF0F766E);
   static const _darkGreen = PdfColor.fromInt(0xFF115E59);
   static const _grey = PdfColor.fromInt(0xFF6B7280);
@@ -91,10 +83,6 @@ class ReportService {
     );
   }
 
-  /// One line per product rather than a single factory-wide verdict —
-  /// achievable/demand can be in different units from one product to the
-  /// next, so "X of Y products meeting demand" is the summary figure that
-  /// stays meaningful, same as the admin cross-factory rollup.
   pw.Widget _capacitySection(List<ProductBottleneck> productBottlenecks) {
     if (productBottlenecks.isEmpty) {
       return _section('Capacity', [

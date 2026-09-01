@@ -14,11 +14,6 @@ import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
 import '../supply/order_form_screen.dart';
 
-/// Read-only admin drill-in for a single factory. Alerts here are computed
-/// live from current_stock / reorder_level and the bottleneck engine — there
-/// is no alerts table to mark rows resolved. Raising a purchase order is the
-/// only action offered, and it goes through Module 3's normal create-order
-/// flow rather than mutating stock from this screen.
 class AdminFactoryDetailScreen extends StatefulWidget {
   final Factory factory;
 
@@ -59,9 +54,6 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         widget.factory.factoryId,
       );
       if (products.isEmpty) {
-        // Shouldn't happen — every factory gets an auto-created General
-        // product — but there's nothing meaningful to show a bottleneck
-        // verdict for if it somehow does.
         setState(() => _state = _LoadState.error);
         return;
       }
@@ -72,10 +64,6 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
             )
           : _defaultProduct(products);
 
-      // Every product's own verdict, not just the picked one — the alerts
-      // section below lists every shortfall across the whole factory. The
-      // product picker + BottleneckBanner underneath is for drilling into
-      // one product's full detail, a separate concern.
       final bottlenecks = await Future.wait(
         products.map(
           (p) => _bottleneckService.computeForProduct(
@@ -120,8 +108,6 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         material.materialId,
       ]);
     } catch (e) {
-      // Unguarded, a failed fetch here made the "Raise PO" tap do nothing
-      // (and threw in the background) — tell the admin instead.
       debugPrint('admin: failed to load suppliers for material: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -218,7 +204,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         ),
       ),
     );
-    
+
     final productPicker = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: DropdownButtonFormField<int>(

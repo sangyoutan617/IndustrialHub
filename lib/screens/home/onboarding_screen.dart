@@ -7,16 +7,7 @@ import '../../services/profile_service.dart';
 import '../../widgets/msic_field.dart';
 import '../../widgets/responsive_form_fields.dart';
 
-/// Shown once, right after a new user's first sign-in (profiles.onboarded is
-/// false). Collects their personal details and sets up their first factory,
-/// then flips onboarded = true so it never shows again.
-///
-/// Everything except the two required names is optional, and there's a
-/// "Skip for now" that just marks onboarding done — so a user is never
-/// trapped here.
 class OnboardingScreen extends StatefulWidget {
-  /// Called once onboarding is finished (completed or skipped) so the gate
-  /// above can swap in the home screen.
   final VoidCallback onComplete;
 
   const OnboardingScreen({super.key, required this.onComplete});
@@ -65,7 +56,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final codes = await _capacityService.getMsicCodes();
       if (mounted) setState(() => _msicCodes = codes);
     } catch (_) {
-      // Industry is optional — leaving the dropdown empty is fine.
     }
   }
 

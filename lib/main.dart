@@ -20,23 +20,11 @@ Future<void> main() async {
   await _bootstrap();
 }
 
-/// Initialises Supabase and launches the app. Isolated (and retryable) so a
-/// failed init — bad config, no network on first launch — shows a friendly
-/// retry screen instead of the blank/black screen that an exception thrown
-/// before [runApp] used to leave behind.
 Future<void> _bootstrap() async {
   try {
     await Supabase.initialize(
       url: SupabaseConfig.url,
       publishableKey: SupabaseConfig.anonKey,
-      // Password-reset (and email-confirmation) links are opened from an
-      // email client, which is almost never the same browser tab that
-      // requested them. The default PKCE flow needs a code verifier stashed
-      // in that original tab's local storage to complete the sign-in, so it
-      // silently fails whenever the link is opened elsewhere — landing back
-      // on the login screen with no session. Implicit flow carries the
-      // session tokens directly in the redirect URL instead, so it works
-      // regardless of which browser/tab opens the link.
       authOptions: const FlutterAuthClientOptions(
         authFlowType: AuthFlowType.implicit,
       ),
@@ -46,16 +34,10 @@ Future<void> _bootstrap() async {
     runApp(StartupErrorApp(onRetry: _bootstrap));
     return;
   }
-  // Best-effort: sets up the local-notifications channel and asks for
-  // permission over the running app. No-op on web. Not awaited so the
-  // permission dialog never blocks first paint.
   unawaited(NotificationService.instance.init());
   runApp(const MyApp());
 }
 
-/// Standalone fallback shown when [Supabase.initialize] fails, so startup
-/// can't reach [MyApp]. Deliberately self-contained — it depends on nothing
-/// that initialisation set up — and offers a Retry that re-runs [_bootstrap].
 class StartupErrorApp extends StatefulWidget {
   final Future<void> Function() onRetry;
 
@@ -70,9 +52,6 @@ class _StartupErrorAppState extends State<StartupErrorApp> {
 
   Future<void> _retry() async {
     setState(() => _retrying = true);
-    // On success this replaces the whole app via runApp, so this widget is
-    // torn down and the flag never needs resetting; on failure _bootstrap
-    // calls runApp(StartupErrorApp) again with a fresh state.
     await widget.onRetry();
   }
 
@@ -140,14 +119,9 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      // Follows the device's light/dark setting.
       themeMode: ThemeMode.system,
-      // Follows the device locale — there's no in-app language picker.
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      // Caps the content width so the app doesn't stretch edge to edge on
-      // wide/landscape/desktop/web viewports. Applies to every screen and
-      // dialog at once — see ResponsiveShell.
       builder: (context, child) =>
           ResponsiveShell(child: child ?? const SizedBox.shrink()),
       home: const AuthGate(),
@@ -167,42 +141,21 @@ class _AuthGateState extends State<AuthGate> {
       Supabase.instance.client.auth.currentSession;
   bool _checkedRememberMe = false;
 
-  // True while the current session came from a password-recovery link
-  // rather than a normal sign-in — routes to ResetPasswordScreen instead
-  // of HomeScreen until that flow explicitly signs out.
   bool _isRecoveringPassword = false;
   StreamSubscription<AuthState>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
-    // Subscribed before _enforceRememberMeWindow runs so a
-    // passwordRecovery event that arrives while that (async) check is
-    // still in flight is never missed. In practice, on a fresh web page
-    // load the event has usually already fired inside
-    // Supabase.initialize() — before any listener could exist — which is
-    // exactly why _enforceRememberMeWindow also checks the persisted
-    // pending-recovery flag below; this listener is the fallback for a
-    // warm app (e.g. a mobile deep link arriving while already running).
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
       (state) {
         if (!mounted) return;
         if (state.event == AuthChangeEvent.passwordRecovery) {
           setState(() => _isRecoveringPassword = true);
         } else if (state.event == AuthChangeEvent.signedOut) {
-          // Otherwise a later, completely normal sign-in would still be
-          // misrouted to ResetPasswordScreen by a flag left over from an
-          // earlier recovery flow.
           setState(() => _isRecoveringPassword = false);
         }
       },
-      // A password-reset (or email-confirmation) link that's already been
-      // used or has expired makes supabase_flutter's own deep-link handler
-      // push an AuthException onto this stream instead of a normal AuthState
-      // — without this handler it surfaces to the user as nothing at all:
-      // the app just silently lands back on the login screen. Confirmed live
-      // on the Android emulator by firing a malformed recovery deep link at
-      // the app and watching it throw unhandled.
       onError: (error, stackTrace) {
         if (!mounted || error is! AuthException) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -223,22 +176,8 @@ class _AuthGateState extends State<AuthGate> {
     super.dispose();
   }
 
-  // "Remember me" is an app-level boundary on top of Supabase's own session
-  // persistence: if the box wasn't checked at login (or the 30 days are up),
-  // sign out on this cold start even though a valid session still exists.
   Future<void> _enforceRememberMeWindow() async {
-    // Whatever happens below, the gate must stop showing the startup spinner
-    // and fall through to the auth check — an exception here (a failed prefs
-    // read or signOut) used to leave _checkedRememberMe false forever, which
-    // pinned the app on the spinner with no way out. Failing open is safe:
-    // a null session lands on LoginScreen, and the worst case (a session that
-    // should have been signed out surviving) is far better than a dead app.
     try {
-      // A password-recovery link also completes via a full page reload on
-      // web, which looks identical to a stale restart to the check below —
-      // consuming this flag (set by ForgotPasswordScreen right before the
-      // email was sent) lets that reload's session survive long enough for
-      // ResetPasswordScreen to use it, instead of being signed straight out.
       final pendingRecovery =
           await SessionPrefs.consumePendingPasswordRecovery();
       final pendingOAuthChoice =
@@ -246,9 +185,6 @@ class _AuthGateState extends State<AuthGate> {
       if (pendingRecovery) {
         if (mounted) setState(() => _isRecoveringPassword = true);
       } else if (pendingOAuthChoice != null) {
-        // This cold start is a web OAuth redirect completing a sign-in that
-        // just happened, not a real app restart — apply the choice made
-        // before the redirect instead of treating it as a stale session.
         await SessionPrefs.setRememberMe(pendingOAuthChoice);
       } else if (_initialSession != null && !_isRecoveringPassword) {
         final stayLoggedIn = await SessionPrefs.shouldStayLoggedIn();
@@ -283,10 +219,6 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-/// Sits between a signed-in session and the home screen. A brand-new user
-/// (profiles.onboarded == false) is sent through [OnboardingScreen] first;
-/// everyone else goes straight to [HomeScreen]. If the profile can't be
-/// read, the user is never trapped — they go to the home screen.
 class OnboardingGate extends StatefulWidget {
   const OnboardingGate({super.key});
 

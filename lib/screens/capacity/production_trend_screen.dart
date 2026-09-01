@@ -46,7 +46,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   final _bomService = BomService();
   final _stockService = StockService();
 
-  /// Dropdown sentinel meaning "combine every product into one line".
   static const _allProductsId = -1;
 
   _LoadState _state = _LoadState.loading;
@@ -75,10 +74,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     }
   }
 
-  /// Loads the product list (once per screen open, or after logging a
-  /// product this factory didn't have selected before) and this factory's
-  /// full product set stays cheap enough to always refetch — trend/log
-  /// dialogs both need an up-to-date list, not a stale snapshot.
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
@@ -93,8 +88,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         });
         return;
       }
-      // Default to the first non-General product if one exists — General
-      // is the migration catch-all, not something a user picks first.
       final productId =
           _selectedProductId ??
           products.firstWhere((p) => !p.isGeneral, orElse: () => products.first).productId;
@@ -133,19 +126,11 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     _load();
   }
 
-  // Delegates all input state (controllers, date, checkbox, validation) to
-  // _LogProductionDialog, which owns its own State — the same pattern
-  // widgets/text_prompt_dialog.dart uses, and for the same reason: a
-  // controller created here and disposed in a `finally` around showDialog
-  // can trigger a framework assertion if a rotation races the route's exit
-  // animation. This method only reacts to the finished result.
   Future<void> _openLogDialog() async {
     final result = await showDialog<_LogProductionResult>(
       context: context,
       builder: (_) => _LogProductionDialog(
         products: _products,
-        // "All products" isn't a thing you can log against — default the
-        // dialog to the first real product instead.
         initialProductId: _isViewingAll ? null : _selectedProductId,
       ),
     );
@@ -153,9 +138,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 
     setState(() => _isLogging = true);
     try {
-      // Captured before the upsert overwrites it — the delta against this
-      // is what actually gets deducted/returned, so re-logging (correcting)
-      // an already-logged day doesn't double-deduct.
       final previous = await _service.getForDate(
         factoryId: widget.factory.factoryId,
         productId: result.productId,
@@ -175,9 +157,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         await _consumeMaterials(result.productId, delta, result.logDate);
         await _updateFinishedStock(result.productId, delta, result.logDate);
       }
-      // Switch the view to whichever product was just logged, so the new
-      // entry is immediately visible rather than possibly landing on a
-      // product the trend chart isn't currently filtered to.
       setState(() => _selectedProductId = result.productId);
       _load();
       if (!mounted) return;
@@ -196,11 +175,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     }
   }
 
-  /// Deducts — or returns, if [unitsDelta] is negative — the raw material
-  /// this product's recipe says the *change* in output implies, and warns
-  /// (non-blocking) about any material that didn't have enough stock to
-  /// consume. Best-effort — a consumption failure never undoes the
-  /// already-logged production.
   Future<void> _consumeMaterials(
     int productId,
     int unitsDelta,
@@ -233,11 +207,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     }
   }
 
-  /// Mirrors [_consumeMaterials] on the finished-goods side: the *change* in
-  /// logged output is added to (or, for a downward correction, removed from)
-  /// this product's finished stock. Best-effort — a failure never undoes the
-  /// already-logged production. A downward correction that would push stock
-  /// below zero is surfaced (non-blocking) rather than silently dropped.
   Future<void> _updateFinishedStock(
     int productId,
     int unitsDelta,
@@ -262,7 +231,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
         await _stockService.recordMovement(
           stockId: stock.stockId,
           movementType: StockMovementType.adjustment,
-          quantity: unitsDelta, // negative — signed as entered
+          quantity: unitsDelta,
           movementDate: date,
           note: 'Production correction',
           factoryId: widget.factory.factoryId,
@@ -531,20 +500,12 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
             const SizedBox(height: 16),
             downtimeSection,
           ],
-          // Clears the "Log production" FAB, which otherwise sits directly
-          // on top of the downtime bar chart's last few days.
           const SizedBox(height: 96),
         ],
       ),
     );
   }
 
-  /// The manually-entered daily downtime total (`daily_production
-  /// .downtime_hours`) — machine-hours lost across every machine that was
-  /// down, keyed in by the user when logging production. Separate from the
-  /// per-machine `machine_downtime_log` ledger; this figure is what the user
-  /// typed, not a roll-up of that. Shown as a daily total with a "worst day"
-  /// flag.
   List<DailyProduction> get _downtimeRows {
     final since = DateTime.now().subtract(const Duration(days: 30));
     return _raw.where((row) => row.logDate.isAfter(since)).toList()
@@ -738,9 +699,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   }
 }
 
-/// Finished input from [_LogProductionDialog] — only ever handed back once
-/// [Form.validate] has already passed, so every field here is guaranteed
-/// parseable and sign-correct.
 class _LogProductionResult {
   final int productId;
   final DateTime logDate;
@@ -755,11 +713,6 @@ class _LogProductionResult {
   });
 }
 
-/// The "Log production" dialog, extracted into its own [StatefulWidget] so
-/// its controllers live in this State (created and disposed here) rather
-/// than in the caller's method body disposed via a `finally` around
-/// `showDialog` — the same pattern widgets/text_prompt_dialog.dart uses, to
-/// avoid the same class of rotation-during-dialog framework crash.
 class _LogProductionDialog extends StatefulWidget {
   final List<Product> products;
   final int? initialProductId;
@@ -814,10 +767,6 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Log production'),
-      // AlertDialog doesn't cap its own height, so a fixed-content Column
-      // here can overflow in landscape (a short screen with the on-screen
-      // keyboard up leaves even less room) — SingleChildScrollView lets the
-      // dialog's content scroll instead of clipping/asserting.
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,

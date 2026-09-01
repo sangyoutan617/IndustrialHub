@@ -100,12 +100,7 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Record movement — ${widget.productName}',
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
+      appBar: AppBar(title: const Text('Record movement')),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -149,14 +144,18 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                     },
                   ),
                   const SizedBox(height: AppSpacing.l),
-                  FormBreak(ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Date'),
-                    subtitle: Text(
-                      '${_movementDate.year}-${_movementDate.month.toString().padLeft(2, '0')}-${_movementDate.day.toString().padLeft(2, '0')}',
-                    ),
-                    trailing: const Icon(Icons.calendar_today_outlined),
+                  FormBreak(InkWell(
                     onTap: _pickDate,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Date',
+                        suffixIcon: Icon(Icons.calendar_today_outlined),
+                      ),
+                      child: Text(
+                        '${_movementDate.year}-${_movementDate.month.toString().padLeft(2, '0')}-${_movementDate.day.toString().padLeft(2, '0')}',
+                      ),
+                    ),
                   )),
                   const SizedBox(height: AppSpacing.l),
                   TextFormField(

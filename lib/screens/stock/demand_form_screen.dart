@@ -57,9 +57,6 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
       if (!mounted) return;
       setState(() {
         _products = products;
-        // Default a new forecast to the first non-General product if one
-        // exists — General is the migration catch-all, not something a
-        // user picks first when forecasting demand.
         _selectedProductId ??= products.isEmpty
             ? null
             : products.firstWhere(
@@ -221,10 +218,6 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                       ),
                     ),
                 ],
-                // Locked once editing an existing forecast — changing the
-                // product would silently redirect an existing forecast's
-                // history onto a different product instead of creating a
-                // new one for it; delete and re-add is the explicit way.
                 onChanged: _isEditing
                     ? null
                     : (value) => setState(() => _selectedProductId = value),

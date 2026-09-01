@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import 'status.dart';
 
-/// A single KPI number in a compact card: icon badge, muted label, a large
-/// prominent value, an optional unit caption, and an optional status pill.
-/// Used across dashboards (capacity ceiling, stock days-of-cover, supply
-/// risk counts) so every "big number" in the app looks the same.
 class KpiCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -68,10 +64,6 @@ class KpiCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 2),
-              // Wrapped in FittedBox so a large aggregate value (e.g. summed
-              // across many factories) shrinks to fit a narrow card instead
-              // of overflowing — most values fit as-is and this is a no-op
-              // for them.
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
@@ -105,9 +97,6 @@ class KpiCard extends StatelessWidget {
   }
 }
 
-/// A left-label / right-value row for compact comparisons (capacity
-/// machine-vs-labour, supplier comparison stats, order details). Optional
-/// trailing [status] pill for rows that also carry a risk/health verdict.
 class MetricRow extends StatelessWidget {
   final String label;
   final String value;
@@ -138,10 +127,6 @@ class MetricRow extends StatelessWidget {
               ),
             ),
           ),
-          // Flexible so a long value (a user-entered supplier/material name,
-          // not just a number) shrinks to fit instead of overflowing the
-          // row — label already yields via Expanded above, but without this
-          // the value itself lays out at its intrinsic width regardless.
           Flexible(
             child: Text(
               value,
@@ -164,9 +149,6 @@ class MetricRow extends StatelessWidget {
   }
 }
 
-/// A section title with optional trailing action — the standard heading
-/// used above every list/grid section on a screen ("Machines", "Alerts",
-/// "Demand forecast", …).
 class SectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;

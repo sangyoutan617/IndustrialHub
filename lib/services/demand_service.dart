@@ -13,8 +13,6 @@ class DemandService {
         .from('demand_forecast')
         .select(_selectWithProduct)
         .eq('factory_id', factoryId);
-    // Sorted client-side by the joined product name — demand_forecast has
-    // no product-name column of its own to order the query by any more.
     final list = (rows as List)
         .map((row) => DemandForecast.fromJson(row as Map<String, dynamic>))
         .toList();
@@ -64,12 +62,6 @@ class DemandService {
     }
   }
 
-  /// Suggests a required_per_day baseline from actual shipment history,
-  /// rather than leaving it as a number the user just types with no basis.
-  /// Purely a suggestion — the caller still lets the user override it.
-  /// Returns null if there's no matching finished_stock row (this product
-  /// isn't tracked as finished stock yet) or no shipment_out movements to
-  /// derive a rate from.
   Future<double?> suggestRequiredPerDay({
     required int factoryId,
     required int productId,

@@ -7,9 +7,6 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 
-/// Side-by-side comparison of every supplier available for one material —
-/// quoted vs effective lead time, reliability, and on-time delivery rate —
-/// so choosing between suppliers doesn't rely on quoted lead time alone.
 class SupplierComparisonScreen extends StatefulWidget {
   final int factoryId;
   final int materialId;
@@ -94,7 +91,7 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
             message: 'No suppliers linked to this material yet.',
           );
         }
-        
+
         final cards = _comparisons.map((c) => _buildCard(c)).toList();
 
         return ListView(padding: const EdgeInsets.all(16), children: cards);

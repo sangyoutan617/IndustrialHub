@@ -22,8 +22,6 @@ class DataChangeEvent {
   });
 }
 
-/// A real-time reactive event bus that notifies active screens whenever
-/// data changes across any module, eliminating the need for manual refreshes.
 class DataEventService {
   DataEventService._();
   static final DataEventService instance = DataEventService._();
@@ -31,8 +29,6 @@ class DataEventService {
   final ValueNotifier<DataChangeEvent?> changeEvent =
       ValueNotifier<DataChangeEvent?>(null);
 
-  /// Broadcasts a data change event for [factoryId], automatically prompting
-  /// all active tabs and screens to reload immediately in the background.
   void notifyChanged({
     required int factoryId,
     DataChangeSource source = DataChangeSource.general,

@@ -88,10 +88,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
     if (!mounted || saved == null) return;
     _load();
-    // Brand-new order (this method is never called with an existing one —
-    // editing goes through _openDetail's own flow): jump straight into its
-    // detail screen so the user sees the real, Supabase-generated PO number
-    // immediately, on the exact same screen "View purchase order" uses.
     if (order == null && saved is PurchaseOrder) {
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -181,7 +177,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
               final isLandscape = orientation == Orientation.landscape;
               return CustomScrollView(
                 slivers: [
-                  // filter chip row
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -204,7 +199,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       ),
                     ),
                   ),
-                  // empty-filter state or grid/list
                   if (filtered.isEmpty)
                     const SliverToBoxAdapter(
                       child: Padding(
@@ -262,11 +256,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
     return ' · overdue by ${-days} day${-days == 1 ? '' : 's'}';
   }
 
-  // Compact, scannable row: PO number / material / supplier+quantity / date
-  // / status. Status-transition actions (start processing, mark shipped,
-  // receive delivery, cancel, delete) moved to PurchaseOrderDetailScreen —
-  // tap through to view and act on one order instead of packing every
-  // possible action into this row.
   Widget _buildOrderCard(PurchaseOrder order) {
     final materialName = _materialNames[order.materialId] ?? 'Unknown material';
     final supplierName = _supplierNames[order.supplierId] ?? 'Unknown supplier';
@@ -320,11 +309,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
-  // Maps order status onto the shared AppStatus vocabulary (see
-  // lib/widgets/status.dart): Processing reads as "queued" (info), Shipped
-  // is "in transit, awaiting receipt" (warning — needs attention), Delivered
-  // is the successful terminal state, and Cancelled is a closed state rather
-  // than a failure, so it reads neutral instead of danger.
   AppStatus _statusFor(String status) {
     switch (status) {
       case PurchaseOrderStatus.processing:

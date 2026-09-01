@@ -3,9 +3,6 @@ class DemandForecast {
   final int factoryId;
   final int productId;
 
-  /// Display name, read from the joined `products` row (see
-  /// DemandService.getForecasts) — demand_forecast carries no product-name
-  /// column of its own any more, [productId] is the only source of truth.
   final String productName;
   final int requiredPerDay;
   final DateTime? periodStart;
@@ -27,8 +24,6 @@ class DemandForecast {
       demandId: json['demand_id'] as int,
       factoryId: json['factory_id'] as int,
       productId: json['product_id'] as int,
-      // Falls back rather than throwing if a caller's query ever forgets
-      // to embed the join — a wrong-looking name beats a crash.
       productName: joinedProduct?['product_name'] as String? ?? 'Unknown product',
       requiredPerDay: json['required_per_day'] as int,
       periodStart: json['period_start'] != null
@@ -50,11 +45,6 @@ class DemandForecast {
     };
   }
 
-  /// Whether this forecast is in effect on [day]. An open-ended period (null
-  /// start or end) is always in effect on that side, so a forecast with no
-  /// dates at all counts every day — keeping rows created before periods
-  /// existed exactly as they behaved before. Compared date-only, and both
-  /// boundaries are inclusive.
   bool isActiveOn(DateTime day) {
     final d = DateTime(day.year, day.month, day.day);
     final start = periodStart;
@@ -69,9 +59,6 @@ class DemandForecast {
     return true;
   }
 
-  /// The subset of [forecasts] in effect on [day] — used so an expired or
-  /// future forecast no longer inflates today's demand / planned production.
-  /// Pure — no DB.
   static List<DemandForecast> activeOn(
     Iterable<DemandForecast> forecasts,
     DateTime day,

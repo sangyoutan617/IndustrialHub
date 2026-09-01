@@ -41,10 +41,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       final userId = _authService.currentUser?.id;
       final isAdmin = userId != null && await _adminService.isAdmin(userId);
       if (!mounted) return;
-      // Keep AuthGate (the first route) alive underneath — it's what
-      // reacts to sign-out by showing LoginScreen again. Wiping it out
-      // with `(route) => false` would leave nothing listening once this
-      // screen calls signOut() later.
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (_) =>

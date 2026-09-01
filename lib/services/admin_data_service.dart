@@ -28,9 +28,6 @@ class AdminDataService {
     ('purchase_orders', 'po_id', 'Purchase orders'),
   ];
 
-  /// Read-only visibility into how much of each table is demo/simulated
-  /// data vs real data. No delete or reset action is exposed from the
-  /// client — see README for why.
   Future<List<TableSimulatedCount>> countSimulated() async {
     final results = <TableSimulatedCount>[];
     for (final (table, idColumn, label) in _tables) {

@@ -56,13 +56,8 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _isGoogleLoading = true);
     try {
-      // No "remember me" checkbox on signup — signing up implies intent to
-      // stay signed in, so default to remembering across the OAuth redirect.
       await SessionPrefs.markPendingOAuthRememberMe(true);
       await _authService.signInWithGoogle();
-      // Success continues outside this screen — AuthGate's onAuthStateChange
-      // listener picks up the session once the browser flow completes and
-      // redirects back into the app.
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {

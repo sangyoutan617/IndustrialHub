@@ -74,11 +74,6 @@ class MaterialService {
         'This material has purchase order history — it cannot be removed.',
       );
     }
-    // The checks above are a friendly fast path — they can still race with
-    // a supplier/order inserted between the SELECT and this DELETE. The
-    // database's own foreign-key constraint is the real backstop: if that
-    // fires, surface it the same way as a pre-checked conflict rather than
-    // letting a raw PostgrestException reach the UI.
     try {
       await _client
           .from('raw_materials')

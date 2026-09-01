@@ -42,12 +42,6 @@ class BottleneckResult {
   }
 }
 
-/// One product's bottleneck verdict, paired with the product itself so a
-/// list of these can be rendered — or narrated to the AI insight card —
-/// without a separate lookup. Shared by every screen that needs "every
-/// product's own verdict" rather than one factory-wide number: the admin
-/// cross-factory rollup, the per-factory admin drill-in, the PDF report,
-/// and the Capacity/Home dashboards' AI prompts.
 class ProductBottleneck {
   final Product product;
   final BottleneckResult bottleneck;
@@ -58,13 +52,6 @@ class ProductBottleneck {
 class BottleneckService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  /// The authoritative capacity/bottleneck verdict — computed server-side
-  /// by the compute_bottleneck() Postgres function, not re-derived from raw
-  /// table reads here. The
-  /// what-if simulator (simulator_screen.dart) is the one place that still
-  /// does this math on the client: it's read-only and needs instant slider
-  /// feedback, so local computation is the right call there. Everywhere
-  /// else — dashboards, admin analytics, material alerts — reads this.
   Future<BottleneckResult> computeForFactory(int factoryId) async {
     final row = await _client
         .rpc('compute_bottleneck', params: {'p_factory_id': factoryId})
@@ -72,12 +59,6 @@ class BottleneckService {
     return _fromRow(row);
   }
 
-  /// Same verdict, scoped to one product — backed by the `compute_bottleneck`
-  /// overload that also takes `p_product_id` (every subquery filtered by
-  /// product, the material ceiling read from that product's own bill of
-  /// materials). [computeForFactory] still exists and is still correct for
-  /// callers that haven't been product-scoped yet; the two RPC signatures
-  /// coexist server-side.
   Future<BottleneckResult> computeForProduct(
     int factoryId,
     int productId,

@@ -44,10 +44,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _tabIndex = 0;
   bool _isSeeding = false;
 
-  // Tabs are built lazily (on first visit) and then kept alive via
-  // IndexedStack, so switching tabs never re-fetches a module's data, but a
-  // module you've never opened never loads at startup either.
   final Set<int> _visitedTabs = {0};
+  final _tabContentKey = GlobalKey();
 
   static const _tabIcons = [
     Icons.home_rounded,
@@ -66,8 +64,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _loadState = _LoadState.loading);
     try {
       final factories = await _factoryService.getFactories();
-      // The auth gate can dispose this screen (e.g. a "remember me" sign-out
-      // completing) while getFactories() is still in flight.
       if (!mounted) return;
       setState(() {
         _factories = factories;
@@ -81,26 +77,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Best-effort supply-risk notification when a factory is opened. Never
-  // blocks the UI or surfaces an error — the alert is a nice-to-have on top
-  // of the in-app risk display. Skipped on web (no local notifications).
   Future<void> _checkAlerts(Factory factory) async {
     if (kIsWeb) return;
     try {
       final overview = await _supplyService.load(factory.factoryId);
       await NotificationService.instance.notifySupplyRisk(factory, overview);
     } catch (_) {
-      // Ignore — best-effort only.
     }
   }
 
   Future<void> _createFactory() async {
-    // showTextPromptDialog owns its own controller's lifecycle (created and
-    // disposed inside the dialog's own State) rather than one created here
-    // and disposed in a `finally` around showDialog — the latter pattern
-    // already caused a real rotation-during-dialog crash once this session.
-    // Its default required-validator also means a non-null result here is
-    // always non-empty.
     final name = await showTextPromptDialog(
       context,
       icon: Icons.add_business_outlined,
@@ -161,11 +147,6 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await _authService.signOut();
       if (!mounted) return;
-      // Usually a no-op (AuthGate renders HomeScreen in place, so the
-      // sign-out stream event alone swaps it back to LoginScreen). But a
-      // non-admin who came in via the admin login link reaches HomeScreen
-      // pushed on top of AuthGate instead — pop back down so that path
-      // also lands on LoginScreen rather than an inert HomeScreen.
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (_) {
       if (!mounted) return;
@@ -403,30 +384,13 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _selectedFactory?.factoryName ?? l10n.appTitle,
-          overflow: TextOverflow.ellipsis,
-        ),
+        toolbarHeight: 72,
+        title: Text(_selectedFactory?.factoryName ?? l10n.appTitle),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            tooltip: 'My profile',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
-          ),
           IconButton(
             icon: const Icon(Icons.factory_outlined),
             tooltip: l10n.homeSwitchFactory,
             onPressed: _loadState == _LoadState.ready ? _pickFactory : null,
-          ),
-          IconButton(
-            icon: const Icon(Icons.ios_share),
-            tooltip: l10n.homeShareReport,
-            onPressed:
-                (_loadState == _LoadState.ready && _selectedFactory != null)
-                ? _shareReport
-                : null,
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
@@ -435,10 +399,49 @@ class _HomeScreenState extends State<HomeScreen> {
               context,
             ).push(MaterialPageRoute(builder: (_) => const AboutScreen())),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: l10n.homeSignOut,
-            onPressed: _signOut,
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            onSelected: (value) {
+              switch (value) {
+                case 'profile':
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  );
+                  break;
+                case 'share':
+                  _shareReport();
+                  break;
+                case 'signout':
+                  _signOut();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'profile',
+                child: ListTile(
+                  leading: Icon(Icons.person_outline),
+                  title: Text('My profile'),
+                ),
+              ),
+              PopupMenuItem(
+                enabled:
+                    _loadState == _LoadState.ready &&
+                    _selectedFactory != null,
+                value: 'share',
+                child: ListTile(
+                  leading: const Icon(Icons.ios_share),
+                  title: Text(l10n.homeShareReport),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'signout',
+                child: ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: Text(l10n.homeSignOut),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -447,21 +450,22 @@ class _HomeScreenState extends State<HomeScreen> {
           if (orientation == Orientation.landscape) {
             return Row(
               children: [
-                SafeArea(
-                  child: NavigationRail(
-                    selectedIndex: _tabIndex,
-                    onDestinationSelected: _onTabSelected,
-                    labelType: NavigationRailLabelType.all,
-                    destinations: [
-                      for (var i = 0; i < tabLabels.length; i++)
-                        NavigationRailDestination(
-                          icon: Icon(_tabIcons[i]),
-                          label: Text(tabLabels[i]),
-                        ),
-                    ],
+                Container(
+                  width: 80,
+                  color: Colors.white,
+                  child: SafeArea(
+                    minimum: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < tabLabels.length; i++)
+                            _railDestination(i, _tabIcons[i], tabLabels[i]),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const VerticalDivider(width: 1),
                 Expanded(child: _buildBody()),
               ],
             );
@@ -494,6 +498,64 @@ class _HomeScreenState extends State<HomeScreen> {
     _tabVersion++;
   });
 
+  Widget _railDestination(int index, IconData icon, String label) {
+    final selected = _tabIndex == index;
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () => _onTabSelected(index),
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: SizedBox(
+          width: 56,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? scheme.primaryContainer
+                      : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 26,
+                  color: selected
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: selected
+                        ? scheme.onSurface
+                        : scheme.onSurfaceVariant,
+                    fontWeight: selected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (_loadState == _LoadState.loading) {
       return const LoadingIndicator();
@@ -520,12 +582,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return _buildTabContent();
   }
 
-  // IndexedStack keeps every visited tab's widget alive, while tab versioning
-  // ensures switching between tabs automatically loads fresh data so changes
-  // across modules (e.g. demand forecast, delivery receipt) reflect immediately.
   Widget _buildTabContent() {
     final factory = _selectedFactory!;
     return IndexedStack(
+      key: _tabContentKey,
       index: _tabIndex,
       children: [
         _visitedTabs.contains(0)

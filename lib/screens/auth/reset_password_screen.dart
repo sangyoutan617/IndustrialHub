@@ -4,9 +4,6 @@ import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/auth_scaffold.dart';
 
-/// Shown by AuthGate in place of the normal signed-in home screen while a
-/// password-recovery session is active — see main.dart's `_isRecoveringPassword`
-/// tracking for how that's detected.
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
 
@@ -45,10 +42,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           ),
         ),
       );
-      // Force a fresh sign-in with the new password rather than letting the
-      // recovery session carry straight into the app — a clean, explicit
-      // end to the flow instead of silently reusing a session that started
-      // as a recovery link.
       await _authService.signOut();
     } on AuthException catch (e) {
       _showError(e.message);

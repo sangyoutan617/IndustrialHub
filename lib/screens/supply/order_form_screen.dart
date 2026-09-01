@@ -11,9 +11,6 @@ import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
 
-/// Values used to pre-populate a new order — e.g. from the material
-/// dashboard's "Reorder" button, which already knows the best supplier
-/// and a suggested quantity.
 class OrderFormPrefill {
   final int materialId;
   final int supplierId;
@@ -56,9 +53,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   List<Supplier> _suppliers = [];
   List<MaterialPlan> _plans = [];
 
-  /// Best-effort preview of the PO number a new order would likely get —
-  /// see [OrderService.getNextPoIdPreview]. Null while editing (the real
-  /// number is already known) or if the preview fetch failed.
   int? _nextPoIdPreview;
   int? _selectedMaterialId;
   int? _selectedSupplierId;
@@ -79,8 +73,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     try {
       return await _orderService.getNextPoIdPreview();
     } catch (e) {
-      // Best-effort only — the form still works fine without a preview,
-      // it just falls back to the generic "auto-generated" text.
       debugPrint('supply: failed to preview next PO number: $e');
       return null;
     }
@@ -90,7 +82,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final token = ++_loadToken;
     setState(() => _state = _LoadState.loading);
     try {
-      // Both kicked off together (not awaited yet) so they run concurrently.
       final overviewFuture = _supplyService.load(widget.factoryId);
       final previewFuture = _isEditing
           ? Future<int?>.value(null)
@@ -113,10 +104,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           _expectedDelivery = order.expectedDelivery;
           _quantityController.text = order.quantity.toString();
           _priceController.text = order.unitPrice?.toString() ?? '';
-          // A supplier can be re-pointed to a different material after this
-          // PO was raised against it. If that happened, the dropdown below
-          // would be handed a value that isn't among its own items (a
-          // framework assertion) — clear it so the user re-picks instead.
           final orderSupplier = _suppliers.where(
             (s) => s.supplierId == order.supplierId,
           );
@@ -201,7 +188,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      // The delivery can't be expected before the order is even placed.
       firstDate: isOrderDate ? DateTime(2020) : _orderDate,
       lastDate: DateTime(2100),
     );
@@ -209,9 +195,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     setState(() {
       if (isOrderDate) {
         _orderDate = picked;
-        // Keep the auto-derived expected delivery in sync with the new
-        // order date instead of leaving it stale (and possibly now
-        // earlier than the order date itself).
         _applyLeadTimeToExpectedDelivery();
       } else {
         _expectedDelivery = picked;
@@ -237,10 +220,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final material = _selectedMaterial;
     final quantity = double.tryParse(_quantityController.text);
     if (material == null || quantity == null || quantity <= 0) return null;
-    // Reads the same already-aggregated burn rate MaterialDetailScreen and
-    // the material list show — a material can now be consumed by several
-    // products at different rates, so this is looked up rather than
-    // re-derived from a single per-unit figure.
     final matches = _plans.where((p) => p.material.materialId == material.materialId);
     if (matches.isEmpty) return null;
     final burnRate = matches.first.burnRatePerDay;
@@ -273,8 +252,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         orderDate: _orderDate,
         expectedDelivery: _expectedDelivery,
         deliveredAt: widget.order?.deliveredAt,
-        // New orders start Processing, not Pending — Pending only still
-        // exists as a status for orders that already have it.
         status: widget.order?.status ?? PurchaseOrderStatus.processing,
         isSimulated: false,
         unitPrice: double.parse(_priceController.text),
@@ -340,11 +317,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
             children: [
               ResponsiveFormFields(
                 children: [
-                  // The real PO number only exists once Supabase has created
-                  // the row, so a new order just shows a placeholder here
-                  // instead of a guessed/fake number. Once saved, the real
-                  // formatPoNumber(savedOrder.poId) is shown everywhere else
-                  // (list, detail) — never invented client-side.
                   FormBreak(
                     TextFormField(
                       key: ValueKey(

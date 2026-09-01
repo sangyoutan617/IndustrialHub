@@ -7,8 +7,6 @@ class Supplier {
   final double reliabilityRating;
   final bool isSimulated;
 
-  /// Contact details so a supplier the app recommends reordering from is
-  /// actually reachable. All optional — null when not recorded.
   final String? contactPerson;
   final String? phone;
   final String? email;
@@ -35,7 +33,6 @@ class Supplier {
       leadTimeDays: json['lead_time_days'] as int,
       reliabilityRating: (json['reliability_rating'] as num?)?.toDouble() ?? 0,
       isSimulated: json['is_simulated'] as bool? ?? false,
-      // Absent on an un-migrated database — stay null rather than throwing.
       contactPerson: json['contact_person'] as String?,
       phone: json['phone'] as String?,
       email: json['email'] as String?,

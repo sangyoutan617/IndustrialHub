@@ -236,7 +236,6 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                     validator: (v) {
                       final value = v?.trim() ?? '';
                       if (value.isEmpty) return null;
-                      // Light sanity check — a single @ with text on both sides.
                       final ok = RegExp(r'^[^@\s]+@[^@\s]+$').hasMatch(value);
                       return ok ? null : 'Enter a valid email';
                     },
@@ -286,11 +285,6 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                         IconButton(
                           icon: Icon(
                             _rating >= i ? Icons.star : Icons.star_border,
-                            // Intentional exception to the AppStatus vocabulary:
-                            // star ratings read as gold worldwide, not as a
-                            // "warning" signal. AppColors.warning is close
-                            // enough in hue to stay themed without introducing
-                            // a new ad hoc literal.
                             color: AppColors.warning,
                           ),
                           onPressed: () => setState(() => _rating = i.toDouble()),

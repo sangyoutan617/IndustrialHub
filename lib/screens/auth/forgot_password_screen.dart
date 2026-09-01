@@ -36,9 +36,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         return;
       }
       await _authService.sendPasswordReset(email);
-      // Only mark a recovery as pending once the request actually went
-      // out — otherwise a failed send would leave a stray flag for
-      // AuthGate to misread on some unrelated later cold start.
       await SessionPrefs.markPendingPasswordRecovery();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -39,10 +39,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   final _searchController = TextEditingController();
   String _query = '';
 
-  // Bumped on every _load() call; a response is only applied if it's still
-  // the most recent one requested. Without this, switching factories or
-  // pulling to refresh mid-flight can let a slower, stale response
-  // overwrite a newer one that already landed.
   int _loadToken = 0;
 
   @override
@@ -89,8 +85,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     }
   }
 
-  // Most urgent first — shared by the full list and the "Attention
-  // required" highlight section so the two can never disagree on ordering.
   List<MaterialPlan> get _riskSortedPlans {
     final plans = List<MaterialPlan>.from(_overview?.plans ?? const []);
     plans.sort((a, b) {
@@ -184,11 +178,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     final overview = _overview!;
     final plans = overview.plans;
 
-    // Partitioned so criticalCount + attentionCount always equals the
-    // number of plans the "Needs action" filter below would show — a
-    // material that's below its reorder level but not yet
-    // watch/reorderNow used to be invisible in both headline numbers
-    // while still showing up once the filter chip was tapped.
     bool isCritical(MaterialPlan p) =>
         p.risk == SupplyRisk.reorderNow || p.risk == SupplyRisk.stockedOut;
     final criticalCount = plans.where(isCritical).length;
@@ -207,17 +196,11 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
         .take(3)
         .toList();
 
-    // Purchase-order status counts — computed from overview.orders, which
-    // SupplyService.load already fetched for this same screen load, so this
-    // costs zero extra queries.
     final poCounts = <String, int>{};
     for (final o in overview.orders) {
       poCounts[o.status] = (poCounts[o.status] ?? 0) + 1;
     }
 
-    // Built once and handed to whichever layout (portrait/landscape) is
-    // active below, so rotating never recreates — and re-fetches — the AI
-    // card.
     final aiInsight = plans.isNotEmpty
         ? AiInsightCard(
             buildPrompt: () => _buildSupplyPrompt(overview),
@@ -225,9 +208,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
           )
         : null;
 
-    // Single scanning column, top to bottom, in every orientation — landscape
-    // gets the same flow with more horizontal room via ResponsiveShell,
-    // rather than being split into two columns.
     return _buildPortrait(
       overview: overview,
       plans: plans,
@@ -292,9 +272,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     int healthyCount,
   ) {
     final scheme = Theme.of(context).colorScheme;
-    // Only materials with a recorded unit cost contribute; zero means no
-    // costs are set yet, so the line below stays hidden rather than reading
-    // a misleading RM 0.00.
     final inventoryValue = MrpService.inventoryValue(overview.materials);
     return Card(
       child: Padding(
@@ -496,7 +473,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.l),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 if (poCounts.isEmpty)
                   Text(
@@ -504,9 +481,8 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   )
                 else
-                  Wrap(
-                    spacing: AppSpacing.l,
-                    runSpacing: AppSpacing.s,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       for (final status in PurchaseOrderStatus.all)
                         if (poCounts[status] != null)
@@ -519,7 +495,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   ),
                 const SizedBox(height: AppSpacing.s),
                 Align(
-                  alignment: Alignment.centerLeft,
+                  alignment: Alignment.center,
                   child: TextButton.icon(
                     onPressed: () => _navigateAndRefresh(
                       OrderListScreen(factoryId: widget.factoryId),
@@ -549,10 +525,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     );
   }
 
-  // Deterministic figures only — burn rates, days of cover, stock-out and
-  // order-by dates, and suggested order quantities are all computed by
-  // MrpService (SupplyService.load). The AI card just narrates them; it
-  // never runs the arithmetic. Mirrors the Module 1 / Module 2 insights.
   static const _supplySystem =
       'You are a factory supply-chain assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. In '
@@ -630,10 +602,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
       if (p.suggestedQty != null && p.suggestedQty! > 0) {
         line.write(', suggested order ${formatNumber(p.suggestedQty!)}');
       }
-      // Which products are actually driving this material's burn rate — a
-      // material can now be shared across several products' recipes at
-      // different rates, so "why is this being used up" isn't a single
-      // answer any more.
       final contributions = overview.productContributionsFor(
         p.material.materialId,
       );
@@ -653,8 +621,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   Widget _summaryStat(String label, String value, Color color) {
     return Column(
       children: [
-        // FittedBox so a wide space-formatted count doesn't pinch when
-        // this row lands inside a half-width landscape column.
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
@@ -671,10 +637,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     );
   }
 
-  // Compact, scannable row: name / stock / days of cover / status. Deeper
-  // detail (overdue batches, reorder-level breach, recommended supplier,
-  // suggested quantity, edit/delete) lives on MaterialDetailScreen now
-  // instead of being crammed into this list row.
   Widget _buildMaterialCard(MaterialPlan plan) {
     final material = plan.material;
     final riskStatus = supplyRiskStatus(plan.risk);
