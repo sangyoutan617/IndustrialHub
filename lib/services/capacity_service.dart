@@ -64,63 +64,75 @@ class SectorComparison {
 }
 
 class SimulatorBaseline {
-  final double machineNameplate;
-
+  final int machines;
+  final double machineHours;
+  final double machineRate;
+  final int workers;
+  final double shiftHours;
   final double outputPerWorkerHour;
 
-  final int activeMachines;
-  final int workers;
-  final int shiftHours;
-
   const SimulatorBaseline({
-    required this.machineNameplate,
-    required this.outputPerWorkerHour,
-    required this.activeMachines,
+    required this.machines,
+    required this.machineHours,
+    required this.machineRate,
     required this.workers,
     required this.shiftHours,
+    required this.outputPerWorkerHour,
   });
 
   static SimulatorBaseline from(CapacitySnapshot snapshot) {
-    final active = snapshot.machines.where((m) => m.isActive).toList();
-    final basis = active.isNotEmpty ? active : snapshot.machines;
+    final byStage = <String, List<Machine>>{};
+    for (final m in snapshot.machines.where((m) => m.isActive)) {
+      byStage.putIfAbsent(m.stageKey, () => []).add(m);
+    }
 
-    final nameplateTotal = basis.fold<double>(
-      0,
-      (sum, m) =>
-          sum + m.ratedOutputPerHour * m.operatingHoursPerDay * m.unitCount,
-    );
-    final machineNameplate = basis.isEmpty
-        ? 0.0
-        : nameplateTotal / basis.length;
+    var machines = 0;
+    var machineHours = 0.0;
+    var machineRate = 0.0;
+    if (byStage.isNotEmpty) {
+      var slowest = byStage.values.first;
+      var slowestCapacity = double.infinity;
+      for (final rows in byStage.values) {
+        final capacity = rows.fold<double>(
+          0,
+          (sum, m) => sum + CapacityService.machineRowCapacity(m),
+        );
+        if (capacity < slowestCapacity) {
+          slowestCapacity = capacity;
+          slowest = rows;
+        }
+      }
+      machines = slowest.fold<int>(0, (sum, m) => sum + m.unitCount);
+      machineHours = slowest.first.operatingHoursPerDay;
+      machineRate = (machines > 0 && machineHours > 0)
+          ? slowestCapacity / (machines * machineHours)
+          : 0;
+    }
 
-    final totalWorkers = snapshot.shifts.fold<int>(
-      0,
-      (sum, s) => sum + s.workerCount,
-    );
-    final workerHours = snapshot.shifts.fold<double>(
-      0,
-      (sum, s) => sum + s.workerCount * s.shiftHours,
-    );
-    final outputPerWorkerHour = workerHours > 0
-        ? CapacityService.sumManpowerCapacity(snapshot.shifts) / workerHours
-        : _mean(snapshot.shifts.map((s) => s.outputPerWorkerHour));
-    final shiftHours = totalWorkers > 0
-        ? workerHours / totalWorkers
-        : _mean(snapshot.shifts.map((s) => s.shiftHours));
+    var workers = 0;
+    var shiftHours = 0.0;
+    var outputPerWorkerHour = 0.0;
+    if (snapshot.shifts.isNotEmpty) {
+      final slowest = snapshot.shifts.reduce(
+        (a, b) =>
+            CapacityService.stationCapacity(a) <=
+                CapacityService.stationCapacity(b)
+            ? a
+            : b,
+      );
+      workers = slowest.workerCount;
+      shiftHours = slowest.shiftHours;
+      outputPerWorkerHour = slowest.outputPerWorkerHour;
+    }
 
     return SimulatorBaseline(
-      machineNameplate: machineNameplate,
+      machines: machines,
+      machineHours: machineHours,
+      machineRate: machineRate,
+      workers: workers,
+      shiftHours: shiftHours,
       outputPerWorkerHour: outputPerWorkerHour,
-      activeMachines: active.length,
-      workers: totalWorkers,
-      shiftHours: shiftHours.round(),
     );
-  }
-
-  static double _mean(Iterable<double> values) {
-    final list = values.toList();
-    if (list.isEmpty) return 0;
-    return list.reduce((a, b) => a + b) / list.length;
   }
 }
 
@@ -139,11 +151,12 @@ class CapacityService {
     Iterable<Machine> machines,
   ) {
     final stages = <String, ({String? label, double capacity})>{};
-    for (final m in machines.where((m) => m.isActive)) {
+    for (final m in machines) {
       final existing = stages[m.stageKey];
       stages[m.stageKey] = (
         label: existing?.label ?? m.stageLabel,
-        capacity: (existing?.capacity ?? 0) + machineRowCapacity(m),
+        capacity: (existing?.capacity ?? 0) +
+            (m.isActive ? machineRowCapacity(m) : 0),
       );
     }
     return stages;
@@ -158,16 +171,6 @@ class CapacityService {
     final list = shifts.toList();
     if (list.isEmpty) return 0;
     return list.map(stationCapacity).reduce(math.min);
-  }
-
-  static double sumManpowerCapacity(Iterable<Manpower> shifts) {
-    return shifts.fold<double>(0, (sum, s) => sum + stationCapacity(s));
-  }
-
-  static double sumMachineCapacity(Iterable<Machine> machines) {
-    return machines
-        .where((m) => m.isActive)
-        .fold<double>(0, (sum, m) => sum + machineRowCapacity(m));
   }
 
   static String bottleneckResourceFor(

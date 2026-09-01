@@ -106,16 +106,25 @@ void main() {
       expect(capacity, 160); // min(stage A 240, stage B 160)
     });
 
-    test('a stage whose only machine is down drops out of the min', () {
+    test('a stage with no active machines stops the flow at zero', () {
       final capacity = CapacityService.computeMachineCapacity([
-        _machine(id: 1, rated: 10, hours: 8, stage: 'A'), // 80
+        _machine(id: 1, rated: 10, hours: 8, stage: 'A'),
         _machine(
           id: 2,
           rated: 5,
           hours: 8,
           stage: 'B',
           status: 'Downtime',
-        ), // whole stage gone
+        ),
+      ]);
+      expect(capacity, 0);
+    });
+
+    test('a stage still counts while it keeps one active machine', () {
+      final capacity = CapacityService.computeMachineCapacity([
+        _machine(id: 1, rated: 10, hours: 8, stage: 'A'),
+        _machine(id: 2, rated: 5, hours: 8, stage: 'A', status: 'Downtime'),
+        _machine(id: 3, rated: 20, hours: 8, stage: 'B'),
       ]);
       expect(capacity, 80);
     });
@@ -145,16 +154,6 @@ void main() {
 
     test('no stations yields zero', () {
       expect(CapacityService.computeManpowerCapacity(const []), 0);
-    });
-
-    test('sumManpowerCapacity still adds every station (simulator only)', () {
-      expect(
-        CapacityService.sumManpowerCapacity([
-          _shift(workers: 5, hours: 8, perHour: 2),
-          _shift(workers: 3, hours: 6, perHour: 1),
-        ]),
-        98,
-      );
     });
   });
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/formatters.dart';
-import '../../models/machine.dart';
 import '../../models/product.dart';
 import '../../services/capacity_service.dart';
 import '../../services/product_service.dart';
@@ -23,21 +22,25 @@ enum _LoadState { loading, error, noProducts, ready }
 class _SimulatorScreenState extends State<SimulatorScreen> {
   final _capacityService = CapacityService();
   final _productService = ProductService();
-  _LoadState _state = _LoadState.loading;
 
-  List<Machine> _machines = [];
+  _LoadState _state = _LoadState.loading;
   List<Product> _products = [];
   int? _selectedProductId;
-
   SimulatorBaseline? _baseline;
 
+  int _machines = 0;
+  double _machineHours = 0;
+  double _machineRate = 0;
   int _workers = 0;
-  int _shiftHours = 0;
-  int _activeMachines = 0;
+  double _shiftHours = 0;
+  double _outputPerWorkerHour = 0;
 
-  late final TextEditingController _workersCtrl;
-  late final TextEditingController _shiftHoursCtrl;
-  late final TextEditingController _activeMachinesCtrl;
+  final _machinesCtrl = TextEditingController();
+  final _machineHoursCtrl = TextEditingController();
+  final _machineRateCtrl = TextEditingController();
+  final _workersCtrl = TextEditingController();
+  final _shiftHoursCtrl = TextEditingController();
+  final _outputPerWorkerHourCtrl = TextEditingController();
 
   String? _lastBottleneck;
   bool _justFlipped = false;
@@ -45,17 +48,17 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   @override
   void initState() {
     super.initState();
-    _workersCtrl = TextEditingController();
-    _shiftHoursCtrl = TextEditingController();
-    _activeMachinesCtrl = TextEditingController();
     _load();
   }
 
   @override
   void dispose() {
+    _machinesCtrl.dispose();
+    _machineHoursCtrl.dispose();
+    _machineRateCtrl.dispose();
     _workersCtrl.dispose();
     _shiftHoursCtrl.dispose();
-    _activeMachinesCtrl.dispose();
+    _outputPerWorkerHourCtrl.dispose();
     super.dispose();
   }
 
@@ -87,7 +90,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
       setState(() {
         _products = products;
         _selectedProductId = selected.productId;
-        _machines = snapshot.machines;
         _baseline = SimulatorBaseline.from(snapshot);
         _resetToActual();
         _state = _LoadState.ready;
@@ -105,28 +107,31 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
 
   void _resetToActual() {
     final baseline = _baseline;
+    _machines = baseline?.machines ?? 0;
+    _machineHours = baseline?.machineHours ?? 0;
+    _machineRate = baseline?.machineRate ?? 0;
     _workers = baseline?.workers ?? 0;
     _shiftHours = baseline?.shiftHours ?? 0;
-    _activeMachines = baseline?.activeMachines ?? 0;
+    _outputPerWorkerHour = baseline?.outputPerWorkerHour ?? 0;
     _lastBottleneck = null;
     _justFlipped = false;
 
+    _machinesCtrl.text = '$_machines';
+    _machineHoursCtrl.text = _fmt(_machineHours);
+    _machineRateCtrl.text = _fmt(_machineRate);
     _workersCtrl.text = '$_workers';
-    _shiftHoursCtrl.text = '$_shiftHours';
-    _activeMachinesCtrl.text = '$_activeMachines';
+    _shiftHoursCtrl.text = _fmt(_shiftHours);
+    _outputPerWorkerHourCtrl.text = _fmt(_outputPerWorkerHour);
   }
 
-  double get _machineCapacity {
-    final baseline = _baseline;
-    if (baseline == null) return 0;
-    return _activeMachines * baseline.machineNameplate;
-  }
+  String _fmt(double value) => value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toString();
 
-  double get _manpowerCapacity {
-    final baseline = _baseline;
-    if (baseline == null) return 0;
-    return _workers * _shiftHours * baseline.outputPerWorkerHour;
-  }
+  double get _machineCapacity => _machines * _machineHours * _machineRate;
+
+  double get _manpowerCapacity =>
+      _workers * _shiftHours * _outputPerWorkerHour;
 
   double get _effectiveCapacity => _machineCapacity < _manpowerCapacity
       ? _machineCapacity
@@ -181,94 +186,108 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
               'what-ifs per product.',
         );
       case _LoadState.ready:
-        final productPicker = DropdownButtonFormField<int>(
-          initialValue: _selectedProductId,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Product'),
-          items: [
-            for (final product in _products)
-              DropdownMenuItem(
-                value: product.productId,
-                child: Text(
-                  product.isGeneral
-                      ? '${product.productName} (auto-created)'
-                      : product.productName,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-          ],
-          onChanged: _setProduct,
-        );
-        final resultCard = _buildResultCard();
-        final manpowerSection = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Manpower', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            _buildIntField(
-              label: 'Workers',
-              controller: _workersCtrl,
-              hint: 'e.g. 20',
-              max: 9999,
-              onValid: (v) => _onFieldChanged(() => _workers = v),
-            ),
-            const SizedBox(height: 12),
-            _buildIntField(
-              label: 'Shift hours',
-              controller: _shiftHoursCtrl,
-              hint: '0 – 24',
-              max: 24,
-              onValid: (v) => _onFieldChanged(() => _shiftHours = v),
-            ),
-          ],
-        );
-        final machinesSection = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Machines', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            _buildIntField(
-              label: 'Active machines',
-              controller: _activeMachinesCtrl,
-              hint: _machines.isEmpty ? 'e.g. 5' : '0 – ${_machines.length}',
-              max: _machines.isEmpty ? 9999 : _machines.length,
-              onValid: (v) => _onFieldChanged(() => _activeMachines = v),
-            ),
-          ],
-        );
-
-        return RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              productPicker,
-              const SizedBox(height: 16),
-              resultCard,
-              const SizedBox(height: 24),
-              manpowerSection,
-              const SizedBox(height: 16),
-              machinesSection,
-            ],
-          ),
-        );
+        return _buildReady();
     }
   }
 
-  Widget _buildIntField({
+  Widget _buildReady() {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          DropdownButtonFormField<int>(
+            initialValue: _selectedProductId,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Product'),
+            items: [
+              for (final product in _products)
+                DropdownMenuItem(
+                  value: product.productId,
+                  child: Text(
+                    product.isGeneral
+                        ? '${product.productName} (auto-created)'
+                        : product.productName,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: _setProduct,
+          ),
+          const SizedBox(height: 16),
+          _buildResultCard(),
+          const SizedBox(height: 24),
+          Text('Machine stage', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          _buildField(
+            label: 'Number of machines',
+            controller: _machinesCtrl,
+            decimal: false,
+            onValid: (v) => _onFieldChanged(() => _machines = v.toInt()),
+          ),
+          const SizedBox(height: 12),
+          _buildField(
+            label: 'Operating hours per day',
+            controller: _machineHoursCtrl,
+            decimal: true,
+            onValid: (v) => _onFieldChanged(() => _machineHours = v),
+          ),
+          const SizedBox(height: 12),
+          _buildField(
+            label: 'Rated output (units/hour)',
+            controller: _machineRateCtrl,
+            decimal: true,
+            onValid: (v) => _onFieldChanged(() => _machineRate = v),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Labour station',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          _buildField(
+            label: 'Workers',
+            controller: _workersCtrl,
+            decimal: false,
+            onValid: (v) => _onFieldChanged(() => _workers = v.toInt()),
+          ),
+          const SizedBox(height: 12),
+          _buildField(
+            label: 'Shift hours',
+            controller: _shiftHoursCtrl,
+            decimal: true,
+            onValid: (v) => _onFieldChanged(() => _shiftHours = v),
+          ),
+          const SizedBox(height: 12),
+          _buildField(
+            label: 'Output per worker-hour',
+            controller: _outputPerWorkerHourCtrl,
+            decimal: true,
+            onValid: (v) => _onFieldChanged(() => _outputPerWorkerHour = v),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildField({
     required String label,
     required TextEditingController controller,
-    required String hint,
-    required int max,
-    required ValueChanged<int> onValid,
+    required bool decimal,
+    required ValueChanged<double> onValid,
   }) {
     return TextFormField(
       controller: controller,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      keyboardType: decimal
+          ? const TextInputType.numberWithOptions(decimal: true)
+          : TextInputType.number,
+      inputFormatters: [
+        decimal
+            ? FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
+            : FilteringTextInputFormatter.digitsOnly,
+      ],
       decoration: InputDecoration(
         labelText: label,
-        hintText: hint,
         border: const OutlineInputBorder(),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
@@ -277,18 +296,9 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
       ),
       onChanged: (text) {
         if (text.isEmpty) return;
-        final parsed = int.tryParse(text);
-        if (parsed == null || parsed < 0 || parsed > max) return;
+        final parsed = double.tryParse(text);
+        if (parsed == null || parsed < 0) return;
         onValid(parsed);
-      },
-      autovalidateMode: AutovalidateMode.onUserInteraction,
-      validator: (value) {
-        if (value == null || value.isEmpty) return 'Enter a whole number';
-        final parsed = int.tryParse(value);
-        if (parsed == null) return 'Whole numbers only (no decimals)';
-        if (parsed < 0) return 'Must be 0 or more';
-        if (parsed > max) return 'Maximum is $max';
-        return null;
       },
     );
   }
@@ -328,7 +338,9 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
             runSpacing: 4,
             children: [
               Chip(label: Text('Machine: ${formatNumber(_machineCapacity)}')),
-              Chip(label: Text('Manpower: ${formatNumber(_manpowerCapacity)}')),
+              Chip(
+                label: Text('Manpower: ${formatNumber(_manpowerCapacity)}'),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -339,13 +351,12 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
               color: onContainerColor,
             ),
           ),
-          if (bottleneck == 'MACHINE') ...[
-            const SizedBox(height: 8),
-            const Text(
-              'Adding workers no longer helps — machines are now the limit.',
-              style: TextStyle(fontStyle: FontStyle.italic),
-            ),
-          ],
+          const SizedBox(height: 8),
+          Text(
+            'Models one machine stage against one labour station — the lower '
+            'of the two is the ceiling.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );

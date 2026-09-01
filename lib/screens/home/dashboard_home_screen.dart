@@ -65,6 +65,7 @@ class _HomeData {
 
   final List<Product> products;
   final Product selectedProduct;
+  final bool isAll;
 
   final List<ProductBottleneck> allBottlenecks;
 
@@ -75,8 +76,57 @@ class _HomeData {
     required this.productivity,
     required this.products,
     required this.selectedProduct,
+    required this.isAll,
     required this.allBottlenecks,
   });
+}
+
+class _AllSummary {
+  final List<ProductBottleneck> withDemand;
+  final double totalAchievable;
+  final double totalDemand;
+  final int meetingCount;
+  final int noDataCount;
+  final int noDemandCount;
+
+  const _AllSummary({
+    required this.withDemand,
+    required this.totalAchievable,
+    required this.totalDemand,
+    required this.meetingCount,
+    required this.noDataCount,
+    required this.noDemandCount,
+  });
+
+  int get demandProductCount => withDemand.length;
+
+  double get percentOfDemand =>
+      totalDemand > 0 ? (totalAchievable / totalDemand) * 100 : 100;
+
+  factory _AllSummary.from(List<ProductBottleneck> all) {
+    final withDemand = [
+      for (final p in all)
+        if (p.bottleneck.hasData && p.bottleneck.requiredPerDay > 0) p,
+    ];
+    var totalAchievable = 0.0;
+    var totalDemand = 0.0;
+    var meeting = 0;
+    for (final p in withDemand) {
+      totalAchievable += p.bottleneck.achievable;
+      totalDemand += p.bottleneck.requiredPerDay;
+      if (p.bottleneck.canMeetDemand) meeting++;
+    }
+    return _AllSummary(
+      withDemand: withDemand,
+      totalAchievable: totalAchievable,
+      totalDemand: totalDemand,
+      meetingCount: meeting,
+      noDataCount: all.where((p) => !p.bottleneck.hasData).length,
+      noDemandCount: all
+          .where((p) => p.bottleneck.hasData && p.bottleneck.requiredPerDay <= 0)
+          .length,
+    );
+  }
 }
 
 class _SmartAction {
@@ -117,6 +167,8 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
   final _capacityService = CapacityService();
   final _productService = ProductService();
 
+  static const _allProductsId = -1;
+
   late Future<_HomeData> _future;
   late final AnimationController _pulseController;
   int? _selectedProductId;
@@ -155,13 +207,15 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     if (products.isEmpty) {
       throw StateError('No products configured for this factory.');
     }
-    final selected = _selectedProductId != null
+    final isAll = products.length > 1 &&
+        (_selectedProductId == null || _selectedProductId == _allProductsId);
+    final selected = !isAll && _selectedProductId != null
         ? products.firstWhere(
             (p) => p.productId == _selectedProductId,
             orElse: () => _defaultProduct(products),
           )
         : _defaultProduct(products);
-    _selectedProductId = selected.productId;
+    if (!isAll) _selectedProductId = selected.productId;
 
     final bottleneck = await _bottleneckService.computeForProduct(
       factoryId,
@@ -202,6 +256,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       productivity: productivity,
       products: products,
       selectedProduct: selected,
+      isAll: isAll,
       allBottlenecks: allBottlenecks,
     );
   }
@@ -264,6 +319,8 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
   }
 
   Widget _buildReady(_HomeData data, _Palette pal) {
+    if (data.isAll) return _buildAllReady(data, pal);
+
     final result = data.bottleneck;
     final aiInsight = result.hasData
         ? AiInsightCard(
@@ -273,6 +330,31 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
         : null;
 
     return _buildPortraitReady(result, data, pal, aiInsight);
+  }
+
+  Widget _buildAllReady(_HomeData data, _Palette pal) {
+    final summary = _AllSummary.from(data.allBottlenecks);
+    final hasAnyData = data.allBottlenecks.any((p) => p.bottleneck.hasData);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      children: [
+        RepaintBoundary(
+          child: _buildHeader(data.bottleneck, data, pal, allSummary: summary),
+        ),
+        const SizedBox(height: 16),
+        RepaintBoundary(child: _buildAllHeroCard(data, summary, pal)),
+        const SizedBox(height: 16),
+        if (hasAnyData) ...[
+          AiInsightCard(
+            buildPrompt: () => _buildProductPrompt(data),
+            system: _productSystem,
+          ),
+          const SizedBox(height: 16),
+        ],
+        RepaintBoundary(child: _buildOpenDataCard(data, pal)),
+      ],
+    );
   }
 
   Widget _buildPortraitReady(
@@ -342,29 +424,51 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       buffer.writeln(line.toString());
     }
 
-    final r = data.bottleneck;
-    buffer
-      ..writeln('Currently viewing: ${data.selectedProduct.productName}')
-      ..writeln('Machine capacity: ${formatUnits(r.machineCapacity)}/day')
-      ..writeln('Manpower capacity: ${formatUnits(r.manpowerCapacity)}/day')
-      ..writeln(
-        'Raw-material ceiling: ${r.materialCeiling != null ? '${formatUnits(r.materialCeiling!)}/day' : 'not set'}',
-      );
+    if (data.isAll) {
+      buffer.writeln('Currently viewing: all products combined');
+    } else {
+      final r = data.bottleneck;
+      buffer
+        ..writeln('Currently viewing: ${data.selectedProduct.productName}')
+        ..writeln('Machine capacity: ${formatUnits(r.machineCapacity)}/day')
+        ..writeln('Manpower capacity: ${formatUnits(r.manpowerCapacity)}/day')
+        ..writeln(
+          'Raw-material ceiling: ${r.materialCeiling != null ? '${formatUnits(r.materialCeiling!)}/day' : 'not set'}',
+        );
+    }
     return buffer.toString();
   }
 
 
-  Widget _buildHeader(BottleneckResult result, _HomeData data, _Palette pal) {
-    final hasData = result.hasData;
-    final healthy = hasData && result.canMeetDemand;
-    final dotColor = !hasData
-        ? pal.textSecondary
-        : (healthy ? pal.ok : pal.alert);
-    final label = !hasData
-        ? 'Awaiting production data'
-        : (healthy
-              ? 'Operating within capacity'
-              : 'Capacity bottleneck detected');
+  Widget _buildHeader(
+    BottleneckResult result,
+    _HomeData data,
+    _Palette pal, {
+    _AllSummary? allSummary,
+  }) {
+    final Color dotColor;
+    final String label;
+    if (allSummary != null) {
+      final n = allSummary.demandProductCount;
+      final healthy = n > 0 && allSummary.meetingCount == n;
+      dotColor = n == 0
+          ? pal.textSecondary
+          : (healthy ? pal.ok : pal.alert);
+      label = n == 0
+          ? 'No demand targets set'
+          : '${allSummary.meetingCount} of $n products meeting demand';
+    } else {
+      final hasData = result.hasData;
+      final healthy = hasData && result.canMeetDemand;
+      dotColor = !hasData
+          ? pal.textSecondary
+          : (healthy ? pal.ok : pal.alert);
+      label = !hasData
+          ? 'Awaiting production data'
+          : (healthy
+                ? 'Operating within capacity'
+                : 'Capacity bottleneck detected');
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -426,7 +530,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
-          value: data.selectedProduct.productId,
+          value: data.isAll ? _allProductsId : data.selectedProduct.productId,
           isExpanded: true,
           isDense: true,
           dropdownColor: pal.card,
@@ -437,6 +541,10 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
             fontWeight: FontWeight.w600,
           ),
           items: [
+            const DropdownMenuItem(
+              value: _allProductsId,
+              child: Text('All products'),
+            ),
             for (final p in data.products)
               DropdownMenuItem(
                 value: p.productId,
@@ -686,6 +794,221 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAllHeroCard(_HomeData data, _AllSummary summary, _Palette pal) {
+    if (summary.demandProductCount == 0) {
+      return _card(
+        pal: pal,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            'No demand targets set. Add a demand forecast for your products '
+            'to see combined achievable output against demand.',
+            style: TextStyle(color: pal.textSecondary, height: 1.4),
+          ),
+        ),
+      );
+    }
+
+    final sections = <PieChartSectionData>[];
+    for (final p in summary.withDemand) {
+      final b = p.bottleneck;
+      final met = (b.achievable / b.requiredPerDay).clamp(0.0, 1.0).toDouble();
+      if (met > 0.001) {
+        sections.add(
+          PieChartSectionData(
+            value: met,
+            color: pal.ok,
+            showTitle: false,
+            radius: 16,
+          ),
+        );
+      }
+      if (1 - met > 0.001) {
+        sections.add(
+          PieChartSectionData(
+            value: 1 - met,
+            color: pal.alert,
+            showTitle: false,
+            radius: 16,
+          ),
+        );
+      }
+    }
+
+    final allMet = summary.meetingCount == summary.demandProductCount;
+
+    return _card(
+      pal: pal,
+      borderColor: allMet ? null : pal.alert.withValues(alpha: 0.5),
+      glow: !allMet,
+      glowColor: pal.alert,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.hub_outlined, size: 16, color: pal.textSecondary),
+                const SizedBox(width: 6),
+                Text(
+                  'BOTTLENECK DIAGNOSIS ENGINE',
+                  style: TextStyle(
+                    color: pal.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Center(
+              child: SizedBox(
+                width: 140,
+                height: 140,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 48,
+                        startDegreeOffset: -90,
+                        pieTouchData: PieTouchData(enabled: false),
+                        sections: sections,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 84,
+                      height: 84,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${summary.meetingCount}/${summary.demandProductCount}',
+                              style: TextStyle(
+                                color: pal.textPrimary,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              'meeting demand',
+                              style: TextStyle(
+                                color: pal.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _legendDot(pal.ok, 'Achievable', pal),
+                const SizedBox(width: 16),
+                _legendDot(pal.alert, 'Shortfall', pal),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _statBlock(
+                    'TOTAL ACHIEVABLE',
+                    formatUnits(summary.totalAchievable),
+                    pal.neutral,
+                    pal,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(width: 1, height: 34, color: pal.cardBorder),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _statBlock(
+                    'TOTAL DEMAND',
+                    formatUnits(summary.totalDemand),
+                    pal.textPrimary,
+                    pal,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            for (final p in summary.withDemand) _allProductRow(p, pal),
+            if (summary.noDataCount > 0 || summary.noDemandCount > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                [
+                  if (summary.noDataCount > 0)
+                    '${summary.noDataCount} not configured',
+                  if (summary.noDemandCount > 0)
+                    '${summary.noDemandCount} with no demand target',
+                ].join('  ·  '),
+                style: TextStyle(color: pal.textSecondary, fontSize: 11),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _allProductRow(ProductBottleneck p, _Palette pal) {
+    final b = p.bottleneck;
+    final ok = b.canMeetDemand;
+    final color = ok ? pal.ok : pal.alert;
+    return InkWell(
+      onTap: () => _setProduct(p.product.productId),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                p.product.isGeneral
+                    ? '${p.product.productName} (auto-created)'
+                    : p.product.productName,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: pal.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              ok ? 'Meets demand' : 'Short ${formatUnits(b.shortfall ?? 0)}/day',
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 16, color: pal.textSecondary),
           ],
         ),
       ),

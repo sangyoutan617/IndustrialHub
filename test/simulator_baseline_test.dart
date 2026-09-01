@@ -43,11 +43,9 @@ Manpower _shift({
   );
 }
 
-// The simulator models a rough parallel-capacity what-if, not the flow (min)
-// ceiling — so its baseline is validated against the *summed* totals.
 CapacitySnapshot _snapshot(List<Machine> machines, List<Manpower> shifts) {
-  final machineCapacity = CapacityService.sumMachineCapacity(machines);
-  final manpowerCapacity = CapacityService.sumManpowerCapacity(shifts);
+  final machineCapacity = CapacityService.computeMachineCapacity(machines);
+  final manpowerCapacity = CapacityService.computeManpowerCapacity(shifts);
   return CapacitySnapshot(
     machines: machines,
     shifts: shifts,
@@ -63,179 +61,84 @@ CapacitySnapshot _snapshot(List<Machine> machines, List<Manpower> shifts) {
   );
 }
 
-/// What the simulator screen itself computes from the baseline, mirrored here
-/// so a change to that arithmetic has to be made in both places deliberately.
-double _simMachineCapacity(SimulatorBaseline b, {int? machines}) {
-  return (machines ?? b.activeMachines) * b.machineNameplate;
-}
+double _machineCapacityOf(SimulatorBaseline b) =>
+    b.machines * b.machineHours * b.machineRate;
 
-double _simManpowerCapacity(SimulatorBaseline b, {int? workers, int? hours}) {
-  return (workers ?? b.workers) *
-      (hours ?? b.shiftHours) *
-      b.outputPerWorkerHour;
-}
+double _manpowerCapacityOf(SimulatorBaseline b) =>
+    b.workers * b.shiftHours * b.outputPerWorkerHour;
 
 void main() {
-  group('SimulatorBaseline reproduces the real ceiling at rest', () {
-    test(
-      'the app\'s own demo fleet — nameplate keeps the rated×hours covariance',
-      () {
-        // Mirrors SeedService._seedMachines / _seedManpower — Packaging Unit
-        // is the group of 3; Old Mixer is under maintenance.
-        final machines = [
-          _machine(id: 1, rated: 65, hours: 16, stage: 'Mixing'),
-          _machine(id: 2, rated: 45, hours: 16, stage: 'Extrusion'),
-          _machine(id: 3, rated: 40, hours: 16, stage: 'Extrusion'),
-          _machine(id: 4, rated: 20, hours: 16, unitCount: 3, stage: 'Packaging'),
-          _machine(
-            id: 5,
-            rated: 20,
-            hours: 8,
-            stage: 'Mixing',
-            status: 'Under Maintenance',
-          ),
-        ];
-        final shifts = [
-          _shift(id: 1, workers: 16, hours: 8, perHour: 8),
-          _shift(id: 2, workers: 14, hours: 8, perHour: 7.7),
-        ];
-        final snapshot = _snapshot(machines, shifts);
-        final baseline = SimulatorBaseline.from(snapshot);
-
-        expect(baseline.activeMachines, 4);
-        expect(baseline.workers, 30);
-        expect(baseline.shiftHours, 8);
-
-        expect(
-          _simMachineCapacity(baseline),
-          closeTo(snapshot.machineCapacity, snapshot.machineCapacity * 0.01),
-        );
-        expect(
-          _simManpowerCapacity(baseline),
-          closeTo(snapshot.manpowerCapacity, 0.001),
-        );
-      },
-    );
-
-    test(
-      'a fleet whose running hours vary — where product-of-means diverges',
-      () {
-        final machines = [
-          _machine(id: 1, rated: 50, hours: 16),
-          _machine(id: 2, rated: 40, hours: 8),
-          _machine(id: 3, rated: 100, hours: 20),
-        ];
-        final snapshot = _snapshot(machines, const []);
-        final baseline = SimulatorBaseline.from(snapshot);
-
-        // mean(rated) × mean(hours) would be 63.33 × 14.67 = 928.9, while
-        // mean(rated × hours) is 1040 — the covariance the old code dropped.
-        expect(baseline.machineNameplate, closeTo(1040, 0.01));
-        expect(
-          _simMachineCapacity(baseline),
-          closeTo(snapshot.machineCapacity, snapshot.machineCapacity * 0.01),
-        );
-      },
-    );
-
-    test('a grouped row still reproduces the real ceiling at rest', () {
-      // One row of 4 identical machines + one single. machineCapacity is
-      // 50×16×4 + 30×16 = 3200 + 480 = 3680, over 2 rows.
-      final snapshot = _snapshot([
-        _machine(id: 1, rated: 50, hours: 16, unitCount: 4),
-        _machine(id: 2, rated: 30, hours: 16),
-      ], const []);
-      final baseline = SimulatorBaseline.from(snapshot);
-
-      expect(snapshot.machineCapacity, 3680);
-      expect(baseline.activeMachines, 2);
-      expect(baseline.machineNameplate, closeTo(1840, 0.01));
-      expect(
-        _simMachineCapacity(baseline),
-        closeTo(snapshot.machineCapacity, snapshot.machineCapacity * 0.01),
-      );
-    });
-
-    test('inactive machines never drag the per-machine rate', () {
-      final withIdleJunk = _snapshot([
-        _machine(id: 1, rated: 100, hours: 16),
-        _machine(id: 2, rated: 1, hours: 1, status: 'Retired'),
-      ], const []);
-      final activeOnly = _snapshot([
-        _machine(id: 1, rated: 100, hours: 16),
-      ], const []);
-
-      expect(
-        SimulatorBaseline.from(withIdleJunk).machineNameplate,
-        SimulatorBaseline.from(activeOnly).machineNameplate,
-      );
-    });
-
-    test('shift hours are worker-weighted, not counted once per shift', () {
-      // A 100-worker 12h shift and a 1-worker 4h shift: the plain mean would
-      // say 8h, which is nowhere near where the worker-hours actually are.
-      final snapshot = _snapshot(const [], [
-        _shift(id: 1, workers: 100, hours: 12, perHour: 5),
-        _shift(id: 2, workers: 1, hours: 4, perHour: 5),
-      ]);
-      final baseline = SimulatorBaseline.from(snapshot);
-
-      expect(baseline.workers, 101);
-      expect(baseline.shiftHours, 12); // 1204 worker-hours / 101 workers
-      expect(
-        _simManpowerCapacity(baseline),
-        closeTo(snapshot.manpowerCapacity, snapshot.manpowerCapacity * 0.01),
-      );
-    });
-  });
-
-  group('SimulatorBaseline extrapolation', () {
-    test('an added machine is worth what an average active one is worth', () {
-      final snapshot = _snapshot([
-        _machine(id: 1, rated: 50, hours: 16),
-        _machine(id: 2, rated: 30, hours: 16),
-      ], const []);
-      final baseline = SimulatorBaseline.from(snapshot);
-
-      final atTwo = _simMachineCapacity(baseline, machines: 2);
-      final atThree = _simMachineCapacity(baseline, machines: 3);
-
-      expect(atThree - atTwo, closeTo(baseline.machineNameplate, 0.001));
-      expect(_simMachineCapacity(baseline, machines: 0), 0);
-    });
-  });
-
-  group('SimulatorBaseline degenerate inputs', () {
-    test('no machines at all: a zero rate', () {
-      final baseline = SimulatorBaseline.from(_snapshot(const [], const []));
-
-      expect(baseline.machineNameplate, 0);
-      expect(baseline.activeMachines, 0);
-      expect(baseline.workers, 0);
-      expect(baseline.shiftHours, 0);
-    });
-
-    test('machines exist but none active: falls back to the whole fleet, so '
-        'reactivating one still moves the number', () {
+  group('SimulatorBaseline.from', () {
+    test('prefills the slowest machine stage', () {
       final baseline = SimulatorBaseline.from(
         _snapshot([
-          _machine(id: 1, rated: 50, hours: 16, status: 'Retired'),
+          _machine(id: 1, rated: 100, hours: 10, stage: 'Extrusion'),
+          _machine(id: 2, rated: 50, hours: 10, stage: 'Packaging'),
         ], const []),
       );
 
-      expect(baseline.activeMachines, 0);
-      expect(baseline.machineNameplate, closeTo(800, 0.001));
-      expect(_simMachineCapacity(baseline, machines: 1), closeTo(800, 0.001));
+      expect(baseline.machines, 1);
+      expect(baseline.machineHours, 10);
+      expect(baseline.machineRate, 50);
+      expect(_machineCapacityOf(baseline), 500);
     });
 
-    test('shifts staffed by nobody do not divide by zero', () {
+    test('parallel machines in a stage collapse to one count and rate', () {
       final baseline = SimulatorBaseline.from(
-        _snapshot(const [], [_shift(id: 1, workers: 0, hours: 8, perHour: 5)]),
+        _snapshot([
+          _machine(id: 1, rated: 30, hours: 16, stage: 'Fill'),
+          _machine(id: 2, rated: 30, hours: 16, unitCount: 2, stage: 'Fill'),
+          _machine(id: 3, rated: 200, hours: 16, stage: 'Mix'),
+        ], const []),
       );
 
-      expect(baseline.workers, 0);
+      expect(baseline.machines, 3);
+      expect(baseline.machineHours, 16);
+      expect(baseline.machineRate, 30);
+      expect(_machineCapacityOf(baseline), 1440);
+    });
+
+    test('prefills the slowest labour station', () {
+      final baseline = SimulatorBaseline.from(
+        _snapshot(const [], [
+          _shift(id: 1, workers: 12, hours: 8, perHour: 9),
+          _shift(id: 2, workers: 5, hours: 8, perHour: 8),
+        ]),
+      );
+
+      expect(baseline.workers, 5);
       expect(baseline.shiftHours, 8);
-      expect(baseline.outputPerWorkerHour, closeTo(5, 0.001));
+      expect(baseline.outputPerWorkerHour, 8);
+      expect(_manpowerCapacityOf(baseline), 320);
+    });
+
+    test('inactive machines are ignored', () {
+      final baseline = SimulatorBaseline.from(
+        _snapshot([
+          _machine(id: 1, rated: 100, hours: 10, stage: 'A'),
+          _machine(
+            id: 2,
+            rated: 1,
+            hours: 1,
+            stage: 'B',
+            status: 'Under Maintenance',
+          ),
+        ], const []),
+      );
+
+      expect(baseline.machines, 1);
+      expect(_machineCapacityOf(baseline), 1000);
+    });
+
+    test('no machines and no shifts yields zeros', () {
+      final baseline = SimulatorBaseline.from(_snapshot(const [], const []));
+
+      expect(baseline.machines, 0);
+      expect(baseline.machineHours, 0);
+      expect(baseline.machineRate, 0);
+      expect(baseline.workers, 0);
+      expect(baseline.shiftHours, 0);
+      expect(baseline.outputPerWorkerHour, 0);
     });
   });
 }

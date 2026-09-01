@@ -51,11 +51,15 @@
   parallel (capacities add), and the product's machine ceiling is the
   **slowest stage**. Each `manpower` row is a **task station** in the labour
   flow (Filling, Wrapping …) and the slowest station caps labour. A blank
-  stage = that machine is its own stage. Capacity still uses each Active
-  machine's full nameplate rate (`rated × hours × unit_count`) — no
-  uptime-percentage derate — and real stoppages are what the downtime log is
-  for. *The what-if simulator still uses the older summed model and
-  over-states multi-stage ceilings — a tracked follow-up.*
+  stage = that machine is its own stage. Capacity uses each Active machine's
+  full nameplate rate (`rated × hours × unit_count`) with no
+  uptime-percentage derate, but a stage whose machines are **all** down
+  (Downtime/Repair/Maintenance) drops the product's machine ceiling to 0 —
+  a broken step stops the whole line; stoppage *durations* are what the
+  downtime log is for. The what-if simulator models one machine stage against
+  one labour
+  station (six raw fields, `min` of the two), pre-filled from the product's
+  slowest stage and slowest station.
 - **A machine row is a group.** `machines.unit_count` (default 1) lets one
   row stand for several identical machines; its stage counts all of them.
   A downtime event records `machines_down` — shown on the machine page but

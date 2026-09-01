@@ -58,10 +58,11 @@ are directly comparable.
 
 ```
 stageCapacity(s) = Σ ( ratedOutputPerHour × operatingHoursPerDay × unitCount )
-                   over Active machines whose stage == s
+                   over the *Active* machines whose stage == s
+                   (a stage that has machine rows but no Active one contributes 0)
 
-machineCapacity  = min( stageCapacity(s) )  over the product's distinct stages
-                   0 when no Active machine exists
+machineCapacity  = min( stageCapacity(s) )  over every stage that has machine rows
+                   0 when no machine row exists, or when any stage is fully down
 ```
 
 A line is a **flow**. Each machine belongs to a `stage` (Mixing → Extrusion →
@@ -76,14 +77,16 @@ A `machines` row is also a **group** of `unit_count` identical machines that
 share one rate, schedule, stage and status (`unit_count` defaults to 1). All
 units in the group count toward their stage's parallel total.
 
-Only machines whose `status` is exactly `'Active'` contribute. Every other
-status — under maintenance, retired, downtime, repair — is excluded outright
-rather than derated, so a group flipped out of Active drops its full share
-of the ceiling. There is no uptime-percentage derate: a group either counts
-at its full nameplate rate or not at all. Actual stoppages are tracked as
-discrete events instead — see `machine_downtime_log` and the
-Active → Downtime → Repair → Active workflow on the machine detail screen —
-rather than folded into this formula as an estimated percentage.
+Only machines whose `status` is exactly `'Active'` contribute their rate.
+Every other status — under maintenance, retired, downtime, repair — adds 0.
+There is no uptime-percentage derate: a machine either counts at its full
+nameplate rate or not at all. But because the stages are a series, a stage
+whose machines are **all** non-Active stops the whole product: that stage's
+`stageCapacity` is 0, so `machineCapacity` is 0. A stage that still has one
+Active machine keeps running at that machine's rate. Actual stoppage
+durations are tracked as discrete events — see `machine_downtime_log` and the
+Active → Downtime → Repair → Active workflow — rather than folded into this
+formula as an estimated percentage.
 
 `machine_downtime_log.machines_down` records how many of a group's units a
 given event took down. It is **informational only** — displayed on the
@@ -108,10 +111,6 @@ Wrapping, Packing …), not a time shift. The stations run in series, so the
 **slowest station** caps the line — the same flow logic as C1. Adding people
 to a station raises that row's `workerCount`. There is no active/inactive
 concept for stations.
-
-`CapacityService.sumManpowerCapacity` (the old additive total) still exists
-but is used **only** by the what-if simulator (C14), which models a rough
-parallel what-if rather than the flow.
 
 > `lib/services/capacity_service.dart` · `computeManpowerCapacity`
 
@@ -288,44 +287,23 @@ The simulator is the one place that re-derives capacity on the client rather
 than reading `compute_bottleneck()`. That is deliberate — it is read-only and
 needs instant feedback as fields change.
 
-> **Not yet updated for the flow model.** C1/C2 became stage/station *minima*;
-> the simulator still models a single summed "parallel capacity" what-if
-> (`activeMachines × machineNameplate` vs `workers × hours × rate`) built from
-> `sumMachineCapacity` / `sumManpowerCapacity`. Its numbers therefore
-> **over-state** the real ceiling whenever a product has more than one stage
-> or station. Reworking it to target the bottleneck stage is a tracked
-> follow-up; treat its output as a rough upper bound until then.
-
 ### C14 · Simulated capacities
 
 ```
-Rates, derived once from the active fleet:
-
-machineNameplate    = mean( rated × hours × unitCount )   active machines only
-outputPerWorkerHour = sumManpowerCapacity / Σ( workerCount × shiftHours )
-
-Baseline field values — chosen so an untouched simulator reproduces C1 and C2:
-
-shiftHours = Σ( workerCount × shiftHours ) / totalWorkers
-
-The simulation itself:
-
-simMachineCapacity  = activeMachines × machineNameplate
-simManpowerCapacity = workers × shiftHours × outputPerWorkerHour
-simEffective        = min( the two )
+simMachineCapacity  = machines × machineHours × machineRate      (C1, one stage)
+simManpowerCapacity = workers  × shiftHours   × outputPerWorkerHour  (C2, one station)
+simEffective        = min( simMachineCapacity, simManpowerCapacity )   (C3)
 ```
 
-The simulator needs a *per-machine* rate because it prices machine counts that
-don't exist yet — but `machineNameplate` is weighted so that, at the untouched
-baseline, the arithmetic collapses back onto C1 exactly (no uptime term means
-no rounding source either — `activeMachines × mean(rated × hours)` reproduces
-`Σ(rated × hours)` precisely, not just approximately). An added machine is
-therefore worth what an average active machine is worth, and the starting
-number matches the dashboard.
-
-`machineNameplate` is the mean of the **product** `rated × hours`, not the
-product of the two means — the latter drops the covariance and understates
-any fleet where the faster machines also run the longer days.
+Six raw fields, no rate-weighting. The simulator models **one machine stage
+against one labour station** — it does not span a multi-stage flow. All six
+fields are pre-filled from the selected product's real data: the machine
+fields from that product's slowest machine stage
+(`machines = Σ unitCount`, `machineHours` = the stage's first row's hours,
+`machineRate = stageCapacity / (machines × machineHours)`), the labour fields
+from its slowest task station verbatim. So an untouched simulator reproduces
+C3 exactly when the product has a single stage and a single station, and sits
+at "slowest stage vs slowest station" otherwise.
 
 > `lib/services/capacity_service.dart` · `SimulatorBaseline.from`
 > `lib/screens/capacity/simulator_screen.dart`
@@ -954,10 +932,13 @@ calls) — has been read directly via the Supabase MCP connection during this
 session, most recently while removing `uptime_percent` and again while
 verifying C5's BOM join, then when the machine-capacity sum gained the
 `× unit_count` factor, and most recently when **both** capacity aggregates
-changed from `SUM` to bottleneck `MIN`: machine capacity is now
-`MIN` over stage-grouped sums
+changed from `SUM` to bottleneck `MIN`, and again when a fully-down stage was
+made to zero the ceiling: machine capacity is now `MIN` over stage-grouped
+sums where the group is over **all** the product's machine rows
 (`GROUP BY COALESCE(NULLIF(lower(btrim(stage)),''), 'machine:'||machine_id)`)
-and manpower capacity is `MIN(worker_count × shift_hours × output_per_worker_hour)`
+and the per-stage sum is `SUM(CASE WHEN status = 'Active' THEN rated × hours ×
+unit_count ELSE 0 END)`, so a stage with rows but no Active machine reports 0.
+Manpower capacity is `MIN(worker_count × shift_hours × output_per_worker_hour)`
 over the rows. The factory-wide overload keeps the same MIN logic across all
 products (no worse than the old cross-product SUM blend). C5–C10 above match
 that live SQL as of this writing; if the function is redefined again later,
@@ -982,7 +963,7 @@ from filenames.
 | File | Covers |
 | --- | --- |
 | `test/capacity_service_test.dart` | C1, C2, C4, C12 |
-| `test/simulator_baseline_test.dart` | C14, incl. degenerate fleets and extrapolation |
+| `test/simulator_baseline_test.dart` | C14 prefill — slowest stage/station, parallel collapse, degenerate |
 | `test/sector_comparison_test.dart` | C18 |
 | `test/supply_mrp_test.dart` | C19, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M16 |
 | `test/cost_test.dart` | M15, M16, M19, M20 |
