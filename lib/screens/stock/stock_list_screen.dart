@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/responsive_grid_list.dart';
 import '../../core/formatters.dart';
+import '../../core/theme.dart';
 import '../../models/finished_stock.dart';
 import '../../models/product.dart';
 import '../../services/product_service.dart';
@@ -51,13 +52,6 @@ class _StockListScreenState extends State<StockListScreen> {
     }
   }
 
-  // Delegates all input state to _NewProductDialog, which owns its own
-  // controllers (created and disposed inside its own State) rather than
-  // this method creating them and disposing in a `finally` around
-  // showDialog — that pattern is what caused a real crash here
-  // ('_dependents.isEmpty' framework assertion) when Cancel raced the
-  // dialog's exit animation. Same fix already applied to home_screen.dart's
-  // factory dialogs and production_trend_screen.dart's log dialog.
   Future<void> _createStock() async {
     setState(() => _isCreating = true);
     List<Product> allProducts;
@@ -73,8 +67,6 @@ class _StockListScreenState extends State<StockListScreen> {
       );
       return;
     }
-    // Finished-stock tracks one row per product — offer only products that
-    // don't already have one, rather than letting a duplicate be created.
     final trackedProductIds = _stock.map((s) => s.productId).toSet();
     final available = allProducts
         .where((p) => !trackedProductIds.contains(p.productId))
@@ -124,7 +116,7 @@ class _StockListScreenState extends State<StockListScreen> {
     }
   }
 
-  Future<void> _delete(FinishedStock stock) async {
+  Future<bool> _delete(FinishedStock stock) async {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Remove product?',
@@ -132,21 +124,23 @@ class _StockListScreenState extends State<StockListScreen> {
           'This removes "${stock.productName}" and its entire movement history permanently. '
           'This cannot be undone.',
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
     try {
       await _service.deleteStock(stock.stockId);
       _load();
-      if (!mounted) return;
+      if (!mounted) return true;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Product removed')));
+      return true;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not delete product. Please try again.'),
         ),
       );
+      return false;
     }
   }
 
@@ -205,20 +199,38 @@ class _StockListScreenState extends State<StockListScreen> {
             itemCount: _stock.length,
             itemBuilder: (context, index) {
               final stock = _stock[index];
-              return Card(
-                child: ListTile(
-                  title: Text(
-                    stock.productName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              return Dismissible(
+                key: ValueKey(stock.stockId),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) => _delete(stock),
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
-                  subtitle: Text(
-                    '${formatUnits(stock.currentQuantity)} in stock',
+                  child: Icon(
+                    Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
                   ),
-                  onTap: () => _openMovements(stock),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _delete(stock),
+                ),
+                child: Card(
+                  child: ListTile(
+                    title: Text(
+                      stock.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      '${formatUnits(stock.currentQuantity)} in stock',
+                    ),
+                    onTap: () => _openMovements(stock),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _delete(stock),
+                    ),
                   ),
                 ),
               );
@@ -229,8 +241,6 @@ class _StockListScreenState extends State<StockListScreen> {
   }
 }
 
-/// Finished input from [_NewProductDialog] — only handed back once
-/// [Form.validate] has already passed.
 class _NewProductResult {
   final Product product;
   final int quantity;
@@ -238,12 +248,6 @@ class _NewProductResult {
   const _NewProductResult({required this.product, required this.quantity});
 }
 
-/// The "New product" dialog — picks which of this factory's products to
-/// start tracking finished-goods stock for. Extracted into its own
-/// [StatefulWidget] so its controllers live in this State (created and
-/// disposed here) rather than in the caller's method body disposed via a
-/// `finally` around showDialog — see the comment on
-/// [_StockListScreenState._createStock] for why.
 class _NewProductDialog extends StatefulWidget {
   final List<Product> products;
 
@@ -304,17 +308,14 @@ class _NewProductDialogState extends State<_NewProductDialog> {
                     ),
                   ),
               ],
-              onChanged: (value) =>
-                  setState(() => _selectedProductId = value),
+              onChanged: (value) => setState(() => _selectedProductId = value),
               validator: (v) => v == null ? 'Required' : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _quantityController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Starting quantity',
-              ),
+              decoration: const InputDecoration(labelText: 'Starting quantity'),
               validator: (v) {
                 final parsed = int.tryParse(v ?? '');
                 if (parsed == null || parsed < 0) {

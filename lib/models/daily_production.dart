@@ -2,10 +2,6 @@ class DailyProduction {
   final int dailyId;
   final int factoryId;
 
-  /// Which product this day's output was logged against. `daily_production`
-  /// now carries one row per (factory, product, day) rather than one per
-  /// (factory, day) — a factory producing several products logs several
-  /// rows for the same date.
   final int productId;
   final DateTime logDate;
   final int actualOutput;

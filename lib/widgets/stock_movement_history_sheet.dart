@@ -10,8 +10,6 @@ import 'error_state.dart';
 import 'loading_indicator.dart';
 import 'status.dart';
 
-/// Opens [StockMovementHistorySheet] as a scroll-controlled modal bottom
-/// sheet — the standard way every screen shows one product's movement log.
 Future<void> showStockMovementHistorySheet(
   BuildContext context, {
   required FinishedStock stock,
@@ -25,10 +23,6 @@ Future<void> showStockMovementHistorySheet(
   );
 }
 
-/// One product's movement history (production-in / shipment-out /
-/// adjustment) plus a button to record a new one. Shared by the Finished
-/// Stock list and the Stock product detail page so both use the exact same
-/// sheet instead of two copies drifting apart.
 class StockMovementHistorySheet extends StatefulWidget {
   final FinishedStock stock;
   final StockService service;

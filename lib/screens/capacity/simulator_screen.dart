@@ -29,17 +29,12 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
   List<Product> _products = [];
   int? _selectedProductId;
 
-  /// Rates the sliders extrapolate from. Weighted so the untouched baseline
-  /// reproduces the same ceiling the Capacity dashboard shows.
   SimulatorBaseline? _baseline;
 
-  // Simulation state — always whole numbers per user requirement.
   int _workers = 0;
   int _shiftHours = 0;
   int _activeMachines = 0;
 
-  // Controllers are late final so their text (and therefore any partially
-  // typed value) survives orientation changes without re-fetching data.
   late final TextEditingController _workersCtrl;
   late final TextEditingController _shiftHoursCtrl;
   late final TextEditingController _activeMachinesCtrl;
@@ -116,7 +111,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     _lastBottleneck = null;
     _justFlipped = false;
 
-    // Sync text controllers to the newly computed values.
     _workersCtrl.text = '$_workers';
     _shiftHoursCtrl.text = '$_shiftHours';
     _activeMachinesCtrl.text = '$_activeMachines';
@@ -261,14 +255,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     }
   }
 
-  /// A labelled [TextFormField] that accepts only whole (non-negative integer)
-  /// numbers. Live-updates the simulation on every valid keystroke.
-  ///
-  /// Validation rules:
-  /// - Digits only (no decimal point, no sign) — enforced by [FilteringTextInputFormatter].
-  /// - Value must be between 0 and [max] inclusive.
-  /// - Empty field and out-of-range values show an inline error but do NOT
-  ///   update the simulation (last valid value is retained).
   Widget _buildIntField({
     required String label,
     required TextEditingController controller,
@@ -279,8 +265,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
     return TextFormField(
       controller: controller,
       keyboardType: TextInputType.number,
-      // Reject any non-digit character at the input layer — no decimal point,
-      // no minus sign, no spaces.
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       decoration: InputDecoration(
         labelText: label,
@@ -292,7 +276,6 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
         ),
       ),
       onChanged: (text) {
-        // Do not update while the field is being cleared or partially typed.
         if (text.isEmpty) return;
         final parsed = int.tryParse(text);
         if (parsed == null || parsed < 0 || parsed > max) return;

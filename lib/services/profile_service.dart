@@ -4,8 +4,6 @@ import '../models/profile.dart';
 class ProfileService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  /// Every profile (admin oversight only — the "read own or admin" RLS
-  /// policy means a non-admin only ever gets their own row back here).
   Future<List<Profile>> getProfiles() async {
     final rows = await _client
         .from('profiles')
@@ -16,9 +14,6 @@ class ProfileService {
         .toList();
   }
 
-  /// The signed-in user's own profile row, or null if there is no session
-  /// (or the row hasn't been created yet — normally the handle_new_user
-  /// trigger creates it at sign-up).
   Future<Profile?> getMyProfile() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return null;
@@ -30,9 +25,6 @@ class ProfileService {
     return row == null ? null : Profile.fromJson(row);
   }
 
-  /// Updates the signed-in user's own profile. Only the fields passed are
-  /// written, so onboarding and the profile screen can each set the subset
-  /// they collect. Backed by the "update own profile" RLS policy.
   Future<Profile> updateMyProfile({
     String? displayName,
     String? phone,

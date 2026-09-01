@@ -7,10 +7,6 @@ import '../../services/factory_service.dart';
 import '../../widgets/msic_field.dart';
 import '../../widgets/responsive_form_fields.dart';
 
-/// Edit a factory's location, state, and industry after it's been created —
-/// the details onboarding captured (or skipped) are otherwise fixed for the
-/// life of the factory. The name is renamed elsewhere (factory switcher), so
-/// it isn't repeated here.
 class FactorySettingsScreen extends StatefulWidget {
   final Factory factory;
 
@@ -54,15 +50,12 @@ class _FactorySettingsScreenState extends State<FactorySettingsScreen> {
       if (!mounted) return;
       setState(() {
         _msicCodes = codes;
-        // Drop a stale code that's no longer in the list, so the dropdown
-        // isn't handed a value that isn't among its items.
         if (_selectedMsic != null &&
             !codes.any((c) => c.msicCode == _selectedMsic)) {
           _selectedMsic = null;
         }
       });
     } catch (_) {
-      // Industry is optional — an empty dropdown is fine.
     }
   }
 

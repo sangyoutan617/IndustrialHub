@@ -22,11 +22,6 @@ import 'order_form_screen.dart';
 import 'supplier_comparison_screen.dart';
 import 'supply_risk_ui.dart';
 
-/// Decision-oriented detail view for one material: every figure
-/// MrpService.buildPlan already computed, laid out so a manager can see at a
-/// glance what's wrong, why, and what to do about it — instead of that
-/// information being spread across a dense list row and a chart-only sheet.
-/// Nothing here recalculates anything; it only reads [MaterialPlan].
 class MaterialDetailScreen extends StatefulWidget {
   final int factoryId;
   final int materialId;
@@ -74,8 +69,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           break;
         }
       }
-      // Ledger and "used in" are both nice-to-haves; a failure in either
-      // shouldn't blank the whole screen.
       List<RawMaterialMovement> movements = const [];
       List<Product> usedIn = const [];
       if (plan != null) {
@@ -171,12 +164,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     ).showSnackBar(SnackBar(content: Text('Purchase order$poNumber created')));
   }
 
-  /// Stock corrections only — waste, spoilage, a stock-take mismatch, or
-  /// usage outside any product's recipe. Production consumption itself is
-  /// never manually recorded here; it's deducted automatically (and, on a
-  /// downward correction, returned) by [MaterialMovementService.
-  /// recordProductionConsumption] whenever production is logged, driven by
-  /// each product's own bill of materials.
   Future<void> _recordUsage() async {
     final material = _plan!.material;
     final qtyController = TextEditingController();
@@ -187,9 +174,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Adjust stock'),
-        // Scrollable so the dialog's content can't overflow a short
-        // landscape screen (or one with the keyboard up) — AlertDialog
-        // doesn't cap its own content height.
         content: SingleChildScrollView(
           child: Form(
             key: formKey,
@@ -242,7 +226,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
       ),
     );
     if (saved != true) return;
-    // Form.validate() above already guarantees a parseable, non-zero value.
     final qty = double.parse(qtyController.text.trim());
     try {
       await _movementService.recordMovement(
@@ -413,7 +396,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
               MetricRow(
                 label: 'Burn rate',
                 value:
-                    '${formatNumber(plan.burnRatePerDay)} ${material.unit}/day',
+                    '${formatRate(plan.burnRatePerDay)} ${material.unit}/day',
               ),
               if (plan.inboundTotal > 0)
                 MetricRow(
@@ -444,12 +427,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     ];
   }
 
-  /// Read-only reverse lookup — every product whose recipe consumes this
-  /// material, so a manager can see what changing/removing it would affect
-  /// without opening each product individually. Editing the actual rate
-  /// happens on the product's own detail screen (ProductDetailScreen), not
-  /// here — a product's bill of materials is one thing a manager edits as a
-  /// whole, this is only the reverse view.
   List<Widget> _usedInSection(ThemeData theme) {
     return [
       const SectionHeader(title: 'Used in'),
@@ -635,8 +612,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     );
   }
 
-  // Plain-language reason the status header shows, reusing the exact same
-  // computed fields the old inline list-card warnings used — no new logic.
   String _riskExplanation(MaterialPlan plan) {
     if (plan.risk == SupplyRisk.stockedOut) {
       return 'Out of stock now. Cover assumes any overdue inbound batches still arrive.';
@@ -662,8 +637,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   }
 }
 
-/// Shown if the material was deleted (e.g. from another screen) between the
-/// list loading and this detail screen opening.
 class ErrorStateNotFound extends StatelessWidget {
   const ErrorStateNotFound({super.key});
 

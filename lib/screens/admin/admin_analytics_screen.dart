@@ -44,8 +44,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     }
   }
 
-  // Consistent status mapping for a factory's overall picture, used for
-  // both the bar chart bars and the factories table's row.
   AppStatus _factoryStatus(FactoryStat stat) {
     if (stat.productsWithData == 0) return AppStatus.neutral;
     return stat.productsShort > 0 ? AppStatus.danger : AppStatus.success;
@@ -126,11 +124,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
-            // Achievable/demand are no longer summed platform-wide — a
-            // factory's products can be in different units, and summing
-            // across factories compounds that. "X of Y products meeting
-            // demand" is the one figure that stays meaningful regardless of
-            // what any given product is measured in.
             Row(
               children: [
                 Expanded(
@@ -215,10 +208,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     );
   }
 
-  // Percent of products meeting demand, not raw achievable units — a
-  // factory's products can be in different units, so a bar chart of raw
-  // achievable output isn't comparable factory-to-factory (or even
-  // product-to-product within one factory). Percent-meeting-demand is.
   Widget _buildChartCard(CrossFactoryStats stats) {
     final bars = stats.factories;
     return Card(

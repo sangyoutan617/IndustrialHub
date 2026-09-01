@@ -4,14 +4,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
-/// Local SQLite queue for stock movements — factory-floor connectivity is
-/// unreliable, so a movement is written here first (always succeeds
-/// instantly) and synced to Supabase in the background. Visible live in
-/// Android Studio's Database Inspector while the app runs.
-///
-/// sqflite only ships a native implementation for Android/iOS — every
-/// method here is a no-op on web/desktop instead of throwing, so testing on
-/// those platforms still works, just without the offline queue.
 class StockOfflineQueueService {
   static Database? _db;
 
@@ -74,9 +66,6 @@ class StockOfflineQueueService {
     );
   }
 
-  // Used when a queued entry turns out to be a real data conflict (e.g.
-  // stock would go below zero) rather than a connectivity problem —
-  // retrying it forever would never succeed.
   Future<void> remove(int id) async {
     if (!_supported || id < 0) return;
     final db = await _database;

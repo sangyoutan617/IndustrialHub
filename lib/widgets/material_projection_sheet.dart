@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 import '../core/formatters.dart';
 import '../services/mrp_service.dart';
 
-/// 30-day stock-balance projection chart for one material, shown as a modal
-/// bottom sheet. Pure presentation of [MaterialPlan.dailyBalances], which
-/// MrpService already computed — this never recalculates anything.
 class MaterialProjectionSheet extends StatelessWidget {
   final MaterialPlan plan;
 
@@ -84,7 +81,6 @@ class MaterialProjectionSheet extends StatelessWidget {
 }
 
 
-/// Opens [MaterialProjectionSheet] as a scroll-controlled modal bottom sheet.
 void showMaterialProjectionSheet(BuildContext context, MaterialPlan plan) {
   showModalBottomSheet(
     context: context,

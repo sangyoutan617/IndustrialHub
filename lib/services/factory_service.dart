@@ -30,22 +30,11 @@ class FactoryService {
             state: state,
             msicCode: msicCode,
           ).toInsertJson(),
-          // Required by the "own or admin" RLS policy's WITH CHECK — every
-          // factory is stamped with its creator so per-user ownership
-          // scoping works.
           'owner_id': _client.auth.currentUser?.id,
         })
         .select()
         .single();
     final factory = Factory.fromJson(row);
-    // Every factory that existed when multi-product support shipped got an
-    // auto-created "General" product via a one-time migration backfill —
-    // this is that same guarantee applied going forward, so a brand-new
-    // factory is never left with zero products (which would leave the
-    // machine/manpower forms with nothing to pick from). is_general can
-    // only ever be set here, never via ProductService's normal create path,
-    // and a partial unique index backstops at most one per factory even if
-    // this were ever called twice.
     await _client.from('products').insert({
       'factory_id': factory.factoryId,
       'product_name': 'General',
@@ -65,10 +54,6 @@ class FactoryService {
     return Factory.fromJson(row);
   }
 
-  /// Updates a factory's location (city/town), state, and industry code.
-  /// Only the fields passed are written, so a caller can update one without
-  /// clobbering the others. A field passed explicitly as null is left
-  /// unchanged too — omit it to keep it, pass a value to change it.
   Future<Factory> updateFactoryDetails(
     int factoryId, {
     String? location,
@@ -107,10 +92,6 @@ class FactoryService {
     return Factory.fromJson(row);
   }
 
-  /// Deletes a factory. Throws if the database still has rows that reference
-  /// it (machines, materials, stock, etc.) and the foreign keys don't
-  /// cascade — the caller surfaces that as a "remove its data first" message
-  /// rather than silently failing.
   Future<void> deleteFactory(int factoryId) async {
     await _client.from('factories').delete().eq('factory_id', factoryId);
   }

@@ -1,6 +1,3 @@
-/// Malaysian states and federal territories, used wherever a factory's
-/// state is chosen (onboarding and factory settings). Kept in one place so
-/// the two dropdowns can never drift apart.
 const List<String> malaysianStates = [
   'Johor',
   'Kedah',

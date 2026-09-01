@@ -5,9 +5,6 @@ import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
 
-/// The signed-in user's own profile — view and edit their personal details.
-/// The email is read-only (it's the auth identity); everything else writes
-/// back to the profiles row via [ProfileService.updateMyProfile].
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 

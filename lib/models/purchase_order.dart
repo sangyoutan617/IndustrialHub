@@ -17,9 +17,6 @@ class PurchaseOrder {
   final String status;
   final bool isSimulated;
 
-  /// Price per unit captured when the order was placed, in the factory's
-  /// currency (RM). Null when not recorded — older orders predate price
-  /// tracking, so the order total is unknown, not zero.
   final double? unitPrice;
 
   const PurchaseOrder({
@@ -35,8 +32,6 @@ class PurchaseOrder {
     this.unitPrice,
   });
 
-  /// True once this PO can no longer arrive or change — used to decide
-  /// whether it still counts toward incoming stock in the MRP projection.
   bool get isClosed =>
       status == PurchaseOrderStatus.delivered ||
       status == PurchaseOrderStatus.cancelled;
@@ -51,15 +46,11 @@ class PurchaseOrder {
       expectedDelivery: json['expected_delivery'] != null
           ? DateTime.parse(json['expected_delivery'] as String)
           : null,
-      // Column added alongside safety_stock_days; absent on an
-      // un-migrated database, so this stays null rather than throwing.
       deliveredAt: json['delivered_at'] != null
           ? DateTime.parse(json['delivered_at'] as String)
           : null,
       status: json['status'] as String,
       isSimulated: json['is_simulated'] as bool? ?? false,
-      // Nullable and absent on an un-migrated database — stays null so the
-      // order total reads as unknown rather than a misleading zero.
       unitPrice: (json['unit_price'] as num?)?.toDouble(),
     );
   }

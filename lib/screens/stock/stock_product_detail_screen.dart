@@ -13,12 +13,6 @@ import '../../widgets/text_prompt_dialog.dart';
 import 'stock_cover_loader.dart';
 import 'stock_movement_form_screen.dart';
 
-/// Decision-oriented detail view for one finished-goods product — the
-/// figures StockDashboardScreen already computes (current stock, demand,
-/// days of cover, predicted stock-out), plus the record-movement and
-/// movement-history actions that previously only existed on a completely
-/// separate screen (Finished Stock list). Nothing here recalculates
-/// anything; it only reads [ProductCover].
 class StockProductDetailScreen extends StatefulWidget {
   final int factoryId;
   final int stockId;
@@ -71,10 +65,6 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
     }
   }
 
-  /// Renames the underlying product itself (via ProductService), not just
-  /// this screen's local view of it — a product's name is shared across
-  /// every module now (Capacity, Supply's bill of materials, demand
-  /// forecasts), so fixing a typo here fixes it everywhere at once.
   Future<void> _rename() async {
     final stock = _cover!.stock;
     final newName = await showTextPromptDialog(
@@ -83,9 +73,6 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
       label: 'Product name',
       initialValue: stock.productName,
     );
-    // The dialog's default required-validator already guarantees newName
-    // is non-empty whenever non-null — only cancellation and "unchanged"
-    // are left to check here.
     if (!mounted || newName == null || newName == stock.productName) return;
     try {
       await _productService.renameProduct(stock.productId, newName);

@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/msic_code.dart';
 
-/// A searchable MSIC industry picker — replaces a plain
-/// `DropdownButtonFormField`, which doesn't scale to the length of the full
-/// MSIC list (DOSM's 2-digit division classification runs to dozens of
-/// entries, most of them long descriptions). Renders as a read-only,
-/// tap-to-open field styled like any other form field; the picker itself is
-/// a full-screen search list filtered by code or description as you type.
 class MsicField extends StatelessWidget {
   final List<MsicCode> codes;
   final String? selectedCode;

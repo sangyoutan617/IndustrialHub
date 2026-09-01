@@ -16,8 +16,6 @@ class StockService {
         .from('finished_stock')
         .select(_selectWithProduct)
         .eq('factory_id', factoryId);
-    // Sorted client-side by the joined product name — finished_stock has
-    // no product-name column of its own to order the query by any more.
     final list = (rows as List)
         .map((row) => FinishedStock.fromJson(row as Map<String, dynamic>))
         .toList();
@@ -25,10 +23,6 @@ class StockService {
     return list;
   }
 
-  /// Creates a finished-stock row for [product] — one row per product per
-  /// factory (see the DB's own unique constraint); the caller is
-  /// responsible for only offering products that don't already have one
-  /// (see stock_list_screen.dart's picker).
   Future<FinishedStock> createStock(
     int factoryId,
     Product product,
@@ -51,9 +45,6 @@ class StockService {
     return result;
   }
 
-  /// The finished-stock row for one product, creating it at quantity 0 if it
-  /// doesn't exist yet. Used by the production log so output always lands
-  /// somewhere even for a product the user never opened the Stock screen for.
   Future<FinishedStock> getOrCreateStockForProduct(
     int factoryId,
     Product product,
@@ -91,8 +82,6 @@ class StockService {
         .toList();
   }
 
-  // One query for every movement across every product — powers the
-  // StockTrendScreen heatmap.
   Future<List<StockMovement>> getMovementsForFactory(int factoryId) async {
     final rows = await _client
         .from('stock_movements')
@@ -104,14 +93,6 @@ class StockService {
         .toList();
   }
 
-  /// Bulk-writes many historical movements for one stock row in one round
-  /// trip and sets its final `current_quantity` directly, rather than the
-  /// incremental read-then-write [recordMovement] does per call — used only
-  /// for seeding a large historical ledger (e.g. 90 days of production/
-  /// shipments) where one sequential call per row would be impractical. The
-  /// caller is responsible for computing correct deltas (including keeping
-  /// the running quantity non-negative) themselves; this performs no
-  /// validation.
   Future<void> recordBulkMovements({
     required int stockId,
     required int factoryId,
@@ -152,7 +133,7 @@ class StockService {
     );
   }
 
-  Future<void> recordMovement({
+  Future<int?> recordMovement({
     required int stockId,
     required String movementType,
     required int quantity,
@@ -160,6 +141,7 @@ class StockService {
     String? note,
     bool isSimulated = false,
     int? factoryId,
+    bool notify = true,
   }) async {
     final current = await _client
         .from('finished_stock')
@@ -174,7 +156,7 @@ class StockService {
       StockMovementType.returned => quantity.abs(),
       StockMovementType.shipmentOut => -quantity.abs(),
       StockMovementType.damaged => -quantity.abs(),
-      _ => quantity, // adjustment: signed as entered
+      _ => quantity,
     };
     final newQuantity = currentQuantity + delta;
     if (newQuantity < 0) {
@@ -198,18 +180,15 @@ class StockService {
         })
         .eq('stock_id', stockId);
 
-    if (fId != null) {
+    if (notify && fId != null) {
       DataEventService.instance.notifyChanged(
         factoryId: fId,
         source: DataChangeSource.stock,
       );
     }
+    return fId;
   }
 
-  // Queues locally first (always succeeds), then tries Supabase right away.
-  // Returns true if it synced immediately, false if it's still pending —
-  // the factory floor rarely has reliable Wi-Fi, so recording a movement
-  // should never block on that.
   Future<bool> recordMovementQueued({
     required int stockId,
     required String movementType,
@@ -225,19 +204,24 @@ class StockService {
       note: note,
     );
     try {
-      await recordMovement(
+      final fId = await recordMovement(
         stockId: stockId,
         movementType: movementType,
         quantity: quantity,
         movementDate: movementDate,
         note: note,
+        notify: false,
       );
       await _queue.markSynced(id);
+      if (fId != null) {
+        DataEventService.instance.notifyChanged(
+          factoryId: fId,
+          source: DataChangeSource.stock,
+        );
+      }
       return true;
     } catch (e) {
       if (e.toString().contains('below zero')) {
-        // A real conflict, not a connectivity problem — retrying it later
-        // would never succeed, so surface it now instead of queuing forever.
         await _queue.remove(id);
         rethrow;
       }
@@ -247,27 +231,22 @@ class StockService {
 
   Future<int> pendingMovementCount() => _queue.pendingCount();
 
-  // Retries every unsynced queue entry — call on screen load/refresh so a
-  // movement recorded offline gets pushed up as soon as Supabase is
-  // reachable again, without the user having to do anything. Returns one
-  // message per entry that turned out to be a real conflict (not just
-  // unreachable). A conflict is only removed from the queue when
-  // [dropConflicts] is true — a silent background sync leaves it pending
-  // rather than discarding it with nobody having seen why; the user's own
-  // "Retry" tap is what actually resolves and reports it.
   Future<List<String>> syncPendingMovements({bool dropConflicts = false}) async {
     final rows = await _queue.getPending();
     final failures = <String>[];
+    final touchedFactoryIds = <int>{};
     for (final row in rows) {
       try {
-        await recordMovement(
+        final fId = await recordMovement(
           stockId: row['stock_id'] as int,
           movementType: row['movement_type'] as String,
           quantity: row['quantity'] as int,
           movementDate: DateTime.parse(row['movement_date'] as String),
           note: row['note'] as String?,
+          notify: false,
         );
         await _queue.markSynced(row['id'] as int);
+        if (fId != null) touchedFactoryIds.add(fId);
       } catch (e) {
         if (e.toString().contains('below zero')) {
           if (dropConflicts) await _queue.remove(row['id'] as int);
@@ -277,8 +256,13 @@ class StockService {
             'zero.',
           );
         }
-        // Otherwise still unreachable — leave queued, retried next time.
       }
+    }
+    for (final fId in touchedFactoryIds) {
+      DataEventService.instance.notifyChanged(
+        factoryId: fId,
+        source: DataChangeSource.stock,
+      );
     }
     return failures;
   }

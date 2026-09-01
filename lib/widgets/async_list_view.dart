@@ -5,9 +5,6 @@ import 'loading_indicator.dart';
 
 enum AsyncViewStatus { loading, error, empty, data }
 
-/// Wraps the loading/error/empty/data branching every list screen repeats,
-/// so a screen only has to describe *what* each state looks like, not the
-/// branching itself.
 class AsyncListView<T> extends StatelessWidget {
   final AsyncViewStatus status;
   final List<T> items;
@@ -24,7 +21,6 @@ class AsyncListView<T> extends StatelessWidget {
   final String? emptyActionLabel;
   final VoidCallback? onEmptyAction;
 
-  /// When set, the data state is wrapped in a [RefreshIndicator].
   final Future<void> Function()? onRefresh;
   final EdgeInsetsGeometry padding;
 

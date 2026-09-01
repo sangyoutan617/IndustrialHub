@@ -45,9 +45,7 @@ class _Palette {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return _Palette(
-      // Light mode keeps the original white-on-white bordered-card look;
-      // dark mode uses theme surfaces so nothing stays glaring white.
-      bg: isDark ? scheme.surface : Colors.white,
+      bg: Theme.of(context).scaffoldBackgroundColor,
       card: isDark ? scheme.surfaceContainerHigh : Colors.white,
       cardBorder: scheme.outlineVariant,
       textPrimary: scheme.onSurface,
@@ -65,15 +63,9 @@ class _HomeData {
   final MsicCode? msic;
   final ProductivityBenchmark? productivity;
 
-  /// Every product this factory has, and which one [bottleneck] was
-  /// computed for — the hero card is scoped to one product at a time now
-  /// that machines/manpower/materials each belong to a specific product.
   final List<Product> products;
   final Product selectedProduct;
 
-  /// Every product's own verdict — not just [selectedProduct]'s — so the AI
-  /// insight can narrate the whole factory rather than only the currently
-  /// viewed product.
   final List<ProductBottleneck> allBottlenecks;
 
   const _HomeData({
@@ -103,11 +95,6 @@ class _SmartAction {
   });
 }
 
-/// MaterialListScreen and StockDashboardScreen are normally tab bodies
-/// embedded under HomeScreen's own AppBar, so neither owns one itself. Smart
-/// actions push them as standalone routes instead, where that AppBar isn't
-/// there to supply a title or a back button — this wraps them with one for
-/// just that case, without touching how they render as tabs.
 Widget _pushedWithAppBar(String title, Widget child) {
   return Scaffold(
     appBar: AppBar(title: Text(title)),
@@ -115,7 +102,6 @@ Widget _pushedWithAppBar(String title, Widget child) {
   );
 }
 
-/// Read-only: only calls BottleneckService/CapacityService reads.
 class DashboardHomeScreen extends StatefulWidget {
   final Factory factory;
 
@@ -139,7 +125,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
   void initState() {
     super.initState();
     _future = _load();
-    // Shared ticker; RepaintBoundary isolates the dot.
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -168,9 +153,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     final factoryId = widget.factory.factoryId;
     final products = await _productService.getProducts(factoryId);
     if (products.isEmpty) {
-      // Shouldn't happen — every factory gets an auto-created General
-      // product — but there's nothing to show a bottleneck verdict for if
-      // it somehow does. Falls through to the existing error UI.
       throw StateError('No products configured for this factory.');
     }
     final selected = _selectedProductId != null
@@ -283,12 +265,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
 
   Widget _buildReady(_HomeData data, _Palette pal) {
     final result = data.bottleneck;
-    // Per-product AI narration tying material/machine/manpower into a
-    // single verdict for whichever product is selected. Narrates the
-    // already-computed bottleneck result; never recalculates it. See
-    // _buildProductPrompt. Built once here and handed to whichever layout
-    // (portrait/landscape) is active below, so rotating never recreates —
-    // and re-fetches — the AI card.
     final aiInsight = result.hasData
         ? AiInsightCard(
             buildPrompt: () => _buildProductPrompt(data),
@@ -296,9 +272,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
           )
         : null;
 
-    // Single scanning column, top to bottom, in every orientation — landscape
-    // gets the same flow with more horizontal room via ResponsiveShell,
-    // rather than being split into two columns.
     return _buildPortraitReady(result, data, pal, aiInsight);
   }
 
@@ -308,7 +281,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     _Palette pal,
     Widget? aiInsight,
   ) {
-    // Flat ListView; per-card RepaintBoundary limits repaint on scroll.
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
@@ -326,12 +298,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // ---------------- Factory-wide AI summary ----------------
 
-  // Deterministic figures only — every bottleneck verdict is computed by
-  // compute_bottleneck() (BottleneckService), once per product. The AI card
-  // narrates the whole factory's picture and calls out the currently viewed
-  // product's own binding constraint; it never computes anything itself.
   static const _productSystem =
       'You are a factory operations assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. In '
@@ -342,12 +309,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       'next step based only on the numbers provided. No markdown, no '
       'headings, under 80 words.';
 
-  // Enumerates every product's own verdict — sorted by urgency, most-short
-  // first — the same template stock_dashboard_screen.dart's
-  // _buildStockPrompt established for this app's other multi-item
-  // dashboards, then calls out the currently viewed product's full
-  // machine/manpower/material breakdown (this RPC's richest figure,
-  // available only for whichever product is picked).
   String _buildProductPrompt(_HomeData data) {
     final withData = data.allBottlenecks.where((p) => p.bottleneck.hasData).toList();
     final noDataCount = data.allBottlenecks.length - withData.length;
@@ -392,7 +353,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     return buffer.toString();
   }
 
-  // ---------------- Header ----------------
 
   Widget _buildHeader(BottleneckResult result, _HomeData data, _Palette pal) {
     final hasData = result.hasData;
@@ -456,8 +416,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  /// Only shown once a factory has a second product — with just the
-  /// auto-created General catch-all there's nothing to pick between.
   Widget _buildProductPicker(_HomeData data, _Palette pal) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -494,7 +452,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // ---------------- Hero: bottleneck diagnosis engine ----------------
 
   Widget _buildHeroCard(BottleneckResult result, _Palette pal) {
     if (!result.hasData) {
@@ -551,7 +508,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
               ],
             ),
             const SizedBox(height: 18),
-            // Green = covered by output, red = shortfall; center = % of demand.
             Center(
               child: SizedBox(
                 width: 140,
@@ -591,9 +547,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
                               ],
                       ),
                     ),
-                    // Bounded FittedBox so a large OS text scale shrinks the
-                    // label to fit the ring's hole instead of overflowing the
-                    // fixed 140px chart.
                     SizedBox(
                       width: 84,
                       height: 84,
@@ -754,7 +707,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // Routes to the screen that fixes the limiting resource.
   void _resolveNow(BottleneckResult result) {
     final factoryId = widget.factory.factoryId;
     final Widget target = switch (result.limiter) {
@@ -823,7 +775,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // ---------------- 3-up ceiling grid ----------------
 
   Widget _buildCeilingGrid(BottleneckResult result, _Palette pal) {
     final isMaterialLimiter = result.limiter == 'RAW MATERIAL';
@@ -836,11 +787,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
         ? 'Machines'
         : 'Manpower';
 
-    // IntrinsicHeight gives the Row a bounded height to stretch children
-    // to — without it, a Row(crossAxisAlignment: stretch) inside a
-    // ListView (which hands its children an unbounded height) throws
-    // "BoxConstraints forces an infinite height" as soon as this section
-    // actually renders with data.
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -848,7 +794,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
           Expanded(
             child: _ceilingCard(
               pal: pal,
-              icon: Icons.local_shipping, // matches Supply tab
+              icon: Icons.local_shipping,
               label: 'MATERIALS',
               moduleCaption: 'Raw material ceiling',
               numericValue: result.materialCeiling,
@@ -859,7 +805,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
           Expanded(
             child: _ceilingCard(
               pal: pal,
-              icon: Icons.precision_manufacturing, // matches Capacity tab
+              icon: Icons.precision_manufacturing,
               label: 'CAPACITY',
               moduleCaption: capacitySubLabel,
               numericValue: capacityCeiling,
@@ -870,7 +816,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
           Expanded(
             child: _ceilingCard(
               pal: pal,
-              icon: Icons.inventory_2, // matches Stock tab
+              icon: Icons.inventory_2,
               label: 'DEMAND',
               moduleCaption: 'Required / day',
               numericValue: result.requiredPerDay,
@@ -973,8 +919,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // ---------------- Open data (DOSM) benchmark preview ----------------
-  // Context only — independent of the bottleneck calculation above.
 
   Widget _buildOpenDataCard(_HomeData data, _Palette pal) {
     final hasMsic =
@@ -1080,7 +1024,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // Opens the full DOSM benchmark screen (Capacity module).
   void _openBenchmark() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -1089,8 +1032,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // ---------------- Smart action center ----------------
-  // Rule-based per limiter — no AI, no reused module tool screens.
 
   Widget _buildActionCenter(BottleneckResult result, _Palette pal) {
     final actions = _actionsFor(result, pal);
@@ -1260,7 +1201,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  // ---------------- Shared card shell ----------------
 
   Widget _card({
     required _Palette pal,
@@ -1292,7 +1232,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
   }
 }
 
-/// Shared controller; RepaintBoundary limits repaint to this dot.
 class _PulsingDot extends StatelessWidget {
   final Color color;
   final AnimationController controller;

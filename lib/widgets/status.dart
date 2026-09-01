@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 
-/// The single semantic vocabulary for status/risk language app-wide: stock
-/// health, supply risk, order status, bottleneck alerts, admin badges.
-/// Screens should map their domain states (e.g. [SupplyRisk],
-/// [PurchaseOrderStatus]) onto one of these rather than choosing a color
-/// directly — that's what keeps "healthy" green and "critical" red
-/// consistent everywhere instead of picked ad hoc per screen.
 enum AppStatus { success, warning, danger, info, neutral }
 
 extension AppStatusStyle on AppStatus {
@@ -35,9 +29,6 @@ extension AppStatusStyle on AppStatus {
   };
 }
 
-/// A small rounded status pill: icon (or dot) + label, colored from
-/// [AppStatus] so status is never conveyed by color alone (accessibility —
-/// the label text and icon shape both carry the meaning too).
 class StatusChip extends StatelessWidget {
   final String label;
   final AppStatus status;
@@ -80,9 +71,6 @@ class StatusChip extends StatelessWidget {
   }
 }
 
-/// A quiet banner for alerts and warnings that need to be visible without
-/// shouting — bottleneck alerts, low-stock warnings, informational notices.
-/// Optional [actionLabel]/[onAction] for a single follow-up action.
 class InfoBanner extends StatelessWidget {
   final String message;
   final String? title;

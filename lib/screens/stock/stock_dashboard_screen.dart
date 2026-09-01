@@ -74,10 +74,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     if (oldWidget.factoryId != widget.factoryId) _load();
   }
 
-  // [showErrors] is only true for an explicit user retry (the pending-sync
-  // pill's "Retry" button) — a silent background load never interrupts the
-  // user, and a conflict it finds stays pending rather than being dropped
-  // with nobody having seen why.
   Future<void> _load({bool showErrors = false}) async {
     setState(() => _state = _LoadState.loading);
     try {
@@ -140,28 +136,30 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     }
   }
 
-  Future<void> _deleteDemand(DemandForecast forecast) async {
+  Future<bool> _deleteDemand(DemandForecast forecast) async {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Remove demand forecast?',
       message:
           'This removes the forecast for "${forecast.productName}" permanently.',
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
     try {
       await _demandService.deleteForecast(forecast.demandId);
       _load();
-      if (!mounted) return;
+      if (!mounted) return true;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Demand forecast removed')));
+      return true;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not delete forecast. Please try again.'),
         ),
       );
+      return false;
     }
   }
 
@@ -215,20 +213,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               .first;
     final criticalItems = withCover.where((c) => c.needsAttention).toList()
       ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!));
-    // Most overstocked first, same ordering convention as criticalItems.
     final overstockItems =
         withCover.where((c) => c.daysOfCover! > overstockDaysThreshold).toList()
           ..sort((a, b) => b.daysOfCover!.compareTo(a.daysOfCover!));
 
-    // AI card is built once so rotating between portrait/landscape never
-    // recreates — and re-fetches — it.
     final aiInsight = withCover.isNotEmpty
         ? AiInsightCard(buildPrompt: _buildStockPrompt, system: _stockSystem)
         : null;
 
-    // Single scanning column, top to bottom, in every orientation — landscape
-    // gets the same flow with more horizontal room via ResponsiveShell,
-    // rather than being split into two columns.
     return _buildPortrait(
       mostUrgent: mostUrgent,
       criticalItems: criticalItems,
@@ -277,7 +269,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             const SizedBox(height: AppSpacing.l),
           ],
           _buildCoverListSection(),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.l),
           _buildDemandSection(),
         ],
       ),
@@ -354,10 +346,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     );
   }
 
-  // Movements recorded while offline (queued in local SQLite) that haven't
-  // reached Supabase yet — see StockOfflineQueueService. A slim status pill
-  // rather than InfoBanner, since this is a live "syncing" state, not a
-  // one-off warning notice.
   Widget _buildPendingSyncBanner() {
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -484,9 +472,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     );
   }
 
-  // Top-N urgent products, highlighted above the full list — same pattern
-  // as the Supply module's "Attention required" section, so a manager sees
-  // what needs a decision first instead of scanning every product.
   Widget _buildCriticalSection(List<ProductCover> criticalItems) {
     return Card(
       color: AppStatus.danger.background,
@@ -546,8 +531,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     );
   }
 
-  // Same visual weight as _buildCriticalSection — overstock is wasted
-  // capital too, not just a number in the summary row.
   Widget _buildOverstockSection(List<ProductCover> overstockItems) {
     return Card(
       color: AppStatus.info.background,
@@ -609,10 +592,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
 
   Widget _buildCoverListSection() {
     if (_covers.isEmpty) {
-      // Carries its own route to the Finished Stock list. The "Log stock
-      // movement" button below is the only other way there, and it renders
-      // in the non-empty branch — so without this, a factory with no
-      // products had nothing on this screen that could create its first one.
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: EmptyState(
@@ -677,28 +656,46 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           )
         else
           for (final forecast in _forecasts)
-            Card(
-              child: ListTile(
-                title: Text(
-                  forecast.productName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+            Dismissible(
+              key: ValueKey(forecast.demandId),
+              direction: DismissDirection.endToStart,
+              confirmDismiss: (_) => _deleteDemand(forecast),
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
-                subtitle: Text(
-                  '${formatNumber(forecast.requiredPerDay)} units/day required',
+                child: Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: () => _openDemandForm(forecast: forecast),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _deleteDemand(forecast),
-                    ),
-                  ],
+              ),
+              child: Card(
+                child: ListTile(
+                  title: Text(
+                    forecast.productName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    '${formatNumber(forecast.requiredPerDay)} units/day required',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () => _openDemandForm(forecast: forecast),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _deleteDemand(forecast),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -706,9 +703,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     );
   }
 
-  // Deterministic figures only — days of cover and stock-out dates are all
-  // computed in _load(). The AI card just narrates them; it never does the
-  // arithmetic. Mirrors the Module 1 (capacity) bottleneck insight.
   static const _stockSystem =
       'You are a factory inventory assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. In '
@@ -779,8 +773,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   Widget _summaryStat(String label, String value, Color color) {
     return Column(
       children: [
-        // FittedBox so a wide space-formatted count doesn't pinch when
-        // this 3-up row lands inside a half-width landscape column.
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
@@ -803,8 +795,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
 
   Widget _buildCoverCard(ProductCover cover) {
     final theme = Theme.of(context);
-    // Zero stock gets a stronger treatment than the "Low stock" chip alone —
-    // the whole card goes solid red, not just a tinted background.
     final isOutOfStock = cover.stock.currentQuantity == 0;
     final primaryTextColor = isOutOfStock
         ? Colors.white

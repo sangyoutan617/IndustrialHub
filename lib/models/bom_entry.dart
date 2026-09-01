@@ -1,6 +1,3 @@
-/// One line of a product's bill of materials: how much of [materialId] one
-/// unit of [productId] consumes. No surrogate id — the pair is the DB's own
-/// composite primary key, so there's nothing else to identify a row by.
 class BomEntry {
   final int productId;
   final int materialId;

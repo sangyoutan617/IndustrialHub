@@ -6,8 +6,6 @@ import 'supply_exceptions.dart';
 class ProductService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  /// General sorts last — it's the migration catch-all, not something a
-  /// user actively picks first when choosing what to assign a machine to.
   Future<List<Product>> getProducts(int factoryId) async {
     final rows = await _client
         .from('products')
@@ -34,11 +32,6 @@ class ProductService {
     return result;
   }
 
-  /// Renames a product without touching its other fields. A targeted
-  /// update rather than [updateProduct]'s full-object overwrite — a caller
-  /// that only has a name in hand (e.g. a rename-only flow on another
-  /// module's screen, which doesn't know this product's unit) would
-  /// otherwise silently reset unit to its default via toInsertJson.
   Future<Product> renameProduct(int productId, String productName) async {
     final row = await _client
         .from('products')
@@ -69,13 +62,6 @@ class ProductService {
     return result;
   }
 
-  /// Deletes a product. Refuses (with a friendly message) if anything still
-  /// references it — a machine/shift/material-rate/finished-stock/demand
-  /// row left pointing at a deleted product would either violate the FK
-  /// outright or, worse, silently orphan data, so this is checked up front
-  /// the same way [MaterialService.deleteMaterial] guards its own deletes.
-  /// The database's `ON DELETE RESTRICT` is the real backstop if a row is
-  /// inserted in the race between this check and the delete.
   Future<void> deleteProduct(int productId, {required int factoryId}) async {
     final checks = <(String, String, String)>[
       ('machines', 'machine_id', 'This product still has machines assigned to it — reassign them first.'),

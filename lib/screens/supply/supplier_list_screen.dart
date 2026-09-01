@@ -98,9 +98,6 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     return list;
   }
 
-  // Contact summary shown under a supplier when any contact detail exists —
-  // person, phone, email joined with dots. Null when nothing was recorded,
-  // so the card stays two-line.
   String? _contactLine(Supplier supplier) {
     final parts = [
       supplier.contactPerson,
@@ -136,31 +133,34 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     }
   }
 
-  Future<void> _delete(Supplier supplier) async {
+  Future<bool> _delete(Supplier supplier) async {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Remove supplier?',
       message: 'This removes "${supplier.supplierName}" permanently.',
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
     try {
       await _supplierService.deleteSupplier(supplier.supplierId);
-      if (!mounted) return;
+      if (!mounted) return true;
       _load();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Supplier deleted')));
+      return true;
     } on SupplyInUseException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      return false;
     } catch (e) {
       debugPrint('supply: failed to delete supplier: $e');
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not delete supplier. Please try again.'),
         ),
       );
+      return false;
     }
   }
 
@@ -350,51 +350,81 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
                           final effectiveLead = MrpService.effectiveLeadDays(
                             supplier,
                           );
-                          final openCount = _openOrderCount(supplier.supplierId);
+                          final openCount = _openOrderCount(
+                            supplier.supplierId,
+                          );
                           final contact = _contactLine(supplier);
-                          return Card(
-                            child: ListTile(
-                              isThreeLine: contact != null,
-                              title: Text(
-                                supplier.supplierName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                          return Dismissible(
+                            key: ValueKey(supplier.supplierId),
+                            direction: DismissDirection.endToStart,
+                            confirmDismiss: (_) => _delete(supplier),
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.l,
                               ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Supplies $materialName · quoted ${supplier.leadTimeDays}d '
-                                    '→ effective ${effectiveLead}d lead · '
-                                    '$openCount open PO${openCount == 1 ? '' : 's'}'
-                                    '${supplier.location != null ? ' · ${supplier.location}' : ''}',
-                                  ),
-                                  if (contact != null)
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.errorContainer,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.delete_outline,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onErrorContainer,
+                              ),
+                            ),
+                            child: Card(
+                              child: ListTile(
+                                isThreeLine: contact != null,
+                                title: Text(
+                                  supplier.supplierName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                     Text(
-                                      contact,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
+                                      'Supplies $materialName · quoted ${supplier.leadTimeDays}d '
+                                      '→ effective ${effectiveLead}d lead · '
+                                      '$openCount open PO${openCount == 1 ? '' : 's'}'
+                                      '${supplier.location != null ? ' · ${supplier.location}' : ''}',
                                     ),
-                                ],
-                              ),
-                              leading: _StarRow(rating: supplier.reliabilityRating),
-                              onTap: () => _openForm(supplier: supplier),
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'rate') _quickRate(supplier);
-                                  if (value == 'delete') _delete(supplier);
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'rate',
-                                    child: Text('Rate'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Delete'),
-                                  ),
-                                ],
+                                    if (contact != null)
+                                      Text(
+                                        contact,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
+                                  ],
+                                ),
+                                leading: _StarRow(
+                                  rating: supplier.reliabilityRating,
+                                ),
+                                onTap: () => _openForm(supplier: supplier),
+                                trailing: PopupMenuButton<String>(
+                                  onSelected: (value) {
+                                    if (value == 'rate') _quickRate(supplier);
+                                    if (value == 'delete') _delete(supplier);
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(
+                                      value: 'rate',
+                                      child: Text('Rate'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text('Delete'),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
@@ -426,10 +456,6 @@ class _StarRow extends StatelessWidget {
                   ? Icons.star
                   : (rating >= i - 0.5 ? Icons.star_half : Icons.star_border),
               size: 14,
-              // Intentional exception to the AppStatus vocabulary: star
-              // ratings read as gold worldwide, not as a "warning" signal.
-              // AppColors.warning is close enough in hue to stay themed
-              // without introducing a new ad hoc literal.
               color: AppColors.warning,
             ),
         ],

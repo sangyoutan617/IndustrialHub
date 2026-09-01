@@ -7,9 +7,6 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 
-/// Factory-wide stock activity as a calendar heatmap, not a line chart —
-/// deliberately distinct from Capacity's trend and IPI charts. Plain
-/// widgets only, no chart package.
 class StockTrendScreen extends StatefulWidget {
   final int factoryId;
 
@@ -24,10 +21,25 @@ enum _LoadState { loading, error, ready }
 const _weeksShown = 12;
 const _daysShown = _weeksShown * 7;
 
+const _weekdayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _monthAbbr = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+const _typeLabels = {
+  StockMovementType.productionIn: 'Production',
+  StockMovementType.shipmentOut: 'Shipments',
+  StockMovementType.damaged: 'Damage',
+  StockMovementType.returned: 'Returns',
+  StockMovementType.adjustment: 'Adjustments',
+};
+
 class _StockTrendScreenState extends State<StockTrendScreen> {
   final _service = StockService();
   _LoadState _state = _LoadState.loading;
   List<StockMovement> _movements = [];
+  String? _filter;
 
   @override
   void initState() {
@@ -76,28 +88,28 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
 
   Widget _buildReady() {
     final today = DateTime.now();
-    final start = DateTime(
-      today.year,
-      today.month,
-      today.day,
-    ).subtract(const Duration(days: _daysShown - 1));
+    final todayAtMidnight = DateTime(today.year, today.month, today.day);
+    final currentWeekStart = todayAtMidnight.subtract(
+      Duration(days: todayAtMidnight.weekday - 1),
+    );
+    final start = currentWeekStart.subtract(
+      const Duration(days: (_weeksShown - 1) * 7),
+    );
+    final end = todayAtMidnight;
 
-    // Absolute units moved per day, all movement types combined. Only the
-    // pre-seeded _daysShown keys are ever read below, so a movement outside
-    // [start, today] (e.g. a forward-dated one) is dropped rather than
-    // silently added as an extra, unread map entry.
-    final end = DateTime(today.year, today.month, today.day);
     final totals = <DateTime, int>{};
     for (var i = 0; i < _daysShown; i++) {
       totals[start.add(Duration(days: i))] = 0;
     }
     for (final m in _movements) {
+      if (_filter != null && m.movementType != _filter) continue;
       final day = DateTime(
         m.movementDate.year,
         m.movementDate.month,
         m.movementDate.day,
       );
       if (day.isBefore(start) || day.isAfter(end)) continue;
+      if (!totals.containsKey(day)) continue;
       totals.update(day, (v) => v + m.quantity.abs());
     }
 
@@ -144,10 +156,11 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
           ],
         ),
         const SizedBox(height: AppSpacing.l),
+        _buildFilterChips(),
+        const SizedBox(height: AppSpacing.m),
         Text(
           'Each cell is one day — darker means more units moved in or out '
-          'that day (production, shipments, damage, returns and '
-          'adjustments combined). Tap a day for its total.',
+          'that day. Tap a day to see what moved.',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -174,6 +187,35 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
           heatmapSection,
         ],
       ),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    final scheme = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: AppSpacing.s,
+      runSpacing: AppSpacing.s,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        ChoiceChip(
+          label: const Text('All movements'),
+          selected: _filter == null,
+          selectedColor: scheme.primaryContainer,
+          onSelected: (_) => setState(() => _filter = null),
+        ),
+        DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _filter,
+            hint: const Text('Filter by type'),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            items: [
+              for (final type in StockMovementType.all)
+                DropdownMenuItem(value: type, child: Text(_typeLabels[type]!)),
+            ],
+            onChanged: (value) => setState(() => _filter = value),
+          ),
+        ),
+      ],
     );
   }
 
@@ -214,7 +256,12 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
     return AppColors.primaryDark;
   }
 
-  // 12 columns of 7 day-cells, not aligned to real weekdays.
+  String _monthLabelForColumn(List<DateTime> days, int col) {
+    final first = days[col * 7];
+    if (col > 0 && days[(col - 1) * 7].month == first.month) return '';
+    return _monthAbbr[first.month - 1];
+  }
+
   Widget _buildHeatmap(
     List<DateTime> days,
     Map<DateTime, int> totals,
@@ -222,60 +269,167 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
   ) {
     const cellSize = 16.0;
     const cellGap = 4.0;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    const monthLabelHeight = 14.0;
+    final labelColor = Theme.of(context).colorScheme.onSurfaceVariant;
+
+    return Center(
       child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var col = 0; col < _weeksShown; col++) ...[
-            Column(
-              children: [
-                for (var row = 0; row < 7; row++) ...[
-                  Builder(
-                    builder: (context) {
-                      final index = col * 7 + row;
-                      final day = days[index];
-                      final value = totals[day] ?? 0;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: cellGap),
-                        child: GestureDetector(
-                          onTap: () => _showDayTotal(day, value),
-                          child: Container(
-                            width: cellSize,
-                            height: cellSize,
-                            decoration: BoxDecoration(
-                              color: _cellColor(value, maxVal),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+          Column(
+            children: [
+              const SizedBox(height: monthLabelHeight + 4),
+              for (var row = 0; row < 7; row++) ...[
+                SizedBox(
+                  width: 26,
+                  height: cellSize,
+                  child: Text(
+                    _weekdayAbbr[row],
+                    style: TextStyle(fontSize: 9, color: labelColor),
                   ),
-                ],
+                ),
+                if (row != 6) const SizedBox(height: cellGap),
               ],
-            ),
-            if (col != _weeksShown - 1) const SizedBox(width: cellGap),
-          ],
+            ],
+          ),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  for (var col = 0; col < _weeksShown; col++) ...[
+                    SizedBox(
+                      width: cellSize,
+                      height: monthLabelHeight,
+                      child: Text(
+                        _monthLabelForColumn(days, col),
+                        style: TextStyle(fontSize: 9, color: labelColor),
+                        softWrap: false,
+                        overflow: TextOverflow.clip,
+                      ),
+                    ),
+                    if (col != _weeksShown - 1) const SizedBox(width: cellGap),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  for (var col = 0; col < _weeksShown; col++) ...[
+                    Column(
+                      children: [
+                        for (var row = 0; row < 7; row++) ...[
+                          Builder(
+                            builder: (context) {
+                              final index = col * 7 + row;
+                              final day = days[index];
+                              final value = totals[day] ?? 0;
+                              return GestureDetector(
+                                onTap: () => _showDayDetail(day),
+                                child: Container(
+                                  width: cellSize,
+                                  height: cellSize,
+                                  decoration: BoxDecoration(
+                                    color: _cellColor(value, maxVal),
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          if (row != 6) const SizedBox(height: cellGap),
+                        ],
+                      ],
+                    ),
+                    if (col != _weeksShown - 1) const SizedBox(width: cellGap),
+                  ],
+                ],
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  void _showDayTotal(DateTime day, int value) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          value > 0
-              ? '${formatDate(day)}: ${formatNumber(value)} units moved'
-              : '${formatDate(day)}: no movement',
-        ),
-      ),
+  void _showDayDetail(DateTime day) {
+    final byType = <String, int>{};
+    for (final m in _movements) {
+      final d = DateTime(
+        m.movementDate.year,
+        m.movementDate.month,
+        m.movementDate.day,
+      );
+      if (d != day) continue;
+      final signed = switch (m.movementType) {
+        StockMovementType.productionIn => m.quantity.abs(),
+        StockMovementType.returned => m.quantity.abs(),
+        StockMovementType.shipmentOut => -m.quantity.abs(),
+        StockMovementType.damaged => -m.quantity.abs(),
+        _ => m.quantity,
+      };
+      byType.update(m.movementType, (v) => v + signed, ifAbsent: () => signed);
+    }
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.l,
+              0,
+              AppSpacing.l,
+              AppSpacing.l,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(formatDate(day), style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: AppSpacing.m),
+                if (byType.isEmpty)
+                  Text(
+                    'No movement that day.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  )
+                else
+                  for (final type in StockMovementType.all)
+                    if (byType[type] != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(_typeLabels[type]!),
+                            Text(
+                              '${byType[type]! > 0 ? '+' : ''}${formatWhole(byType[type]!)}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: byType[type]! >= 0
+                                    ? scheme.primary
+                                    : scheme.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildLegend() {
     final scheme = Theme.of(context).colorScheme;
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text('Less', style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
         const SizedBox(width: 6),

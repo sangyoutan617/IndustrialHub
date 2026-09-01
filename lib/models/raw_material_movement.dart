@@ -1,8 +1,3 @@
-/// Movement types for the raw-material ledger.
-///
-/// `consumption` is stock issued to production (negative delta), `receipt` is
-/// stock arriving (positive delta — normally written by a delivery), and
-/// `adjustment` is a manual correction that can go either way.
 class RawMaterialMovementType {
   static const consumption = 'consumption';
   static const receipt = 'receipt';
@@ -10,8 +5,6 @@ class RawMaterialMovementType {
   static const all = [consumption, receipt, adjustment];
 }
 
-/// One entry in a raw material's stock ledger. Mirrors [StockMovement] but for
-/// raw materials — finished goods and raw materials keep separate ledgers.
 class RawMaterialMovement {
   final int movementId;
   final int materialId;

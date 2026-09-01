@@ -7,14 +7,6 @@ class DailyProductionService {
   final SupabaseClient _client = Supabase.instance.client;
   final BottleneckService _bottleneckService = BottleneckService();
 
-  /// Logs (or re-logs) one product's production for one day. Reuses
-  /// [BottleneckService.computeForProduct] for the ceiling/bottleneck math
-  /// rather than re-deriving it — scoped to [productId] rather than the
-  /// whole factory, since machines/manpower/materials are now product-owned
-  /// and a factory-wide figure would blend unrelated products together.
-  /// Upserts on (factory_id, product_id, log_date) so re-logging the same
-  /// product on the same day updates the existing row instead of creating a
-  /// duplicate; a different product on the same day is its own row.
   Future<DailyProduction> logProduction({
     required int factoryId,
     required int productId,
@@ -66,14 +58,6 @@ class DailyProductionService {
     return result;
   }
 
-  /// Bulk-writes many days of production in one round trip, reusing a single
-  /// bottleneck snapshot for all of them instead of the one-`compute_bottleneck`-
-  /// call-per-day [logProduction] makes for a single live entry. Only valid
-  /// when capacity genuinely doesn't change across the whole batch (e.g.
-  /// backfilling demo history immediately after machines/manpower were
-  /// seeded, before anything about them could have changed) — a real
-  /// day-by-day log always goes through [logProduction] instead, since a
-  /// machine going down partway through *should* change later days' ceiling.
   Future<void> logHistoricalBatch({
     required int factoryId,
     required int productId,
@@ -119,10 +103,6 @@ class DailyProductionService {
     );
   }
 
-  /// The row already logged for one product on one day, if any — used to
-  /// find the previously logged output before overwriting it, so a caller
-  /// can deduct/return only the *change* in material consumption rather
-  /// than the whole new total again.
   Future<DailyProduction?> getForDate({
     required int factoryId,
     required int productId,
@@ -138,10 +118,6 @@ class DailyProductionService {
     return row == null ? null : DailyProduction.fromJson(row);
   }
 
-  /// One product's trend — the chart and downtime summary on
-  /// production_trend_screen.dart are both scoped to a single product at a
-  /// time, since a factory-wide sum would mix output figures across
-  /// products that may not even share a unit.
   Future<List<DailyProduction>> getTrend(
     int factoryId, {
     required int productId,
@@ -160,13 +136,6 @@ class DailyProductionService {
         .toList();
   }
 
-  /// Every product's trend combined — the production_trend_screen's "All
-  /// products" view. Rows are collapsed to one synthetic record per
-  /// `log_date`, summing `actual_output`, `effective_ceiling` (products
-  /// without a ceiling contribute 0; the sum is null only when *no* product
-  /// that day had one) and `downtime_hours`. Mixed product units are added
-  /// regardless — the caller opted into a combined figure. `productId` on the
-  /// returned records is 0 (not a real product).
   Future<List<DailyProduction>> getTrendAllProducts(
     int factoryId, {
     int days = 30,
@@ -202,13 +171,6 @@ class DailyProductionService {
       ..sort((a, b) => a.logDate.compareTo(b.logDate));
   }
 
-  /// Average *factory-wide* output per logged day, grouped by calendar
-  /// month — feeds the sector (IPI) benchmark, which compares total factory
-  /// output, not any one product. A factory can now log several rows per
-  /// day (one per product), so rows are first collapsed into one total per
-  /// calendar day before averaging within the month; averaging naively over
-  /// (day, product) rows would dilute the average by however many products
-  /// were logged that day instead of by how many days were logged.
   Future<Map<DateTime, double>> getMonthlyAverageOutput(
     int factoryId, {
     required DateTime since,

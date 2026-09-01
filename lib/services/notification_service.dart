@@ -6,7 +6,6 @@ import '../models/factory.dart';
 import 'mrp_service.dart';
 import 'supply_service.dart';
 
-/// In-app delivery event emitted when a raw material delivery arrives.
 class MaterialDeliveryEvent {
   final int factoryId;
   final String materialName;
@@ -21,10 +20,6 @@ class MaterialDeliveryEvent {
   });
 }
 
-/// Surfaces supply-risk alerts as OS notifications. The risk itself is
-/// computed by [MrpService] (via [SupplyService]); this only decides whether
-/// something is urgent enough to notify about and shows it. Entirely a no-op
-/// on web, where local notifications aren't supported.
 class NotificationService {
   NotificationService._();
   static final NotificationService instance = NotificationService._();
@@ -33,8 +28,6 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   bool _initialised = false;
 
-  /// Holds the most recent delivery event so other screens (like Stock)
-  /// can display interactive update notifications and reload data immediately.
   final ValueNotifier<MaterialDeliveryEvent?> lastDelivery =
       ValueNotifier<MaterialDeliveryEvent?>(null);
 
@@ -98,10 +91,6 @@ class NotificationService {
     iOS: DarwinNotificationDetails(),
   );
 
-  /// Fires one summary notification when [supply] contains materials that
-  /// must be reordered now (or are already stocked out). No-op on web, and
-  /// when nothing is urgent. The id is keyed by factory so alerts for
-  /// different factories don't overwrite each other.
   Future<void> notifySupplyRisk(Factory factory, SupplyOverview supply) async {
     if (kIsWeb) return;
     await init();
@@ -141,8 +130,6 @@ class NotificationService {
     );
   }
 
-  /// Fires a local notification when an incoming material purchase order has been
-  /// delivered and added to raw material stock.
   Future<void> notifyDeliveryReceived({
     required int factoryId,
     required String materialName,

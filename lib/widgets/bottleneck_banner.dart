@@ -7,16 +7,8 @@ import 'status.dart';
 class BottleneckBanner extends StatefulWidget {
   final int factoryId;
 
-  /// Which product's verdict to show — a machine/shift/material-rate now
-  /// belongs to one product, so "factory health" is only meaningful per
-  /// product. The caller owns the product picker; this widget just re-fetches
-  /// when it changes.
   final int productId;
 
-  /// Outer margin around the card. Defaults to a 16px margin on every side,
-  /// matching this widget's original standalone usage — pass
-  /// [EdgeInsets.zero] when embedding it as the first item of a list that
-  /// already applies its own padding, to avoid doubling up.
   final EdgeInsetsGeometry padding;
 
   const BottleneckBanner({
@@ -277,11 +269,6 @@ class _BottleneckBannerState extends State<BottleneckBanner> {
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 4),
-          // FittedBox so a long space-formatted number (e.g. "40 000")
-          // shrinks to fit this cell instead of pinching against its
-          // neighbour when the banner sits in a half-width landscape
-          // column — same treatment KpiCard already uses for its own
-          // big-number display.
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,

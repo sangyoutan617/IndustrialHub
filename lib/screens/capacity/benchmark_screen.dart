@@ -59,8 +59,6 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
             msicCode.substring(0, msicCode.length >= 2 ? 2 : msicCode.length),
       );
 
-      // Only reach back as far as the sector series does — months with no IPI
-      // reading can't take part in the comparison anyway.
       final monthlyOutput = ipiTrend.isEmpty
           ? <DateTime, double>{}
           : await _productionService.getMonthlyAverageOutput(
@@ -230,8 +228,6 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
     );
   }
 
-  /// Latest month the factory actually logged production for. This is the same
-  /// figure the comparison chart is built from, so the two cards agree.
   MapEntry<DateTime, double>? get _latestLoggedMonth {
     if (_monthlyOutput.isEmpty) return null;
     final months = _monthlyOutput.keys.toList()..sort();
@@ -364,9 +360,6 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
     );
   }
 
-  /// Shown when the factory's logged months overlap the sector series in fewer
-  /// than two places. The sector line still says something on its own, so it
-  /// stays — alongside the reason its counterpart is missing.
   Widget _buildSectorOnly() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,8 +415,6 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
               titlesData: _hiddenTitles,
               gridData: const FlGridData(show: false),
               borderData: FlBorderData(show: false),
-              // The base month sits at 100 by construction, so this is the
-              // "no change since then" mark both series are read against.
               extraLinesData: ExtraLinesData(
                 horizontalLines: [
                   HorizontalLine(
