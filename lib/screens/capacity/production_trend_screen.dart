@@ -38,6 +38,13 @@ class _TrendPoint {
   const _TrendPoint({required this.label, this.actual, this.ceiling});
 }
 
+class _DowntimeBar {
+  final String label;
+  final double hours;
+
+  const _DowntimeBar(this.label, this.hours);
+}
+
 class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   final _service = DailyProductionService();
   final _materialService = MaterialService();
@@ -113,6 +120,12 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       setState(() => _state = _LoadState.error);
     }
   }
+
+  String get _granularityLabel => switch (_granularity) {
+    _Granularity.day => 'Day',
+    _Granularity.rollingWeek => '7-day avg',
+    _Granularity.month => 'Month',
+  };
 
   void _setGranularity(_Granularity granularity) {
     if (granularity == _granularity) return;
@@ -358,6 +371,60 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 
   String _dateKey(DateTime date) => '${date.year}-${date.month}-${date.day}';
 
+  static const _monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  List<_DowntimeBar> get _downtimeBars {
+    switch (_granularity) {
+      case _Granularity.day:
+        return [
+          for (final r in _raw)
+            _DowntimeBar(
+              '${r.logDate.month}/${r.logDate.day}',
+              r.downtimeHours,
+            ),
+        ];
+      case _Granularity.rollingWeek:
+        final byWeek = <DateTime, double>{};
+        for (final r in _raw) {
+          final d = _dateOnly(r.logDate);
+          final monday = d.subtract(Duration(days: d.weekday - 1));
+          byWeek[monday] = (byWeek[monday] ?? 0) + r.downtimeHours;
+        }
+        final keys = byWeek.keys.toList()..sort();
+        return [
+          for (final k in keys) _DowntimeBar('${k.month}/${k.day}', byWeek[k]!),
+        ];
+      case _Granularity.month:
+        final byMonth = <String, double>{};
+        for (final r in _raw) {
+          final key =
+              '${r.logDate.year}-${r.logDate.month.toString().padLeft(2, '0')}';
+          byMonth[key] = (byMonth[key] ?? 0) + r.downtimeHours;
+        }
+        final keys = byMonth.keys.toList()..sort();
+        return [
+          for (final k in keys)
+            _DowntimeBar(
+              _monthNames[int.parse(k.split('-')[1]) - 1],
+              byMonth[k]!,
+            ),
+        ];
+    }
+  }
+
   String? get _summaryLine {
     final last30 = _raw.where(
       (row) => row.logDate.isAfter(
@@ -425,6 +492,8 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 
   Widget _buildReady() {
     final points = _points;
+    final downtimeBars = _downtimeBars;
+    final hasDowntime = downtimeBars.any((b) => b.hours > 0);
 
     final headerSection = Column(
       children: [
@@ -484,10 +553,6 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           )
         : _buildChartCard(points);
 
-    final downtimeSection = _downtimeRows.isNotEmpty
-        ? _buildDowntimeCard()
-        : const SizedBox.shrink();
-
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -496,9 +561,9 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           headerSection,
           const SizedBox(height: 16),
           chartSection,
-          if (_downtimeRows.isNotEmpty) ...[
+          if (hasDowntime) ...[
             const SizedBox(height: 16),
-            downtimeSection,
+            _buildDowntimeCard(downtimeBars),
           ],
           const SizedBox(height: 96),
         ],
@@ -506,24 +571,13 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
     );
   }
 
-  List<DailyProduction> get _downtimeRows {
-    final since = DateTime.now().subtract(const Duration(days: 30));
-    return _raw.where((row) => row.logDate.isAfter(since)).toList()
-      ..sort((a, b) => a.logDate.compareTo(b.logDate));
-  }
-
-  Widget _buildDowntimeCard() {
-    final rows = _downtimeRows;
-    final totalDowntime = rows.fold<double>(
-      0,
-      (sum, r) => sum + r.downtimeHours,
-    );
-    final worst = rows.reduce(
-      (a, b) => a.downtimeHours >= b.downtimeHours ? a : b,
-    );
-    final maxDowntime = rows
-        .map((r) => r.downtimeHours)
+  Widget _buildDowntimeCard(List<_DowntimeBar> bars) {
+    final maxHours = bars
+        .map((b) => b.hours)
         .fold<double>(0, (m, v) => v > m ? v : m);
+    final total = bars.fold<double>(0, (sum, b) => sum + b.hours);
+    final peak = bars.reduce((a, b) => a.hours >= b.hours ? a : b);
+    final labelEvery = (bars.length / 10).ceil().clamp(1, 999);
 
     return Card(
       child: Padding(
@@ -532,50 +586,71 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Total downtime (last 30 days)',
+              'Downtime · $_granularityLabel',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
             Text(
-              'Machine-hours lost per day, as keyed in when logging production.',
+              _granularity == _Granularity.day
+                  ? 'Machine-hours lost per day, as keyed in when logging production.'
+                  : 'Total machine-hours lost per ${_granularity == _Granularity.month ? 'month' : 'week'}.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            if (worst.downtimeHours > 0)
-              InfoBanner(
-                message:
-                    'Worst day: ${worst.logDate.year}-'
-                    '${worst.logDate.month.toString().padLeft(2, '0')}-'
-                    '${worst.logDate.day.toString().padLeft(2, '0')} — '
-                    '${worst.downtimeHours.toStringAsFixed(1)}h '
-                    '(${totalDowntime.toStringAsFixed(1)}h total)',
-                status: AppStatus.warning,
-              )
-            else
-              const Text('No downtime logged in this window.'),
-            const SizedBox(height: 12),
+            InfoBanner(
+              message:
+                  'Peak: ${peak.label} — ${peak.hours.toStringAsFixed(1)}h  ·  '
+                  '${total.toStringAsFixed(1)}h total',
+              status: AppStatus.warning,
+            ),
+            const SizedBox(height: 20),
             SizedBox(
-              height: 80,
+              height: 150,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  for (final row in rows)
+                  for (var i = 0; i < bars.length; i++)
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 1),
-                        child: Container(
-                          height: maxDowntime > 0
-                              ? (row.downtimeHours / maxDowntime * 72).clamp(
-                                  2.0,
-                                  72.0,
-                                )
-                              : 2.0,
-                          decoration: BoxDecoration(
-                            color: row == worst && worst.downtimeHours > 0
-                                ? Theme.of(context).colorScheme.onSurface
-                                : Theme.of(context).colorScheme.primary,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Container(
+                              height: maxHours > 0
+                                  ? (bars[i].hours / maxHours * 92).clamp(
+                                      bars[i].hours > 0 ? 3.0 : 0.0,
+                                      92.0,
+                                    )
+                                  : 0.0,
+                              decoration: BoxDecoration(
+                                color: bars[i] == peak && peak.hours > 0
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            SizedBox(
+                              height: 44,
+                              child:
+                                  (bars[i].hours > 0 || i % labelEvery == 0)
+                                  ? Transform.rotate(
+                                      angle: -0.9,
+                                      alignment: Alignment.topRight,
+                                      child: Text(
+                                        bars[i].hours > 0
+                                            ? '${bars[i].label} ${bars[i].hours.toStringAsFixed(1)}h'
+                                            : bars[i].label,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        overflow: TextOverflow.visible,
+                                        style: const TextStyle(fontSize: 7),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -612,6 +687,28 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                 LineChartData(
                   gridData: const FlGridData(show: false),
                   borderData: FlBorderData(show: false),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          final i = spot.x.toInt();
+                          final label = i >= 0 && i < points.length
+                              ? points[i].label
+                              : '';
+                          final name = spot.barIndex == 0
+                              ? 'Actual'
+                              : 'Ceiling';
+                          return LineTooltipItem(
+                            '$label  ·  $name ${spot.y.toStringAsFixed(0)}',
+                            const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                            ),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
                   titlesData: FlTitlesData(
                     topTitles: const AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
@@ -620,29 +717,29 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                       sideTitles: SideTitles(showTitles: false),
                     ),
                     leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                      ),
+                      sideTitles: SideTitles(showTitles: false, reservedSize: 0),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 28,
-                        interval: (points.length / 6).ceilToDouble().clamp(
-                          1,
-                          double.infinity,
-                        ),
+                        reservedSize: 34,
+                        interval: 1,
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
-                          if (index < 0 || index >= points.length) {
+                          if (index < 0 ||
+                              index >= points.length ||
+                              (value - index).abs() > 0.01) {
                             return const SizedBox.shrink();
                           }
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              points[index].label,
-                              style: const TextStyle(fontSize: 10),
+                            child: Transform.rotate(
+                              angle: -1.0,
+                              alignment: Alignment.topCenter,
+                              child: Text(
+                                points[index].label,
+                                style: const TextStyle(fontSize: 8),
+                              ),
                             ),
                           );
                         },
