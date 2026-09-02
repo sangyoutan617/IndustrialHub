@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme.dart';
 import '../../models/manpower.dart';
 import '../../models/product.dart';
@@ -8,6 +9,24 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
+
+final _hoursInputFormatter = TextInputFormatter.withFunction((
+  oldValue,
+  newValue,
+) {
+  if (newValue.text.isEmpty) return newValue;
+  final pattern = RegExp(r'^\d{0,2}(\.\d{0,2})?$');
+  return pattern.hasMatch(newValue.text) ? newValue : oldValue;
+});
+
+final _outputInputFormatter = TextInputFormatter.withFunction((
+  oldValue,
+  newValue,
+) {
+  if (newValue.text.isEmpty) return newValue;
+  final pattern = RegExp(r'^\d{0,6}(\.\d{0,2})?$');
+  return pattern.hasMatch(newValue.text) ? newValue : oldValue;
+});
 
 class ManpowerFormScreen extends StatefulWidget {
   final int factoryId;
@@ -192,6 +211,10 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
               TextFormField(
                 controller: _workersController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(4),
+                ],
                 decoration: const InputDecoration(labelText: 'Worker count'),
                 validator: (v) {
                   final parsed = int.tryParse(v ?? '');
@@ -206,6 +229,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                inputFormatters: [_hoursInputFormatter],
                 decoration: const InputDecoration(labelText: 'Hours per day'),
                 validator: (v) {
                   final parsed = double.tryParse(v ?? '');
@@ -222,6 +246,7 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                inputFormatters: [_outputInputFormatter],
                 decoration: const InputDecoration(
                   labelText: 'Output per worker-hour',
                 ),

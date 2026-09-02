@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme.dart';
 import '../../models/machine.dart';
 import '../../models/product.dart';
@@ -8,6 +9,17 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
+
+const _maxUnitCount = 100;
+
+final _hoursInputFormatter = TextInputFormatter.withFunction((
+  oldValue,
+  newValue,
+) {
+  if (newValue.text.isEmpty) return newValue;
+  final pattern = RegExp(r'^\d{0,2}(\.\d{0,2})?$');
+  return pattern.hasMatch(newValue.text) ? newValue : oldValue;
+});
 
 class MachineFormScreen extends StatefulWidget {
   final int factoryId;
@@ -133,11 +145,12 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
     return null;
   }
 
-  String? _requiredInt(String? value, {int min = 1}) {
+  String? _requiredInt(String? value, {int min = 1, int? max}) {
     if (value == null || value.trim().isEmpty) return 'Required';
     final parsed = int.tryParse(value.trim());
     if (parsed == null) return 'Enter a whole number';
     if (parsed < min) return 'Must be at least $min';
+    if (max != null && parsed > max) return 'Must be at most $max';
     return null;
   }
 
@@ -225,6 +238,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                inputFormatters: [_hoursInputFormatter],
                 decoration: const InputDecoration(
                   labelText: 'Operating hours per day',
                 ),
@@ -234,6 +248,10 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
               TextFormField(
                 controller: _unitCountController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(3),
+                ],
                 decoration: const InputDecoration(
                   labelText: 'Number of machines in this group',
                   helperText:
@@ -241,7 +259,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                       'capacity counts all of them. Leave as 1 for a single '
                       'machine.',
                 ),
-                validator: (v) => _requiredInt(v, min: 1),
+                validator: (v) => _requiredInt(v, min: 1, max: _maxUnitCount),
               ),
               const SizedBox(height: AppSpacing.l),
               TextFormField(
