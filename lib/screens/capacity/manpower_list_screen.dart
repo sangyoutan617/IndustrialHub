@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
+import '../../core/theme.dart';
 import '../../models/manpower.dart';
 import '../../models/product.dart';
 import '../../services/capacity_service.dart';
@@ -46,9 +47,7 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
       final products = results[1] as List<Product>;
       setState(() {
         _shifts = shifts;
-        _productNames = {
-          for (final p in products) p.productId: p.productName,
-        };
+        _productNames = {for (final p in products) p.productId: p.productName};
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -74,28 +73,30 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
     }
   }
 
-  Future<void> _delete(Manpower shift) async {
+  Future<bool> _delete(Manpower shift) async {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Remove station?',
       message:
           'This removes "${shift.shiftName}" permanently. This cannot be undone.',
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
     try {
       await _service.deleteShift(shift.manpowerId);
       _load();
-      if (!mounted) return;
+      if (!mounted) return true;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Station removed')));
+      return true;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not delete station. Please try again.'),
         ),
       );
+      return false;
     }
   }
 
@@ -130,8 +131,7 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
                 EmptyState(
                   icon: Icons.groups_outlined,
                   title: 'No stations yet',
-                  subtitle:
-                      'Add your first labour station to track capacity.',
+                  subtitle: 'Add your first labour station to track capacity.',
                   actionLabel: 'Add station',
                   onAction: () => _openForm(),
                 ),
@@ -150,17 +150,21 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
                     return GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 8,
-                        childAspectRatio: 3.0,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: 3.0,
+                          ),
                       itemCount: _shifts.length,
-                      itemBuilder: (context, index) => _buildShiftCard(_shifts[index]),
+                      itemBuilder: (context, index) =>
+                          _buildShiftCard(_shifts[index]),
                     );
                   }
                   return Column(
-                    children: [for (final shift in _shifts) _buildShiftCard(shift)],
+                    children: [
+                      for (final shift in _shifts) _buildShiftCard(shift),
+                    ],
                   );
                 },
               ),
@@ -171,43 +175,61 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
   }
 
   Widget _buildShiftCard(Manpower shift) {
-    return Card(
-      child: ListTile(
-        title: Text(
-          shift.shiftName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+    return Dismissible(
+      key: ValueKey(shift.manpowerId),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => _delete(shift),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${shift.workerCount} workers × ${shift.shiftHours}h × '
-              '${shift.outputPerWorkerHour}/worker-hour  ·  '
-              '${formatUnits(CapacityService.stationCapacity(shift))}/day',
-            ),
-            Text(
-              _productNames[shift.productId] ?? 'Unknown product',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+        child: Icon(
+          Icons.delete_outline,
+          color: Theme.of(context).colorScheme.onErrorContainer,
+        ),
+      ),
+      child: Card(
+        child: ListTile(
+          title: Text(
+            shift.shiftName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${shift.workerCount} workers × ${shift.shiftHours}h × '
+                '${shift.outputPerWorkerHour}/worker-hour  ·  '
+                '${formatUnits(CapacityService.stationCapacity(shift))}/day',
               ),
-            ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _openForm(shift: shift),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _delete(shift),
-            ),
-          ],
+              Text(
+                _productNames[shift.productId] ?? 'Unknown product',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => _openForm(shift: shift),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _delete(shift),
+              ),
+            ],
+          ),
         ),
       ),
     );

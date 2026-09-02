@@ -10,6 +10,7 @@ import '../../models/product.dart';
 import '../../models/productivity_benchmark.dart';
 import '../../services/bottleneck_service.dart';
 import '../../services/capacity_service.dart';
+import '../../services/data_event_service.dart';
 import '../../services/product_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../capacity/benchmark_screen.dart';
@@ -181,6 +182,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
+    DataEventService.instance.changeEvent.addListener(_onDataEvent);
   }
 
   @override
@@ -192,8 +194,16 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     }
   }
 
+  void _onDataEvent() {
+    final event = DataEventService.instance.changeEvent.value;
+    if (mounted && event != null && event.factoryId == widget.factory.factoryId) {
+      setState(() => _future = _load());
+    }
+  }
+
   @override
   void dispose() {
+    DataEventService.instance.changeEvent.removeListener(_onDataEvent);
     _pulseController.dispose();
     super.dispose();
   }

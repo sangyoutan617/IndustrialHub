@@ -76,7 +76,8 @@ class StockService {
         .from('stock_movements')
         .select()
         .eq('stock_id', stockId)
-        .order('movement_date', ascending: false);
+        .order('movement_date', ascending: false)
+        .order('movement_id', ascending: false);
     return (rows as List)
         .map((row) => StockMovement.fromJson(row as Map<String, dynamic>))
         .toList();

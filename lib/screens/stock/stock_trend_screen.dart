@@ -256,6 +256,12 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
     return AppColors.primaryDark;
   }
 
+  Color _cellTextColor(int value, int maxVal) {
+    if (value == 0 || maxVal == 0) return AppColors.textMuted;
+    final ratio = value / maxVal;
+    return ratio <= 0.5 ? AppColors.textSecondary : Colors.white;
+  }
+
   String _monthLabelForColumn(List<DateTime> days, int col) {
     final first = days[col * 7];
     if (col > 0 && days[(col - 1) * 7].month == first.month) return '';
@@ -267,7 +273,7 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
     Map<DateTime, int> totals,
     int maxVal,
   ) {
-    const cellSize = 16.0;
+    const cellSize = 22.0;
     const cellGap = 4.0;
     const monthLabelHeight = 14.0;
     final labelColor = Theme.of(context).colorScheme.onSurfaceVariant;
@@ -331,9 +337,17 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
                                 child: Container(
                                   width: cellSize,
                                   height: cellSize,
+                                  alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     color: _cellColor(value, maxVal),
                                     borderRadius: BorderRadius.circular(3),
+                                  ),
+                                  child: Text(
+                                    '${day.day}',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: _cellTextColor(value, maxVal),
+                                    ),
                                   ),
                                 ),
                               );

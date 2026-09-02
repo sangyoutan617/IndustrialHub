@@ -147,7 +147,7 @@ class NotificationService {
     await init();
 
     final title = 'Material Delivered';
-    final qtyFormatted = formatUnits(quantity);
+    final qtyFormatted = '${formatRate(quantity)} units';
     final prefix = factoryName != null && factoryName.isNotEmpty
         ? '$factoryName: '
         : '';

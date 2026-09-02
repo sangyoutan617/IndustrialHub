@@ -64,15 +64,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   Future<void> _openDetail(Product product) async {
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => ProductDetailScreen(product: product),
-      ),
+      MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
     );
     if (!mounted || changed != true) return;
     _load();
   }
 
-  Future<void> _delete(Product product) async {
+  Future<bool> _delete(Product product) async {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Remove product?',
@@ -80,27 +78,30 @@ class _ProductListScreenState extends State<ProductListScreen> {
           'This removes "${product.productName}" permanently. This cannot '
           'be undone.',
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
     try {
       await _service.deleteProduct(
         product.productId,
         factoryId: widget.factoryId,
       );
-      if (!mounted) return;
+      if (!mounted) return true;
       _load();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Product removed')));
+      return true;
     } on SupplyInUseException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      return false;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not delete product. Please try again.'),
         ),
       );
+      return false;
     }
   }
 
@@ -152,51 +153,73 @@ class _ProductListScreenState extends State<ProductListScreen> {
             itemCount: _products.length,
             itemBuilder: (context, index) {
               final product = _products[index];
-              return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: product.isGeneral
-                        ? Theme.of(context).colorScheme.surfaceContainerHighest
-                        : Theme.of(context).colorScheme.primaryContainer,
-                    child: Icon(
-                      product.isGeneral
-                          ? Icons.inventory_2_outlined
-                          : Icons.category_outlined,
+              return Dismissible(
+                key: ValueKey(product.productId),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) => _delete(product),
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: Icon(
+                    Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+                child: Card(
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: product.isGeneral
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest
+                          : Theme.of(context).colorScheme.primaryContainer,
+                      child: Icon(
+                        product.isGeneral
+                            ? Icons.inventory_2_outlined
+                            : Icons.category_outlined,
+                      ),
                     ),
-                  ),
-                  title: Text(
-                    product.productName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: product.isGeneral
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: AppSpacing.xs),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const StatusChip(
-                                label: 'General',
-                                status: AppStatus.neutral,
-                                dense: true,
-                              ),
-                              const SizedBox(width: AppSpacing.s),
-                              Expanded(
-                                child: Text(
-                                  'Auto-created catch-all',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
+                    title: Text(
+                      product.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: product.isGeneral
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.xs),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const StatusChip(
+                                  label: 'General',
+                                  status: AppStatus.neutral,
+                                  dense: true,
                                 ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : Text(product.unit),
-                  onTap: () => _openDetail(product),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _delete(product),
+                                const SizedBox(width: AppSpacing.s),
+                                Expanded(
+                                  child: Text(
+                                    'Auto-created catch-all',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : Text(product.unit),
+                    onTap: () => _openDetail(product),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => _delete(product),
+                    ),
                   ),
                 ),
               );

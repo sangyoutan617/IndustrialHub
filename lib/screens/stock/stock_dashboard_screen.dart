@@ -278,7 +278,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
 
   Widget _buildDeliveryBanner(MaterialDeliveryEvent delivery) {
     final theme = Theme.of(context);
-    final formattedQty = formatUnits(delivery.quantity);
+    final formattedQty = '${formatRate(delivery.quantity)} units';
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.m,

@@ -8,7 +8,6 @@ import '../../services/order_service.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/status.dart';
-import 'order_form_screen.dart';
 
 class PurchaseOrderDetailScreen extends StatefulWidget {
   final int factoryId;
@@ -74,17 +73,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     return 'Overdue by ${-days} day${-days == 1 ? '' : 's'}';
   }
 
-  Future<void> _edit() async {
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) =>
-            OrderFormScreen(factoryId: widget.factoryId, order: _order),
-      ),
-    );
-    if (!mounted || saved != true) return;
-    Navigator.of(context).pop(true);
-  }
-
   Future<void> _advanceStatus(String newStatus) async {
     setState(() => _busy = true);
     try {
@@ -108,7 +96,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
       context,
       title: 'Receive delivery?',
       message:
-          'This adds ${formatUnits(_order.quantity)} to '
+          'This adds ${formatRate(_order.quantity)} units to '
           '${widget.materialName}\'s stock and marks the order Delivered.',
       confirmLabel: 'Receive',
     );
@@ -125,7 +113,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Received ${formatUnits(_order.quantity)} of ${widget.materialName}. Stock updated.',
+            'Received ${formatRate(_order.quantity)} units of ${widget.materialName}. Stock updated.',
           ),
         ),
       );
@@ -190,10 +178,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
                 ? null
                 : () => _advanceStatus(PurchaseOrderStatus.shipped),
             child: const Text('Mark shipped'),
-          ),
-          OutlinedButton(
-            onPressed: _busy ? null : _edit,
-            child: const Text('Edit'),
           ),
           TextButton(
             onPressed: _busy ? null : _cancel,
@@ -262,7 +246,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
             MetricRow(label: 'PO number', value: formatPoNumber(_order.poId)),
             MetricRow(label: 'Supplier', value: widget.supplierName),
             MetricRow(label: 'Material', value: widget.materialName),
-            MetricRow(label: 'Quantity', value: formatUnits(_order.quantity)),
+            MetricRow(label: 'Quantity', value: '${formatRate(_order.quantity)} units'),
             if (_order.unitPrice != null) ...[
               MetricRow(
                 label: 'Unit price',

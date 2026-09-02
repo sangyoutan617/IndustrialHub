@@ -490,12 +490,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  int _tabVersion = 0;
-
   void _onTabSelected(int index) => setState(() {
     _tabIndex = index;
     _visitedTabs.add(index);
-    _tabVersion++;
   });
 
   Widget _railDestination(int index, IconData icon, String label) {
@@ -590,25 +587,25 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         _visitedTabs.contains(0)
             ? DashboardHomeScreen(
-                key: ValueKey('home-${factory.factoryId}-${_tabIndex == 0 ? _tabVersion : 0}'),
+                key: ValueKey('home-${factory.factoryId}'),
                 factory: factory,
               )
             : const SizedBox.shrink(),
         _visitedTabs.contains(1)
             ? CapacityDashboardScreen(
-                key: ValueKey('capacity-${factory.factoryId}-${_tabIndex == 1 ? _tabVersion : 0}'),
+                key: ValueKey('capacity-${factory.factoryId}'),
                 factory: factory,
               )
             : const SizedBox.shrink(),
         _visitedTabs.contains(2)
             ? StockDashboardScreen(
-                key: ValueKey('stock-${factory.factoryId}-${_tabIndex == 2 ? _tabVersion : 0}'),
+                key: ValueKey('stock-${factory.factoryId}'),
                 factoryId: factory.factoryId,
               )
             : const SizedBox.shrink(),
         _visitedTabs.contains(3)
             ? MaterialListScreen(
-                key: ValueKey('supply-${factory.factoryId}-${_tabIndex == 3 ? _tabVersion : 0}'),
+                key: ValueKey('supply-${factory.factoryId}'),
                 factoryId: factory.factoryId,
               )
             : const SizedBox.shrink(),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/formatters.dart';
 import '../../models/purchase_order.dart';
 import '../../models/raw_material.dart';
@@ -10,6 +11,17 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
+
+const _maxQuantityOrPrice = 99999.99;
+
+final _twoDecimalInputFormatter = TextInputFormatter.withFunction((
+  oldValue,
+  newValue,
+) {
+  if (newValue.text.isEmpty) return newValue;
+  final pattern = RegExp(r'^\d{0,5}(\.\d{0,2})?$');
+  return pattern.hasMatch(newValue.text) ? newValue : oldValue;
+});
 
 class OrderFormPrefill {
   final int materialId;
@@ -228,6 +240,33 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     return 'Covers ~${days.toStringAsFixed(0)} days of planned production';
   }
 
+  Widget _dropdownMenuField({
+    required Key key,
+    required String label,
+    required int? value,
+    required List<DropdownMenuEntry<int>> entries,
+    required ValueChanged<int?> onChanged,
+    bool enabled = true,
+  }) {
+    return FormField<int>(
+      key: key,
+      initialValue: value,
+      validator: (v) => v == null ? 'Required' : null,
+      builder: (field) => DropdownMenu<int>(
+        enabled: enabled,
+        initialSelection: value,
+        expandedInsets: EdgeInsets.zero,
+        label: Text(label),
+        errorText: field.errorText,
+        dropdownMenuEntries: entries,
+        onSelected: (v) {
+          field.didChange(v);
+          onChanged(v);
+        },
+      ),
+    );
+  }
+
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -346,18 +385,19 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     title: 'What to order',
                     padding: EdgeInsets.only(top: 20, bottom: 4),
                   )),
-                  DropdownButtonFormField<int>(
-                    initialValue: _selectedMaterialId,
-                    decoration: const InputDecoration(labelText: 'Material'),
-                    items: [
+                  _dropdownMenuField(
+                    key: ValueKey('material-$_selectedMaterialId'),
+                    label: 'Material',
+                    value: _selectedMaterialId,
+                    enabled: !_isEditing,
+                    entries: [
                       for (final material in _materials)
-                        DropdownMenuItem(
+                        DropdownMenuEntry(
                           value: material.materialId,
-                          child: Text(material.materialName),
+                          label: material.materialName,
                         ),
                     ],
-                    onChanged: _isEditing ? null : _selectMaterial,
-                    validator: (v) => v == null ? 'Required' : null,
+                    onChanged: _selectMaterial,
                   ),
                   const SizedBox(height: 16),
                   if (supplierOptions.isEmpty)
@@ -369,21 +409,20 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       ),
                     ))
                   else
-                    DropdownButtonFormField<int>(
-                      initialValue: _selectedSupplierId,
-                      decoration: const InputDecoration(labelText: 'Supplier'),
-                      items: [
+                    _dropdownMenuField(
+                      key: ValueKey('supplier-$_selectedSupplierId'),
+                      label: 'Supplier',
+                      value: _selectedSupplierId,
+                      entries: [
                         for (final supplier in supplierOptions)
-                          DropdownMenuItem(
+                          DropdownMenuEntry(
                             value: supplier.supplierId,
-                            child: Text(
-                              '${supplier.supplierName} '
-                              '(${MrpService.effectiveLeadDays(supplier)}d lead)',
-                            ),
+                            label:
+                                '${supplier.supplierName} '
+                                '(${MrpService.effectiveLeadDays(supplier)}d lead)',
                           ),
                       ],
                       onChanged: _selectSupplier,
-                      validator: (v) => v == null ? 'Required' : null,
                     ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -391,6 +430,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    inputFormatters: [_twoDecimalInputFormatter],
                     decoration: InputDecoration(
                       labelText: 'Quantity',
                       helperText: coverageText,
@@ -401,6 +441,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       if (parsed == null || parsed <= 0) {
                         return 'Enter a positive number';
                       }
+                      if (parsed > _maxQuantityOrPrice) {
+                        return 'Must not exceed ${formatRate(_maxQuantityOrPrice)}';
+                      }
                       return null;
                     },
                   ),
@@ -410,6 +453,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    inputFormatters: [_twoDecimalInputFormatter],
                     decoration: InputDecoration(
                       labelText: 'Unit price (RM)',
                       helperText: _orderTotalHelperText(),
@@ -419,6 +463,9 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       final parsed = double.tryParse(v ?? '');
                       if (parsed == null || parsed < 0) {
                         return 'Enter a valid price';
+                      }
+                      if (parsed > _maxQuantityOrPrice) {
+                        return 'Must not exceed ${formatRate(_maxQuantityOrPrice)}';
                       }
                       return null;
                     },

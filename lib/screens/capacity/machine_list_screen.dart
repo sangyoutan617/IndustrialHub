@@ -50,9 +50,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
       final products = results[1] as List<Product>;
       setState(() {
         _machines = machines;
-        _productNames = {
-          for (final p in products) p.productId: p.productName,
-        };
+        _productNames = {for (final p in products) p.productId: p.productName};
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -90,28 +88,30 @@ class _MachineListScreenState extends State<MachineListScreen> {
     }
   }
 
-  Future<void> _delete(Machine machine) async {
+  Future<bool> _delete(Machine machine) async {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Decommission machine?',
       message:
           'This removes "${machine.machineName}" permanently. This cannot be undone.',
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
     try {
       await _service.deleteMachine(machine.machineId);
       _load();
-      if (!mounted) return;
+      if (!mounted) return true;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Machine removed')));
+      return true;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not delete machine. Please try again.'),
         ),
       );
+      return false;
     }
   }
 
@@ -176,84 +176,107 @@ class _MachineListScreenState extends State<MachineListScreen> {
                   ? CapacityService.computeMachineCapacity([machine])
                   : 0.0;
               final (chipStatus, chipLabel) = _statusStyle(machine.status);
-              return Card(
-                child: ListTile(
-                  onTap: () => _openDetail(machine),
-                  title: Text(
-                    machine.machineName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              return Dismissible(
+                key: ValueKey(machine.machineId),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) => _delete(machine),
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            StatusChip(
-                              label: chipLabel,
-                              status: chipStatus,
-                              dense: true,
-                            ),
-                            const SizedBox(width: AppSpacing.s),
-                            if (machine.isGroup) ...[
-                              Text(
-                                '×${machine.unitCount}',
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
+                  child: Icon(
+                    Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+                child: Card(
+                  child: ListTile(
+                    onTap: () => _openDetail(machine),
+                    title: Text(
+                      machine.machineName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.xs),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              StatusChip(
+                                label: chipLabel,
+                                status: chipStatus,
+                                dense: true,
                               ),
                               const SizedBox(width: AppSpacing.s),
-                            ],
-                            Expanded(
-                              child: Text(
-                                isActive
-                                    ? '${formatUnits(contribution)}/day'
-                                    : 'Excluded from capacity (${machine.status})',
-                                overflow: TextOverflow.ellipsis,
+                              if (machine.isGroup) ...[
+                                Text(
+                                  '×${machine.unitCount}',
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                                const SizedBox(width: AppSpacing.s),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  isActive
+                                      ? '${formatUnits(contribution)}/day'
+                                      : 'Excluded from capacity (${machine.status})',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          machine.stageLabel != null
-                              ? '${_productNames[machine.productId] ?? 'Unknown product'} · ${machine.stageLabel} stage'
-                              : (_productNames[machine.productId] ??
-                                    'Unknown product'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ],
                           ),
+                          const SizedBox(height: 2),
+                          Text(
+                            machine.stageLabel != null
+                                ? '${_productNames[machine.productId] ?? 'Unknown product'} · ${machine.stageLabel} stage'
+                                : (_productNames[machine.productId] ??
+                                      'Unknown product'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    leading: CircleAvatar(
+                      backgroundColor: isActive
+                          ? Theme.of(context).colorScheme.primaryContainer
+                          : Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                      child: Icon(
+                        isActive ? Icons.check : Icons.build_circle_outlined,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _openForm(machine: machine),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _delete(machine),
                         ),
                       ],
                     ),
-                  ),
-                  leading: CircleAvatar(
-                    backgroundColor: isActive
-                        ? Theme.of(context).colorScheme.primaryContainer
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: Icon(
-                      isActive ? Icons.check : Icons.build_circle_outlined,
-                    ),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => _openForm(machine: machine),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _delete(machine),
-                      ),
-                    ],
                   ),
                 ),
               );
