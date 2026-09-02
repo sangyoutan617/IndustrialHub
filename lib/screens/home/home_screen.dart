@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:printing/printing.dart';
+import '../../core/theme.dart';
 import '../../models/factory.dart';
 import '../../services/auth_service.dart';
 import '../../services/factory_service.dart';
@@ -46,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final Set<int> _visitedTabs = {0};
   final _tabContentKey = GlobalKey();
+  bool _chromeVisible = true;
 
   static const _tabIcons = [
     Icons.home_rounded,
@@ -82,8 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final overview = await _supplyService.load(factory.factoryId);
       await NotificationService.instance.notifySupplyRisk(factory, overview);
-    } catch (_) {
-    }
+    } catch (_) {}
   }
 
   Future<void> _createFactory() async {
@@ -298,53 +300,62 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     for (final factory in _factories)
                       ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: factory.factoryId ==
-                          _selectedFactory?.factoryId
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  foregroundColor: factory.factoryId ==
-                          _selectedFactory?.factoryId
-                      ? Theme.of(context).colorScheme.onPrimaryContainer
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                  child: const Icon(Icons.factory_outlined, size: 18),
-                ),
-                title: Text(factory.factoryName),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (factory.factoryId == _selectedFactory?.factoryId)
-                      Icon(
-                        Icons.check_circle,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        Navigator.pop(context);
-                        if (value == 'rename') {
-                          _renameFactory(factory);
-                        } else if (value == 'settings') {
-                          _editFactoryDetails(factory);
-                        } else if (value == 'delete') {
-                          _deleteFactory(factory);
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(value: 'rename', child: Text('Rename')),
-                        PopupMenuItem(
-                          value: 'settings',
-                          child: Text('Edit details'),
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              factory.factoryId == _selectedFactory?.factoryId
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                          foregroundColor:
+                              factory.factoryId == _selectedFactory?.factoryId
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          child: const Icon(Icons.factory_outlined, size: 18),
                         ),
-                        PopupMenuItem(value: 'delete', child: Text('Delete')),
-                      ],
-                    ),
-                  ],
-                ),
-                onTap: () {
-                  setState(() => _selectedFactory = factory);
-                  Navigator.pop(context);
-                },
-              ),
+                        title: Text(factory.factoryName),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (factory.factoryId ==
+                                _selectedFactory?.factoryId)
+                              Icon(
+                                Icons.check_circle,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            PopupMenuButton<String>(
+                              onSelected: (value) {
+                                Navigator.pop(context);
+                                if (value == 'rename') {
+                                  _renameFactory(factory);
+                                } else if (value == 'settings') {
+                                  _editFactoryDetails(factory);
+                                } else if (value == 'delete') {
+                                  _deleteFactory(factory);
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'rename',
+                                  child: Text('Rename'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'settings',
+                                  child: Text('Edit details'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          setState(() => _selectedFactory = factory);
+                          Navigator.pop(context);
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -373,6 +384,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  bool get _isLandscape =>
+      MediaQuery.of(context).orientation == Orientation.landscape;
+
+  PreferredSizeWidget _collapsibleAppBar(Widget appBar, double height) {
+    final targetHeight = (_chromeVisible || !_isLandscape) ? height : 0.0;
+    return PreferredSize(
+      preferredSize: Size.fromHeight(targetHeight),
+      child: ClipRect(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          height: targetHeight,
+          color: AppColors.primary,
+          alignment: Alignment.bottomCenter,
+          child: OverflowBox(
+            minHeight: height,
+            maxHeight: height,
+            alignment: Alignment.bottomCenter,
+            child: appBar,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _collapsibleBottomBar(Widget bar, double height) {
+    final targetHeight = (_chromeVisible || !_isLandscape) ? height : 0.0;
+    return ClipRect(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeInOut,
+        height: targetHeight,
+        color: Theme.of(context).colorScheme.surface,
+        alignment: Alignment.topCenter,
+        child: OverflowBox(
+          minHeight: height,
+          maxHeight: height,
+          alignment: Alignment.topCenter,
+          child: bar,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -382,111 +437,92 @@ class _HomeScreenState extends State<HomeScreen> {
       l10n.tabStock,
       l10n.tabSupply,
     ];
+    final appBarHeight = 72 + MediaQuery.of(context).padding.top;
+    final bottomBarHeight = 64 + MediaQuery.of(context).padding.bottom;
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: Text(_selectedFactory?.factoryName ?? l10n.appTitle),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.factory_outlined),
-            tooltip: l10n.homeSwitchFactory,
-            onPressed: _loadState == _LoadState.ready ? _pickFactory : null,
-          ),
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            tooltip: l10n.homeAbout,
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const AboutScreen())),
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'More',
-            onSelected: (value) {
-              switch (value) {
-                case 'profile':
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  );
-                  break;
-                case 'share':
-                  _shareReport();
-                  break;
-                case 'signout':
-                  _signOut();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'profile',
-                child: ListTile(
-                  leading: Icon(Icons.person_outline),
-                  title: Text('My profile'),
-                ),
-              ),
-              PopupMenuItem(
-                enabled:
-                    _loadState == _LoadState.ready &&
-                    _selectedFactory != null,
-                value: 'share',
-                child: ListTile(
-                  leading: const Icon(Icons.ios_share),
-                  title: Text(l10n.homeShareReport),
-                ),
-              ),
-              PopupMenuItem(
-                value: 'signout',
-                child: ListTile(
-                  leading: const Icon(Icons.logout),
-                  title: Text(l10n.homeSignOut),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: OrientationBuilder(
-        builder: (context, orientation) {
-          if (orientation == Orientation.landscape) {
-            return Row(
-              children: [
-                Container(
-                  width: 80,
-                  color: Colors.white,
-                  child: SafeArea(
-                    minimum: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (var i = 0; i < tabLabels.length; i++)
-                            _railDestination(i, _tabIcons[i], tabLabels[i]),
-                        ],
-                      ),
-                    ),
+      appBar: _collapsibleAppBar(
+        AppBar(
+          toolbarHeight: 72,
+          title: Text(_selectedFactory?.factoryName ?? l10n.appTitle),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.factory_outlined),
+              tooltip: l10n.homeSwitchFactory,
+              onPressed: _loadState == _LoadState.ready ? _pickFactory : null,
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              tooltip: l10n.homeAbout,
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const AboutScreen())),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              onSelected: (value) {
+                switch (value) {
+                  case 'profile':
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                    );
+                    break;
+                  case 'share':
+                    _shareReport();
+                    break;
+                  case 'signout':
+                    _signOut();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'profile',
+                  child: ListTile(
+                    leading: Icon(Icons.person_outline),
+                    title: Text('My profile'),
                   ),
                 ),
-                Expanded(child: _buildBody()),
-              ],
-            );
-          }
-          return _buildBody();
-        },
-      ),
-      bottomNavigationBar: MediaQuery.of(context).orientation ==
-              Orientation.landscape
-          ? null
-          : NavigationBar(
-              selectedIndex: _tabIndex,
-              onDestinationSelected: _onTabSelected,
-              destinations: [
-                for (var i = 0; i < tabLabels.length; i++)
-                  NavigationDestination(
-                    icon: Icon(_tabIcons[i]),
-                    label: tabLabels[i],
+                PopupMenuItem(
+                  enabled:
+                      _loadState == _LoadState.ready &&
+                      _selectedFactory != null,
+                  value: 'share',
+                  child: ListTile(
+                    leading: const Icon(Icons.ios_share),
+                    title: Text(l10n.homeShareReport),
                   ),
+                ),
+                PopupMenuItem(
+                  value: 'signout',
+                  child: ListTile(
+                    leading: const Icon(Icons.logout),
+                    title: Text(l10n.homeSignOut),
+                  ),
+                ),
               ],
             ),
+          ],
+        ),
+        appBarHeight,
+      ),
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _handleScrollNotification,
+        child: _buildBody(),
+      ),
+      bottomNavigationBar: _collapsibleBottomBar(
+        NavigationBar(
+          selectedIndex: _tabIndex,
+          onDestinationSelected: _onTabSelected,
+          destinations: [
+            for (var i = 0; i < tabLabels.length; i++)
+              NavigationDestination(
+                icon: Icon(_tabIcons[i]),
+                label: tabLabels[i],
+              ),
+          ],
+        ),
+        bottomBarHeight,
+      ),
     );
   }
 
@@ -495,62 +531,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _visitedTabs.add(index);
   });
 
-  Widget _railDestination(int index, IconData icon, String label) {
-    final selected = _tabIndex == index;
-    final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () => _onTabSelected(index),
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: SizedBox(
-          width: 56,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? scheme.primaryContainer
-                      : Colors.transparent,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  size: 26,
-                  color: selected
-                      ? scheme.onPrimaryContainer
-                      : scheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  softWrap: false,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: selected
-                        ? scheme.onSurface
-                        : scheme.onSurfaceVariant,
-                    fontWeight: selected
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0 || !_isLandscape) return false;
+    final direction = notification.metrics.axis == Axis.vertical
+        ? (notification is UserScrollNotification
+              ? notification.direction
+              : null)
+        : null;
+    if (direction == ScrollDirection.reverse && _chromeVisible) {
+      setState(() => _chromeVisible = false);
+    } else if (direction == ScrollDirection.forward && !_chromeVisible) {
+      setState(() => _chromeVisible = true);
+    }
+    return false;
   }
 
   Widget _buildBody() {
@@ -567,7 +560,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return EmptyState(
         icon: Icons.factory_outlined,
         title: 'No factory set up yet',
-        subtitle: 'Create a factory to start tracking capacity, stock and supply.',
+        subtitle:
+            'Create a factory to start tracking capacity, stock and supply.',
         actionLabel: 'Create factory',
         onAction: _isSeeding ? null : _createFactory,
         secondaryActionLabel: 'Load demo data',
