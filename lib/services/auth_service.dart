@@ -43,6 +43,17 @@ class AuthService {
     );
   }
 
+  Future<void> verifyPasswordResetCode({
+    required String email,
+    required String code,
+  }) async {
+    await _client.auth.verifyOTP(
+      email: email,
+      token: code,
+      type: OtpType.recovery,
+    );
+  }
+
   Future<void> updatePassword(String newPassword) async {
     await _client.auth.updateUser(UserAttributes(password: newPassword));
   }

@@ -807,13 +807,7 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
               TextFormField(
                 controller: _outputController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Actual output',
-                  helperText:
-                      'Deducts this recipe\'s materials and adds to finished '
-                      'stock automatically',
-                  helperMaxLines: 2,
-                ),
+                decoration: const InputDecoration(labelText: 'Actual output'),
                 validator: (v) {
                   final parsed = int.tryParse((v ?? '').trim());
                   if (parsed == null || parsed < 0) {
@@ -830,10 +824,6 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                 ),
                 decoration: const InputDecoration(
                   labelText: 'Total downtime hours',
-                  helperText:
-                      'Machine-hours lost across every machine that was '
-                      'down — e.g. 2 machines down 2h + 3 machines down 1h = 7.',
-                  helperMaxLines: 3,
                 ),
                 validator: (v) {
                   final trimmed = (v ?? '').trim();

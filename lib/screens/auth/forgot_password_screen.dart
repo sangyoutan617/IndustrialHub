@@ -5,6 +5,7 @@ import '../../services/auth_service.dart';
 import '../../services/session_prefs.dart';
 import '../../widgets/auth_scaffold.dart';
 import '../../widgets/status.dart';
+import 'verify_reset_code_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -38,10 +39,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       await _authService.sendPasswordReset(email);
       await SessionPrefs.markPendingPasswordRecovery();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reset link sent — check your email.')),
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => VerifyResetCodeScreen(email: email),
+        ),
       );
-      Navigator.of(context).pop();
     } on AuthException catch (e) {
       _showError(e.message);
     } catch (e) {
@@ -69,14 +71,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const AuthHeader(
             icon: Icons.lock_reset,
             title: 'Forgot your password?',
-            subtitle: "Enter your email and we'll send you a reset link.",
+            subtitle: "Enter your email and we'll send you a 6-digit code.",
           ),
           const SizedBox(height: AppSpacing.xl),
           const InfoBanner(
             status: AppStatus.info,
             title: 'Signed up with Google?',
             message:
-                "You don't need a reset link — go back and use Continue "
+                "You don't need a reset code — go back and use Continue "
                 "with Google. Setting a password here also works: you'll "
                 'then be able to sign in either way.',
           ),
@@ -108,7 +110,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       color: Colors.white,
                     ),
                   )
-                : const Text('Send reset link'),
+                : const Text('Send code'),
           ),
           const SizedBox(height: AppSpacing.l),
           Center(
