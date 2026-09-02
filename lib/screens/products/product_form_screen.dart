@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme.dart';
 import '../../models/product.dart';
 import '../../services/product_service.dart';
+import '../../services/stock_service.dart';
 import '../../widgets/responsive_form_fields.dart';
+
+const _maxUnitLength = 20;
 
 class ProductFormScreen extends StatefulWidget {
   final int factoryId;
@@ -17,6 +21,7 @@ class ProductFormScreen extends StatefulWidget {
 class _ProductFormScreenState extends State<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _service = ProductService();
+  final _stockService = StockService();
 
   late final _nameController = TextEditingController(
     text: widget.product?.productName,
@@ -50,7 +55,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       if (_isEditing) {
         await _service.updateProduct(widget.product!.productId, product);
       } else {
-        await _service.createProduct(product);
+        final created = await _service.createProduct(product);
+        try {
+          await _stockService.createStock(widget.factoryId, created, 0);
+        } catch (e) {
+          debugPrint('products: failed to create initial stock row: $e');
+        }
       }
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -88,10 +98,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   const SizedBox(height: AppSpacing.l),
                   TextFormField(
                     controller: _unitController,
+                    maxLength: _maxUnitLength,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Unit',
                       helperText: 'e.g. units, bottles, boxes, litres',
                     ),
+                    validator: (v) {
+                      if (v != null && RegExp(r'[0-9]').hasMatch(v)) {
+                        return 'Unit must contain letters only';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   FormBreak(

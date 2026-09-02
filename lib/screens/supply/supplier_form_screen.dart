@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../core/supplier_validators.dart';
 import '../../core/theme.dart';
 import '../../models/raw_material.dart';
 import '../../models/supplier.dart';
@@ -51,6 +53,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
 
   _LoadState _state = _LoadState.loading;
   List<RawMaterial> _materials = [];
+  List<Supplier> _existingSuppliers = [];
   int? _selectedMaterialId;
   double? _suggestedRating;
   bool _isSaving = false;
@@ -70,6 +73,9 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
     setState(() => _state = _LoadState.loading);
     try {
       final materials = await _materialService.getMaterials(widget.factoryId);
+      final existingSuppliers = await _supplierService.getSuppliersForMaterials(
+        materials.map((m) => m.materialId).toList(),
+      );
       double? suggested;
       final supplier = widget.supplier;
       if (supplier != null && supplier.materialId != null) {
@@ -84,6 +90,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
       if (!mounted || token != _loadToken) return;
       setState(() {
         _materials = materials;
+        _existingSuppliers = existingSuppliers;
         _selectedMaterialId ??= materials.isNotEmpty
             ? materials.first.materialId
             : null;
@@ -199,9 +206,13 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                 children: [
                   TextFormField(
                     controller: _nameController,
+                    maxLength: SupplierValidators.maxNameLength,
                     decoration: const InputDecoration(labelText: 'Supplier name'),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    validator: (v) => SupplierValidators.validateName(
+                      v,
+                      existingSuppliers: _existingSuppliers,
+                      excludingSupplierId: widget.supplier?.supplierId,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -225,6 +236,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Phone (optional)',
                     ),
+                    validator: SupplierValidators.validatePhone,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -233,12 +245,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Email (optional)',
                     ),
-                    validator: (v) {
-                      final value = v?.trim() ?? '';
-                      if (value.isEmpty) return null;
-                      final ok = RegExp(r'^[^@\s]+@[^@\s]+$').hasMatch(value);
-                      return ok ? null : 'Enter a valid email';
-                    },
+                    validator: SupplierValidators.validateEmail,
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
@@ -261,18 +268,17 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                   TextFormField(
                     controller: _leadTimeController,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(2),
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Lead time (days)',
-                      helperText: 'How long an order takes to arrive',
+                      helperText: 'How long an order takes to arrive '
+                          '(max ${SupplierValidators.maxLeadTimeDays} working days)',
                     ),
                     onChanged: (_) => setState(() {}),
-                    validator: (v) {
-                      final parsed = int.tryParse(v ?? '');
-                      if (parsed == null || parsed < 0) {
-                        return 'Enter a non-negative whole number';
-                      }
-                      return null;
-                    },
+                    validator: SupplierValidators.validateLeadTime,
                   ),
                   const SizedBox(height: 20),
                   FormBreak(Text(

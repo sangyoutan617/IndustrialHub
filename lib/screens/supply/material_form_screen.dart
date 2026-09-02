@@ -1,8 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../core/formatters.dart';
 import '../../models/raw_material.dart';
 import '../../services/material_service.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/responsive_form_fields.dart';
+
+const _maxUnitCost = 99999999.99;
+const _maxUnitLength = 20;
+const _maxSafetyStockDays = 30;
+
+final _eightDigitDecimalFormatter = TextInputFormatter.withFunction((
+  oldValue,
+  newValue,
+) {
+  if (newValue.text.isEmpty) return newValue;
+  final pattern = RegExp(r'^\d{0,8}(\.\d{0,2})?$');
+  return pattern.hasMatch(newValue.text) ? newValue : oldValue;
+});
 
 class MaterialFormScreen extends StatefulWidget {
   final int factoryId;
@@ -81,10 +96,13 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
     }
   }
 
-  String? _requiredNumber(String? value, {double min = 0}) {
+  String? _requiredNumber(String? value, {double min = 0, double? max}) {
     final parsed = double.tryParse(value ?? '');
     if (parsed == null) return 'Enter a valid number';
     if (parsed < min) return 'Must be at least $min';
+    if (max != null && parsed > max) {
+      return 'Must not exceed ${formatNumber(max)}';
+    }
     return null;
   }
 
@@ -120,16 +138,27 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    inputFormatters: [_eightDigitDecimalFormatter],
                     decoration: const InputDecoration(labelText: 'Current stock'),
-                    validator: (v) => _requiredNumber(v, min: 0),
+                    validator: (v) => _requiredNumber(v, min: 0, max: _maxUnitCost),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _unitController,
+                    maxLength: _maxUnitLength,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Unit',
                       helperText: 'e.g. kg, litres, rolls',
                     ),
+                    validator: (v) {
+                      if (v != null && RegExp(r'[0-9]').hasMatch(v)) {
+                        return 'Unit must contain letters only';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -137,11 +166,12 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    inputFormatters: [_eightDigitDecimalFormatter],
                     decoration: InputDecoration(
                       labelText: 'Unit cost (RM)',
                       helperText: 'Cost per ${_unitController.text.trim().isEmpty ? 'unit' : _unitController.text.trim()} — used for inventory value',
                     ),
-                    validator: (v) => _requiredNumber(v, min: 0),
+                    validator: (v) => _requiredNumber(v, min: 0, max: _maxUnitCost),
                   ),
                   const FormBreak(
                     Padding(
@@ -163,16 +193,24 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                   TextFormField(
                     controller: _safetyStockController,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(2),
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Safety stock (days)',
                       helperText:
                           'Extra buffer kept on top of supplier lead time when '
-                          'deciding the latest safe reorder date',
+                          'deciding the latest safe reorder date '
+                          '(max $_maxSafetyStockDays days)',
                     ),
                     validator: (v) {
                       final parsed = int.tryParse(v ?? '');
                       if (parsed == null || parsed < 0) {
                         return 'Enter a non-negative whole number';
+                      }
+                      if (parsed > _maxSafetyStockDays) {
+                        return 'Safety stock cannot exceed $_maxSafetyStockDays days';
                       }
                       return null;
                     },

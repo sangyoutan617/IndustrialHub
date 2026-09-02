@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../main.dart';
 import '../../services/auth_service.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_factories_screen.dart';
 import 'admin_data_screen.dart';
 import 'admin_users_screen.dart';
+import 'issue_reports_list_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -12,7 +14,10 @@ class AdminHomeScreen extends StatelessWidget {
     try {
       await AuthService().signOut();
       if (!context.mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,6 +83,15 @@ class AdminHomeScreen extends StatelessWidget {
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const AdminDataScreen())),
+          ),
+          _adminTile(
+            context,
+            icon: Icons.error_outline,
+            title: 'Issue Reports',
+            subtitle: 'User-submitted issues, review and update status',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const IssueReportsListScreen()),
+            ),
           ),
         ],
       ),

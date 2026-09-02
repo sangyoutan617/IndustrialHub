@@ -124,6 +124,7 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
         builder: (_) => StockMovementFormScreen(
           stockId: stock.stockId,
           productName: stock.productName,
+          currentQuantity: stock.currentQuantity,
         ),
       ),
     );
@@ -205,12 +206,14 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
             MetricRow(
               label: 'Current stock',
               value: formatUnits(stock.currentQuantity),
+              reserveBadgeSpace: true,
             ),
             MetricRow(
               label: 'Demand',
               value: cover.requiredPerDay != null
                   ? '${formatNumber(cover.requiredPerDay!)}/day'
                   : 'Not set',
+              reserveBadgeSpace: true,
             ),
             MetricRow(
               label: 'Days of cover',
@@ -219,12 +222,14 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
                   : '—',
               status: cover.needsAttention ? AppStatus.danger : null,
               statusLabel: cover.needsAttention ? 'Low' : null,
+              reserveBadgeSpace: true,
             ),
             MetricRow(
               label: 'Predicted stock-out',
               value: cover.stockOutDate != null
                   ? formatDate(cover.stockOutDate!)
                   : 'Not projected',
+              reserveBadgeSpace: true,
             ),
           ],
         ),
@@ -236,16 +241,16 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  stock.productName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge,
-                ),
+              Text(
+                stock.productName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge,
               ),
+              const SizedBox(height: AppSpacing.xs),
               StatusChip(label: cover.status, status: cover.appStatus),
             ],
           ),

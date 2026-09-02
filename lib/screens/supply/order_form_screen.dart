@@ -12,14 +12,14 @@ import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
 
-const _maxQuantityOrPrice = 99999.99;
+const _maxQuantityOrPrice = 99999999.99;
 
 final _twoDecimalInputFormatter = TextInputFormatter.withFunction((
   oldValue,
   newValue,
 ) {
   if (newValue.text.isEmpty) return newValue;
-  final pattern = RegExp(r'^\d{0,5}(\.\d{0,2})?$');
+  final pattern = RegExp(r'^\d{0,8}(\.\d{0,2})?$');
   return pattern.hasMatch(newValue.text) ? newValue : oldValue;
 });
 
@@ -194,23 +194,19 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     super.dispose();
   }
 
-  Future<void> _pickDate({required bool isOrderDate}) async {
-    final initial =
-        (isOrderDate ? _orderDate : _expectedDelivery) ?? DateTime.now();
+  Future<void> _pickOrderDate() async {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: initial,
-      firstDate: isOrderDate ? DateTime(2020) : _orderDate,
+      initialDate: _orderDate.isBefore(startOfToday) ? startOfToday : _orderDate,
+      firstDate: startOfToday,
       lastDate: DateTime(2100),
     );
     if (picked == null || !mounted) return;
     setState(() {
-      if (isOrderDate) {
-        _orderDate = picked;
-        _applyLeadTimeToExpectedDelivery();
-      } else {
-        _expectedDelivery = picked;
-      }
+      _orderDate = picked;
+      _applyLeadTimeToExpectedDelivery();
     });
   }
 
@@ -479,14 +475,21 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     title: const Text('Order date'),
                     subtitle: Text(_formatDate(_orderDate)),
                     trailing: const Icon(Icons.calendar_today_outlined),
-                    onTap: () => _pickDate(isOrderDate: true),
+                    onTap: _pickOrderDate,
                   )),
                   FormBreak(ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Expected delivery'),
                     subtitle: Text(_formatDate(_expectedDelivery)),
-                    trailing: const Icon(Icons.calendar_today_outlined),
-                    onTap: () => _pickDate(isOrderDate: false),
+                    trailing: const Icon(Icons.lock_outline, size: 18),
+                  )),
+                  const FormBreak(Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      "Follows the selected supplier's effective lead time — "
+                      'not editable directly.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
                   )),
                   const SizedBox(height: 24),
                   FormBreak(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../widgets/responsive_grid_list.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
@@ -315,11 +316,18 @@ class _NewProductDialogState extends State<_NewProductDialog> {
             TextFormField(
               controller: _quantityController,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(8),
+              ],
               decoration: const InputDecoration(labelText: 'Starting quantity'),
               validator: (v) {
                 final parsed = int.tryParse(v ?? '');
                 if (parsed == null || parsed < 0) {
-                  return 'Enter a non-negative whole number';
+                  return 'Starting quantity cannot be negative';
+                }
+                if (parsed > 99999999) {
+                  return 'Starting quantity cannot exceed 99,999,999';
                 }
                 return null;
               },

@@ -113,12 +113,12 @@ class ReportService {
       }
       final verdict = r.canMeetDemand
           ? '${formatUnits(r.achievable)}/day achievable vs '
-                '${formatUnits(r.requiredPerDay)}/day required — meeting demand'
+                '${formatUnits(r.requiredPerDay)}/day required - meeting demand'
           : 'Short by ${formatUnits(r.shortfall ?? 0)}/day '
                 '(${_limiterLabel(r.limiter)} limited)';
       rows.add(_row(pb.product.productName, verdict));
     }
-    return _section('Capacity — by product', rows);
+    return _section('Capacity - by product', rows);
   }
 
   pw.Widget _stockOverview(StockOverview stock) {
@@ -139,7 +139,7 @@ class ReportService {
         _row(
           'Closest to stock-out',
           '${withCover.first.stock.productName}'
-              '${withCover.first.stockOutDate != null ? ' — predicted ${formatDate(withCover.first.stockOutDate!)}' : ''}',
+              '${withCover.first.stockOutDate != null ? ' - predicted ${formatDate(withCover.first.stockOutDate!)}' : ''}',
         ),
     ]);
   }
@@ -179,7 +179,7 @@ class ReportService {
         _row(
           'Most urgent',
           '${attention.first.material.materialName}'
-              '${attention.first.orderByDate != null ? ' — order by ${formatDate(attention.first.orderByDate!)}' : ''}',
+              '${attention.first.orderByDate != null ? ' - order by ${formatDate(attention.first.orderByDate!)}' : ''}',
         ),
     ]);
   }
@@ -233,7 +233,7 @@ class ReportService {
 
   pw.Widget _footer() {
     return pw.Text(
-      'Industrial Hub — Malaysia Industrial Hub Innovation Platform. '
+      'Industrial Hub - Malaysia Industrial Hub Innovation Platform. '
       'Benchmarks from DOSM open data (data.gov.my).',
       style: const pw.TextStyle(fontSize: 8, color: _grey),
     );

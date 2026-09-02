@@ -103,21 +103,33 @@ class MetricRow extends StatelessWidget {
   final AppStatus? status;
   final String? statusLabel;
 
+  /// When true, always reserves a fixed-width trailing slot for the status
+  /// badge — even on rows with no badge — so the value column lines up
+  /// across every row in the same card regardless of which rows have one.
+  final bool reserveBadgeSpace;
+
+  static const double _badgeSlotWidth = 92;
+
   const MetricRow({
     super.key,
     required this.label,
     required this.value,
     this.status,
     this.statusLabel,
+    this.reserveBadgeSpace = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final badge = (status != null && statusLabel != null)
+        ? StatusChip(label: statusLabel!, status: status!, dense: true)
+        : null;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Text(
@@ -139,9 +151,24 @@ class MetricRow extends StatelessWidget {
               ),
             ),
           ),
-          if (status != null && statusLabel != null) ...[
+          if (reserveBadgeSpace) ...[
             const SizedBox(width: AppSpacing.s),
-            StatusChip(label: statusLabel!, status: status!, dense: true),
+            SizedBox(
+              width: _badgeSlotWidth,
+              child: badge == null
+                  ? null
+                  : Align(
+                      alignment: Alignment.centerRight,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: badge,
+                      ),
+                    ),
+            ),
+          ] else if (badge != null) ...[
+            const SizedBox(width: AppSpacing.s),
+            badge,
           ],
         ],
       ),

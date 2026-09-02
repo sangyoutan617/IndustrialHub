@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
-import '../../l10n/app_localizations.dart';
 import '../../models/demand_forecast.dart';
 import '../../services/data_event_service.dart';
 import '../../services/demand_service.dart';
@@ -206,11 +205,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
 
   Widget _buildReady() {
     final withCover = _covers.where((c) => c.daysOfCover != null).toList();
-    final mostUrgent = withCover.isEmpty
-        ? null
-        : (withCover.toList()
-                ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!)))
-              .first;
     final criticalItems = withCover.where((c) => c.needsAttention).toList()
       ..sort((a, b) => a.daysOfCover!.compareTo(b.daysOfCover!));
     final overstockItems =
@@ -222,7 +216,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         : null;
 
     return _buildPortrait(
-      mostUrgent: mostUrgent,
       criticalItems: criticalItems,
       overstockItems: overstockItems,
       aiInsight: aiInsight,
@@ -230,7 +223,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   }
 
   Widget _buildPortrait({
-    required ProductCover? mostUrgent,
     required List<ProductCover> criticalItems,
     required List<ProductCover> overstockItems,
     required Widget? aiInsight,
@@ -252,8 +244,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             _buildPendingSyncBanner(),
             const SizedBox(height: AppSpacing.l),
           ],
-          _buildCoverSummaryCard(mostUrgent),
-          const SizedBox(height: AppSpacing.l),
           if (aiInsight != null) ...[
             aiInsight,
             const SizedBox(height: AppSpacing.l),
@@ -392,44 +382,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCoverSummaryCard(ProductCover? mostUrgent) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              AppLocalizations.of(context).stockDaysOfCover,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              mostUrgent != null ? formatDays(mostUrgent.daysOfCover!) : '—',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: scheme.onSurface,
-              ),
-            ),
-            if (mostUrgent?.stockOutDate != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'Stock-out predicted: ${formatDate(mostUrgent!.stockOutDate!)}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }
@@ -795,7 +747,8 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
 
   Widget _buildCoverCard(ProductCover cover) {
     final theme = Theme.of(context);
-    final isOutOfStock = cover.stock.currentQuantity == 0;
+    final isOutOfStock =
+        cover.stock.currentQuantity == 0 && cover.demandGap == null;
     final primaryTextColor = isOutOfStock
         ? Colors.white
         : theme.colorScheme.onSurface;

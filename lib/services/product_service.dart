@@ -67,7 +67,6 @@ class ProductService {
       ('machines', 'machine_id', 'This product still has machines assigned to it — reassign them first.'),
       ('manpower', 'manpower_id', 'This product still has manpower shifts assigned to it — reassign them first.'),
       ('product_materials', 'material_id', 'This product still has material requirements set — remove them first.'),
-      ('finished_stock', 'stock_id', 'This product still has finished-goods stock tracked — remove it first.'),
       ('demand_forecast', 'demand_id', 'This product still has a demand forecast set — remove it first.'),
       ('daily_production', 'daily_id', 'This product has production history — it cannot be removed.'),
     ];
@@ -80,6 +79,26 @@ class ProductService {
       if ((linked as List).isNotEmpty) {
         throw SupplyInUseException(message);
       }
+    }
+    final stockRow = await _client
+        .from('finished_stock')
+        .select('stock_id, current_quantity')
+        .eq('product_id', productId)
+        .maybeSingle();
+    if (stockRow != null) {
+      final stockId = stockRow['stock_id'] as int;
+      final quantity = stockRow['current_quantity'] as int;
+      final movements = await _client
+          .from('stock_movements')
+          .select('movement_id')
+          .eq('stock_id', stockId)
+          .limit(1);
+      if (quantity != 0 || (movements as List).isNotEmpty) {
+        throw const SupplyInUseException(
+          'This product still has finished-goods stock tracked — remove it first.',
+        );
+      }
+      await _client.from('finished_stock').delete().eq('stock_id', stockId);
     }
     try {
       await _client.from('products').delete().eq('product_id', productId);

@@ -278,7 +278,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                 Expanded(
                   child: _statTile(
                     'Latest month',
-                    latest != null ? formatMonth(latest.key) : 'n/a',
+                    latest != null ? formatMonth(latest.key) : '-',
                   ),
                 ),
               ],

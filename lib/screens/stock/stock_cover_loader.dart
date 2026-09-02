@@ -38,7 +38,7 @@ class ProductCover {
         break;
     }
     if (daysOfCover! < lowCoverDaysThreshold) {
-      return 'Low stock — reorder soon';
+      return 'Low stock';
     }
     if (daysOfCover! > overstockDaysThreshold) return 'Overstocked';
     return 'Healthy';

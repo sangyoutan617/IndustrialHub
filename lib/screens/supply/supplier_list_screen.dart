@@ -143,7 +143,8 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     try {
       await _supplierService.deleteSupplier(supplier.supplierId);
       if (!mounted) return true;
-      _load();
+      await _load();
+      if (!mounted) return true;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Supplier deleted')));

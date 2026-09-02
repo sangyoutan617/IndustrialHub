@@ -51,7 +51,7 @@ void main() {
         requiredPerDay: 10,
         daysOfCover: lowCoverDaysThreshold - 0.01,
       );
-      expect(cover.status, 'Low stock — reorder soon');
+      expect(cover.status, 'Low stock');
       expect(cover.appStatus, AppStatus.danger);
     });
 
@@ -61,7 +61,7 @@ void main() {
         requiredPerDay: 10,
         daysOfCover: 0,
       );
-      expect(cover.status, 'Low stock — reorder soon');
+      expect(cover.status, 'Low stock');
       expect(cover.appStatus, AppStatus.danger);
     });
 

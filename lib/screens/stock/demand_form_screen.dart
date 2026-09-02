@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme.dart';
 import '../../models/demand_forecast.dart';
 import '../../models/product.dart';
@@ -31,6 +32,7 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
 
   _LoadState _state = _LoadState.loading;
   List<Product> _products = [];
+  Set<int> _productIdsWithForecast = {};
   int? _selectedProductId;
 
   DateTime? _periodStart;
@@ -50,18 +52,37 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
     _load();
   }
 
+  List<Product> get _availableProducts {
+    if (_isEditing) return _products;
+    return _products
+        .where((p) => !_productIdsWithForecast.contains(p.productId))
+        .toList();
+  }
+
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
       final products = await _productService.getProducts(widget.factoryId);
+      final forecasts = await _service.getForecasts(widget.factoryId);
       if (!mounted) return;
       setState(() {
         _products = products;
-        _selectedProductId ??= products.isEmpty
+        _productIdsWithForecast = forecasts
+            .where((f) => f.demandId != widget.forecast?.demandId)
+            .map((f) => f.productId)
+            .toSet();
+        final available = _isEditing
+            ? products
+            : products
+                  .where(
+                    (p) => !_productIdsWithForecast.contains(p.productId),
+                  )
+                  .toList();
+        _selectedProductId ??= available.isEmpty
             ? null
-            : products.firstWhere(
+            : available.firstWhere(
                 (p) => !p.isGeneral,
-                orElse: () => products.first,
+                orElse: () => available.first,
               ).productId;
         _state = _LoadState.ready;
       });
@@ -78,12 +99,16 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
   }
 
   Future<void> _pickDate({required bool isStart}) async {
-    final initial = (isStart ? _periodStart : _periodEnd) ?? DateTime.now();
+    final firstDate = isStart ? DateTime(2020) : (_periodStart ?? DateTime(2020));
+    final lastDate = isStart ? (_periodEnd ?? DateTime(2100)) : DateTime(2100);
+    var initial = (isStart ? _periodStart : _periodEnd) ?? DateTime.now();
+    if (initial.isBefore(firstDate)) initial = firstDate;
+    if (initial.isAfter(lastDate)) initial = lastDate;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      firstDate: firstDate,
+      lastDate: lastDate,
     );
     if (picked == null) return;
     setState(() {
@@ -134,6 +159,16 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     final productId = _selectedProductId;
     if (productId == null) return;
+    final start = _periodStart;
+    final end = _periodEnd;
+    if (start != null && end != null && end.isBefore(start)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Period end can\'t be before period start.'),
+        ),
+      );
+      return;
+    }
     setState(() => _isSaving = true);
     try {
       final productName = _products
@@ -190,6 +225,14 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                 'must target one.',
           );
         }
+        if (_availableProducts.isEmpty) {
+          return const EmptyState(
+            icon: Icons.category_outlined,
+            message:
+                'Every product already has a demand forecast — edit the '
+                'existing one instead of adding a new one.',
+          );
+        }
         return _buildForm();
     }
   }
@@ -207,7 +250,7 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Product'),
                 items: [
-                  for (final product in _products)
+                  for (final product in _availableProducts)
                     DropdownMenuItem(
                       value: product.productId,
                       child: Text(
@@ -227,6 +270,10 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
               TextFormField(
                 controller: _requiredController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(8),
+                ],
                 decoration: const InputDecoration(
                   labelText: 'Required units per day',
                   helperText:
@@ -234,8 +281,11 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                 ),
                 validator: (v) {
                   final parsed = int.tryParse(v ?? '');
-                  if (parsed == null || parsed < 0) {
-                    return 'Enter a non-negative whole number';
+                  if (parsed == null || parsed <= 0) {
+                    return 'Daily demand must be greater than 0';
+                  }
+                  if (parsed > 99999999) {
+                    return 'Required units cannot exceed 99,999,999';
                   }
                   return null;
                 },

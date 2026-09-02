@@ -1312,7 +1312,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
                       'YOUR OUTPUT / WORKER',
                       data.outputPerWorker != null
                           ? '${formatUnits(data.outputPerWorker!)}/day'
-                          : 'n/a',
+                          : '-',
                       pal.ok,
                       pal,
                     ),

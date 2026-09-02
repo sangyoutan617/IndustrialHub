@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme.dart';
 import '../../models/stock_movement.dart';
 import '../../services/stock_service.dart';
@@ -7,11 +8,13 @@ import '../../widgets/responsive_form_fields.dart';
 class StockMovementFormScreen extends StatefulWidget {
   final int stockId;
   final String productName;
+  final int currentQuantity;
 
   const StockMovementFormScreen({
     super.key,
     required this.stockId,
     required this.productName,
+    required this.currentQuantity,
   });
 
   @override
@@ -26,8 +29,9 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
   final _noteController = TextEditingController();
 
   String _movementType = StockMovementType.productionIn;
-  DateTime _movementDate = DateTime.now();
+  final DateTime _movementDate = DateTime.now();
   bool _isSaving = false;
+  bool _isAdjustmentNegative = false;
 
   static const _typeLabels = {
     StockMovementType.productionIn: 'Production in',
@@ -44,6 +48,13 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
     super.dispose();
   }
 
+  bool get _isToday {
+    final now = DateTime.now();
+    return _movementDate.year == now.year &&
+        _movementDate.month == now.month &&
+        _movementDate.day == now.day;
+  }
+
   String get _quantityHint {
     switch (_movementType) {
       case StockMovementType.productionIn:
@@ -55,28 +66,24 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
       case StockMovementType.returned:
         return 'Adds this many units back to stock (customer or site return)';
       default:
-        return 'Positive to add, negative to subtract (e.g. a stock count correction)';
+        return 'Select + to add stock, - to deduct stock';
     }
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _movementDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (picked != null) setState(() => _movementDate = picked);
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
+      final qty = int.parse(_quantityController.text);
+      final finalQty =
+          (_movementType == StockMovementType.adjustment &&
+              _isAdjustmentNegative)
+          ? -qty
+          : qty;
       await _service.recordMovementQueued(
         stockId: widget.stockId,
         movementType: _movementType,
-        quantity: int.parse(_quantityController.text),
+        quantity: finalQty,
         movementDate: _movementDate,
         note: _noteController.text.trim().isEmpty
             ? null
@@ -123,11 +130,34 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                         setState(() => _movementType = value ?? _movementType),
                   ),
                   const SizedBox(height: AppSpacing.l),
+                  if (_movementType == StockMovementType.adjustment) ...[
+                    FormBreak(
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(
+                            value: false,
+                            label: Text('+ Add'),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            label: Text('- Deduct'),
+                          ),
+                        ],
+                        selected: {_isAdjustmentNegative},
+                        onSelectionChanged: (selection) => setState(
+                          () => _isAdjustmentNegative = selection.first,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.l),
+                  ],
                   TextFormField(
                     controller: _quantityController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      signed: true,
-                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(8),
+                    ],
                     decoration: InputDecoration(
                       labelText: 'Quantity',
                       helperText: _quantityHint,
@@ -136,31 +166,50 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                       final parsed = int.tryParse(v ?? '');
                       if (parsed == null) return 'Enter a whole number';
                       if (parsed == 0) return 'Must not be zero';
-                      if (_movementType != StockMovementType.adjustment &&
-                          parsed < 0) {
-                        return 'Enter a positive amount';
+                      if (parsed > 99999999) {
+                        return 'Quantity exceeds maximum limit of 99,999,999';
+                      }
+                      if ((_movementType == StockMovementType.shipmentOut ||
+                              _movementType == StockMovementType.damaged) &&
+                          parsed > widget.currentQuantity) {
+                        return 'Shipment quantity cannot exceed current '
+                            'available stock (${widget.currentQuantity})';
+                      }
+                      if (_movementType == StockMovementType.adjustment &&
+                          _isAdjustmentNegative &&
+                          parsed > widget.currentQuantity) {
+                        return 'Deduction cannot exceed current stock '
+                            '(${widget.currentQuantity})';
                       }
                       return null;
                     },
                   ),
                   const SizedBox(height: AppSpacing.l),
-                  FormBreak(InkWell(
-                    onTap: _pickDate,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Date',
-                        suffixIcon: Icon(Icons.calendar_today_outlined),
-                      ),
-                      child: Text(
-                        '${_movementDate.year}-${_movementDate.month.toString().padLeft(2, '0')}-${_movementDate.day.toString().padLeft(2, '0')}',
-                      ),
+                  FormBreak(InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Date',
+                      helperText: 'Movements are always recorded for today',
+                    ),
+                    child: Text(
+                      '${_movementDate.year}-${_movementDate.month.toString().padLeft(2, '0')}-${_movementDate.day.toString().padLeft(2, '0')}',
                     ),
                   )),
                   const SizedBox(height: AppSpacing.l),
                   TextFormField(
                     controller: _noteController,
-                    decoration: const InputDecoration(labelText: 'Note (optional)'),
+                    decoration: InputDecoration(
+                      labelText: _isToday ? 'Note (optional)' : 'Note',
+                      helperText: _isToday
+                          ? null
+                          : 'Required when recording for a different date',
+                    ),
+                    validator: (v) {
+                      if (!_isToday && (v == null || v.trim().isEmpty)) {
+                        return 'Note is required when recording movement '
+                            'for a different date';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   FormBreak(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/constants.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/auth_service.dart';
@@ -105,6 +106,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 return l10n.authEmailRequired;
               }
               if (!value.contains('@')) return l10n.authEmailInvalid;
+              if (value.trim().toLowerCase() == AdminConfig.adminEmail) {
+                return 'Use Admin login for this account';
+              }
               return null;
             },
           ),

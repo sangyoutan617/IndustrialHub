@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/constants.dart';
 import '../../core/theme.dart';
+import '../../main.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/session_prefs.dart';
 import '../../widgets/auth_scaffold.dart';
-import '../home/home_screen.dart';
 import 'admin_home_screen.dart';
 
 class AdminLoginScreen extends StatefulWidget {
@@ -40,13 +42,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       );
       final userId = _authService.currentUser?.id;
       final isAdmin = userId != null && await _adminService.isAdmin(userId);
+      if (!isAdmin) {
+        await SessionPrefs.setRememberMe(true);
+      }
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) =>
-              isAdmin ? const AdminHomeScreen() : const HomeScreen(),
+          builder: (_) => isAdmin ? const AdminHomeScreen() : const AuthGate(),
         ),
-        (route) => route.isFirst,
+        (route) => false,
       );
     } on AuthException catch (e) {
       _showError(e.message);
@@ -86,6 +90,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 return 'Email is required';
               }
               if (!value.contains('@')) return 'Enter a valid email';
+              if (value.trim().toLowerCase() != AdminConfig.adminEmail) {
+                return 'This login is for the admin account only';
+              }
               return null;
             },
           ),

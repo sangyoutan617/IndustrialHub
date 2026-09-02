@@ -169,70 +169,95 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
     final qtyController = TextEditingController();
     final noteController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    var isDeduct = false;
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Adjust stock'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: qtyController,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                    signed: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Adjust stock'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SegmentedButton<bool>(
+                    showSelectedIcon: false,
+                    style: SegmentedButton.styleFrom(
+                      selectedBackgroundColor:
+                          Theme.of(context).colorScheme.primary,
+                      selectedForegroundColor:
+                          Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('+ Add')),
+                      ButtonSegment(value: true, label: Text('- Deduct')),
+                    ],
+                    selected: {isDeduct},
+                    onSelectionChanged: (selection) =>
+                        setDialogState(() => isDeduct = selection.first),
                   ),
-                  decoration: InputDecoration(
-                    labelText: 'Adjustment: +add / -remove (${material.unit})',
+                  const SizedBox(height: AppSpacing.m),
+                  TextFormField(
+                    controller: qtyController,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Amount (${material.unit})',
+                      helperText: 'Select + to add stock, - to deduct stock',
+                    ),
+                    validator: (v) {
+                      final parsed = double.tryParse((v ?? '').trim());
+                      if (parsed == null || parsed <= 0) {
+                        return 'Enter a positive amount';
+                      }
+                      if (isDeduct && parsed > material.currentStock) {
+                        return 'Deduction cannot exceed current stock '
+                            '(${formatNumber(material.currentStock)} ${material.unit})';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (v) {
-                    final parsed = double.tryParse((v ?? '').trim());
-                    if (parsed == null || parsed == 0) {
-                      return 'Enter a non-zero amount';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: AppSpacing.m),
-                TextField(
-                  controller: noteController,
-                  decoration: const InputDecoration(
-                    labelText: 'Note (optional)',
+                  const SizedBox(height: AppSpacing.m),
+                  TextField(
+                    controller: noteController,
+                    decoration: const InputDecoration(
+                      labelText: 'Note (optional)',
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(context, true);
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(context, true);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
     if (saved != true) return;
     final qty = double.parse(qtyController.text.trim());
+    final finalQty = isDeduct ? -qty : qty;
     try {
       await _movementService.recordMovement(
         materialId: material.materialId,
         factoryId: widget.factoryId,
         movementType: RawMaterialMovementType.adjustment,
-        quantity: qty,
+        quantity: finalQty,
         movementDate: DateTime.now(),
         note: noteController.text.trim().isEmpty
             ? null
@@ -368,35 +393,41 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
               MetricRow(
                 label: 'Current stock',
                 value: '${formatNumber(material.currentStock)} ${material.unit}',
+                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Reorder level',
                 value: '${formatNumber(plan.reorderLevel)} ${material.unit}',
                 status: plan.belowReorderLevel ? AppStatus.danger : null,
                 statusLabel: plan.belowReorderLevel ? 'Below' : null,
+                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Days of cover',
                 value: plan.daysOfCover != null
                     ? formatDays(plan.daysOfCover!)
                     : '${MrpService.defaultHorizonDays}+ days',
+                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Expected stock-out',
                 value: plan.stockOutDate != null
                     ? formatDate(plan.stockOutDate!)
                     : 'Not projected',
+                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Latest safe order date',
                 value: plan.orderByDate != null
                     ? formatDate(plan.orderByDate!)
                     : '—',
+                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Burn rate',
                 value:
                     '${formatRate(plan.burnRatePerDay)} ${material.unit}/day',
+                reserveBadgeSpace: true,
               ),
               if (plan.inboundTotal > 0)
                 MetricRow(
@@ -409,6 +440,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                   statusLabel: plan.overdueOrderCount > 0
                       ? '${plan.overdueOrderCount} overdue'
                       : null,
+                  reserveBadgeSpace: true,
                 ),
             ],
           ),

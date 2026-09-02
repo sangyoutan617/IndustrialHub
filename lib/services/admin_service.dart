@@ -110,6 +110,22 @@ class AdminService {
     return row != null;
   }
 
+  Future<Map<String, bool>> getUserBanStatuses() async {
+    final rows = await _client.rpc('admin_list_user_ban_status');
+    return {
+      for (final row in rows as List)
+        (row as Map<String, dynamic>)['user_id'] as String:
+            row['is_banned'] as bool,
+    };
+  }
+
+  Future<void> setUserBanned(String userId, bool banned) async {
+    await _client.rpc(
+      'admin_set_user_banned',
+      params: {'p_user_id': userId, 'p_banned': banned},
+    );
+  }
+
   Future<CrossFactoryStats> crossFactoryStats() async {
     final factories = await _factoryService.getFactories();
 

@@ -16,6 +16,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/text_prompt_dialog.dart';
+import 'my_issue_reports_screen.dart';
 import '../capacity/capacity_dashboard_screen.dart';
 import '../stock/stock_dashboard_screen.dart';
 import '../supply/material_list_screen.dart';
@@ -469,6 +470,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   case 'share':
                     _shareReport();
                     break;
+                  case 'my_reports':
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const MyIssueReportsScreen(),
+                      ),
+                    );
+                    break;
                   case 'signout':
                     _signOut();
                     break;
@@ -490,6 +498,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: ListTile(
                     leading: const Icon(Icons.ios_share),
                     title: Text(l10n.homeShareReport),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'my_reports',
+                  child: ListTile(
+                    leading: Icon(Icons.error_outline),
+                    title: Text('My reports'),
                   ),
                 ),
                 PopupMenuItem(
