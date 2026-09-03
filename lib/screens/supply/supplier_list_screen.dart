@@ -31,6 +31,13 @@ class SupplierListScreen extends StatefulWidget {
 
 enum _LoadState { loading, error, ready }
 
+enum _SortMode { name, reliability }
+
+const _sortLabels = {
+  _SortMode.name: 'Name (A-Z)',
+  _SortMode.reliability: 'Reliability rating (highest first)',
+};
+
 class _SupplierListScreenState extends State<SupplierListScreen> {
   final _supplyService = SupplyService();
   final _supplierService = SupplierService();
@@ -40,7 +47,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
   List<RawMaterial> _materials = [];
   List<PurchaseOrder> _orders = [];
   Map<int, String> _materialNames = {};
-  bool _sortByReliability = false;
+  _SortMode _sortMode = _SortMode.name;
   final _searchController = TextEditingController();
   String _query = '';
   int _loadToken = 0;
@@ -90,7 +97,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
           )
           .toList();
     }
-    if (_sortByReliability) {
+    if (_sortMode == _SortMode.reliability) {
       list.sort((a, b) => b.reliabilityRating.compareTo(a.reliabilityRating));
     } else {
       list.sort((a, b) => a.supplierName.compareTo(b.supplierName));
@@ -141,7 +148,10 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     );
     if (!confirmed) return false;
     try {
-      await _supplierService.deleteSupplier(supplier.supplierId);
+      await _supplierService.deleteSupplier(
+        supplier.supplierId,
+        factoryId: widget.factoryId,
+      );
       if (!mounted) return true;
       await _load();
       if (!mounted) return true;
@@ -201,7 +211,11 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     );
     if (saved == null) return;
     try {
-      await _supplierService.updateRating(supplier.supplierId, saved);
+      await _supplierService.updateRating(
+        supplier.supplierId,
+        saved,
+        factoryId: widget.factoryId,
+      );
       if (!mounted) return;
       _load();
       ScaffoldMessenger.of(
@@ -259,13 +273,27 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
             tooltip: 'Compare suppliers',
             onPressed: _state == _LoadState.ready ? _openComparison : null,
           ),
-          IconButton(
-            icon: Icon(_sortByReliability ? Icons.star : Icons.sort_by_alpha),
-            tooltip: _sortByReliability
-                ? 'Sorted by reliability'
-                : 'Sort by name',
-            onPressed: () =>
-                setState(() => _sortByReliability = !_sortByReliability),
+          PopupMenuButton<_SortMode>(
+            tooltip: 'Sort',
+            icon: const Icon(Icons.sort),
+            initialValue: _sortMode,
+            onSelected: (mode) => setState(() => _sortMode = mode),
+            itemBuilder: (context) => [
+              for (final mode in _SortMode.values)
+                PopupMenuItem(
+                  value: mode,
+                  child: Row(
+                    children: [
+                      Icon(
+                        mode == _sortMode ? Icons.check : null,
+                        size: 18,
+                      ),
+                      const SizedBox(width: AppSpacing.s),
+                      Text(_sortLabels[mode]!),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ],
       ),

@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/supplier.dart';
+import 'data_event_service.dart';
 import 'supply_exceptions.dart';
 
 class SupplierService {
@@ -20,6 +21,7 @@ class SupplierService {
   Future<Supplier> createSupplier(
     Supplier supplier, {
     bool isSimulated = false,
+    int? factoryId,
   }) async {
     final row = await _client
         .from('suppliers')
@@ -29,10 +31,21 @@ class SupplierService {
         })
         .select()
         .single();
-    return Supplier.fromJson(row);
+    final result = Supplier.fromJson(row);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.supply,
+      );
+    }
+    return result;
   }
 
-  Future<Supplier> updateSupplier(int supplierId, Supplier supplier) async {
+  Future<Supplier> updateSupplier(
+    int supplierId,
+    Supplier supplier, {
+    int? factoryId,
+  }) async {
     final row = await _client
         .from('suppliers')
         .update({
@@ -42,10 +55,21 @@ class SupplierService {
         .eq('supplier_id', supplierId)
         .select()
         .single();
-    return Supplier.fromJson(row);
+    final result = Supplier.fromJson(row);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.supply,
+      );
+    }
+    return result;
   }
 
-  Future<Supplier> updateRating(int supplierId, double rating) async {
+  Future<Supplier> updateRating(
+    int supplierId,
+    double rating, {
+    int? factoryId,
+  }) async {
     final row = await _client
         .from('suppliers')
         .update({
@@ -55,10 +79,17 @@ class SupplierService {
         .eq('supplier_id', supplierId)
         .select()
         .single();
-    return Supplier.fromJson(row);
+    final result = Supplier.fromJson(row);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.supply,
+      );
+    }
+    return result;
   }
 
-  Future<void> deleteSupplier(int supplierId) async {
+  Future<void> deleteSupplier(int supplierId, {int? factoryId}) async {
     final linkedOrders = await _client
         .from('purchase_orders')
         .select('po_id')
@@ -73,6 +104,12 @@ class SupplierService {
     }
     try {
       await _client.from('suppliers').delete().eq('supplier_id', supplierId);
+      if (factoryId != null) {
+        DataEventService.instance.notifyChanged(
+          factoryId: factoryId,
+          source: DataChangeSource.supply,
+        );
+      }
     } on PostgrestException catch (e) {
       if (e.code == '23503') {
         throw const SupplyInUseException(

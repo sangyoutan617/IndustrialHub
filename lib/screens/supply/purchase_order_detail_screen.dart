@@ -103,7 +103,7 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
     if (!confirmed) return;
     setState(() => _busy = true);
     try {
-      await _orderService.receiveDelivery(_order);
+      await _orderService.receiveDelivery(_order, factoryId: widget.factoryId);
       await NotificationService.instance.notifyDeliveryReceived(
         factoryId: widget.factoryId,
         materialName: widget.materialName,
@@ -272,17 +272,20 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
       ),
     );
 
-    final actionsSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(title: 'Actions'),
-        Wrap(
-          spacing: AppSpacing.s,
-          runSpacing: AppSpacing.s,
-          children: _actions(),
-        ),
-      ],
-    );
+    final actions = _actions();
+    final actionsSection = actions.isEmpty
+        ? null
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionHeader(title: 'Actions'),
+              Wrap(
+                spacing: AppSpacing.s,
+                runSpacing: AppSpacing.s,
+                children: actions,
+              ),
+            ],
+          );
 
     return Scaffold(
       appBar: AppBar(title: Text(formatPoNumber(_order.poId))),
@@ -293,8 +296,10 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
           deliveryText,
           const SizedBox(height: AppSpacing.l),
           detailsCard,
-          const SizedBox(height: AppSpacing.l),
-          actionsSection,
+          if (actionsSection != null) ...[
+            const SizedBox(height: AppSpacing.l),
+            actionsSection,
+          ],
         ],
       ),
     );

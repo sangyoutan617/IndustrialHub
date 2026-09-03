@@ -218,6 +218,7 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
                     decoration: InputDecoration(
                       labelText: 'Machines down',
                       helperText: 'Out of $unitCount in this group',
+                      helperMaxLines: 2,
                     ),
                     validator: (v) {
                       final parsed = int.tryParse((v ?? '').trim());

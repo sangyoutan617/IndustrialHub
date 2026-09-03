@@ -382,6 +382,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                       decoration: InputDecoration(
                         labelText: 'PO Number',
                         helperText: 'System-generated — cannot be edited',
+                        helperMaxLines: 2,
                         filled: true,
                         fillColor: theme.colorScheme.surfaceContainerHighest,
                       ),
@@ -440,6 +441,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     decoration: InputDecoration(
                       labelText: 'Quantity',
                       helperText: coverageText,
+                      helperMaxLines: 2,
                     ),
                     onChanged: (_) => setState(() {}),
                     validator: (v) {
@@ -463,6 +465,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
                     decoration: InputDecoration(
                       labelText: 'Unit price (RM)',
                       helperText: _orderTotalHelperText(),
+                      helperMaxLines: 2,
                     ),
                     onChanged: (_) => setState(() {}),
                     validator: (v) {

@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/manpower.dart';
+import 'data_event_service.dart';
 
 class ManpowerService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -27,7 +28,12 @@ class ManpowerService {
         })
         .select()
         .single();
-    return Manpower.fromJson(row);
+    final result = Manpower.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: manpower.factoryId,
+      source: DataChangeSource.capacity,
+    );
+    return result;
   }
 
   Future<Manpower> updateShift(int manpowerId, Manpower manpower) async {
@@ -40,10 +46,21 @@ class ManpowerService {
         .eq('manpower_id', manpowerId)
         .select()
         .single();
-    return Manpower.fromJson(row);
+    final result = Manpower.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: manpower.factoryId,
+      source: DataChangeSource.capacity,
+    );
+    return result;
   }
 
-  Future<void> deleteShift(int manpowerId) async {
+  Future<void> deleteShift(int manpowerId, {int? factoryId}) async {
     await _client.from('manpower').delete().eq('manpower_id', manpowerId);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.capacity,
+      );
+    }
   }
 }

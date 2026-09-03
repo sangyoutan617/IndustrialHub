@@ -170,14 +170,15 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
 
   static const _allProductsId = -1;
 
-  late Future<_HomeData> _future;
+  _HomeData? _data;
+  Object? _loadError;
   late final AnimationController _pulseController;
   int? _selectedProductId;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _refresh();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -190,14 +191,18 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.factory.factoryId != widget.factory.factoryId) {
       _selectedProductId = null;
-      setState(() => _future = _load());
+      setState(() {
+        _data = null;
+        _loadError = null;
+      });
+      _refresh();
     }
   }
 
   void _onDataEvent() {
     final event = DataEventService.instance.changeEvent.value;
     if (mounted && event != null && event.factoryId == widget.factory.factoryId) {
-      setState(() => _future = _load());
+      _refresh();
     }
   }
 
@@ -211,7 +216,21 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
   Product _defaultProduct(List<Product> products) =>
       products.firstWhere((p) => !p.isGeneral, orElse: () => products.first);
 
-  Future<_HomeData> _load() async {
+  Future<void> _refresh() async {
+    try {
+      final data = await _fetch();
+      if (!mounted) return;
+      setState(() {
+        _data = data;
+        _loadError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (_data == null) setState(() => _loadError = e);
+    }
+  }
+
+  Future<_HomeData> _fetch() async {
     final factoryId = widget.factory.factoryId;
     final products = await _productService.getProducts(factoryId);
     if (products.isEmpty) {
@@ -271,14 +290,12 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-  void _retry() => setState(() => _future = _load());
+  void _retry() => _refresh();
 
   void _setProduct(int? productId) {
     if (productId == null || productId == _selectedProductId) return;
-    setState(() {
-      _selectedProductId = productId;
-      _future = _load();
-    });
+    setState(() => _selectedProductId = productId);
+    _refresh();
   }
 
   @override
@@ -288,20 +305,11 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       color: pal.bg,
       child: SafeArea(
         top: false,
-        child: FutureBuilder<_HomeData>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return Center(
-                child: CircularProgressIndicator(color: pal.neutral),
-              );
-            }
-            if (snapshot.hasError) {
-              return _buildError(pal);
-            }
-            return _buildReady(snapshot.data!, pal);
-          },
-        ),
+        child: _data != null
+            ? _buildReady(_data!, pal)
+            : _loadError != null
+            ? _buildError(pal)
+            : Center(child: CircularProgressIndicator(color: pal.neutral)),
       ),
     );
   }

@@ -4,6 +4,7 @@ import '../../models/factory.dart';
 import '../../models/msic_code.dart';
 import '../../services/capacity_service.dart';
 import '../../services/factory_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/msic_field.dart';
 import '../../widgets/responsive_form_fields.dart';
 
@@ -109,13 +110,14 @@ class _FactorySettingsScreenState extends State<FactorySettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedState,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'State'),
-                    items: [
+                  AppDropdownField<String>(
+                    idPrefix: 'state',
+                    label: 'State',
+                    required: false,
+                    value: _selectedState,
+                    entries: [
                       for (final state in malaysianStates)
-                        DropdownMenuItem(value: state, child: Text(state)),
+                        DropdownMenuEntry(value: state, label: state),
                     ],
                     onChanged: (v) => setState(() => _selectedState = v),
                   ),

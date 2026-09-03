@@ -9,6 +9,7 @@ import '../../services/material_service.dart';
 import '../../services/mrp_service.dart';
 import '../../services/order_service.dart';
 import '../../services/supplier_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
@@ -163,9 +164,13 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
         await _supplierService.updateSupplier(
           widget.supplier!.supplierId,
           supplier,
+          factoryId: widget.factoryId,
         );
       } else {
-        await _supplierService.createSupplier(supplier);
+        await _supplierService.createSupplier(
+          supplier,
+          factoryId: widget.factoryId,
+        );
       }
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -267,21 +272,19 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                     validator: SupplierValidators.validateEmail,
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    initialValue: _selectedMaterialId,
-                    decoration: const InputDecoration(
-                      labelText: 'Supplies which material',
-                    ),
-                    items: [
+                  AppDropdownField<int>(
+                    idPrefix: 'material',
+                    label: 'Supplies which material',
+                    value: _selectedMaterialId,
+                    entries: [
                       for (final material in _materials)
-                        DropdownMenuItem(
+                        DropdownMenuEntry(
                           value: material.materialId,
-                          child: Text(material.materialName),
+                          label: material.materialName,
                         ),
                     ],
                     onChanged: (value) =>
                         setState(() => _selectedMaterialId = value),
-                    validator: (v) => v == null ? 'Required' : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -295,6 +298,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                       labelText: 'Lead time (days)',
                       helperText: 'How long an order takes to arrive '
                           '(max ${SupplierValidators.maxLeadTimeDays} working days)',
+                      helperMaxLines: 2,
                     ),
                     onChanged: (_) => setState(() {}),
                     validator: SupplierValidators.validateLeadTime,
@@ -311,6 +315,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                       helperText:
                           'Quoted price for this material — prefills new '
                           'purchase orders, still editable there',
+                      helperMaxLines: 2,
                     ),
                     validator: (v) {
                       final trimmed = v?.trim() ?? '';

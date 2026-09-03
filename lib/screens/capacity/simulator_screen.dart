@@ -4,6 +4,7 @@ import '../../core/formatters.dart';
 import '../../models/product.dart';
 import '../../services/capacity_service.dart';
 import '../../services/product_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -196,23 +197,18 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          DropdownButtonFormField<int>(
-            initialValue: _selectedProductId,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Product'),
-            items: [
+          AppDropdownField<int>(
+            idPrefix: 'product',
+            label: 'Product',
+            required: false,
+            value: _selectedProductId,
+            entries: [
               for (final product in _products)
-                DropdownMenuItem(
+                DropdownMenuEntry(
                   value: product.productId,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      product.isGeneral
-                          ? '${product.productName} (auto-created)'
-                          : product.productName,
-                    ),
-                  ),
+                  label: product.isGeneral
+                      ? '${product.productName} (auto-created)'
+                      : product.productName,
                 ),
             ],
             onChanged: _setProduct,

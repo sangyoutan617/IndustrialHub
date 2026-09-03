@@ -103,20 +103,12 @@ class MetricRow extends StatelessWidget {
   final AppStatus? status;
   final String? statusLabel;
 
-  /// When true, always reserves a fixed-width trailing slot for the status
-  /// badge — even on rows with no badge — so the value column lines up
-  /// across every row in the same card regardless of which rows have one.
-  final bool reserveBadgeSpace;
-
-  static const double _badgeSlotWidth = 92;
-
   const MetricRow({
     super.key,
     required this.label,
     required this.value,
     this.status,
     this.statusLabel,
-    this.reserveBadgeSpace = false,
   });
 
   @override
@@ -140,42 +132,20 @@ class MetricRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.m),
+          if (badge != null) ...[badge, const SizedBox(width: AppSpacing.s)],
           Flexible(
             child: Align(
               alignment: Alignment.centerRight,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerRight,
-                child: Text(
-                  value,
-                  textAlign: TextAlign.right,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: scheme.onSurface,
-                  ),
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
                 ),
               ),
             ),
           ),
-          if (reserveBadgeSpace) ...[
-            const SizedBox(width: AppSpacing.s),
-            SizedBox(
-              width: _badgeSlotWidth,
-              child: badge == null
-                  ? null
-                  : Align(
-                      alignment: Alignment.centerRight,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
-                        child: badge,
-                      ),
-                    ),
-            ),
-          ] else if (badge != null) ...[
-            const SizedBox(width: AppSpacing.s),
-            badge,
-          ],
         ],
       ),
     );

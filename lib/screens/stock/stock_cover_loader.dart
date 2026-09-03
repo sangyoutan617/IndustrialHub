@@ -62,10 +62,16 @@ class StockOverview {
   const StockOverview({required this.covers, required this.forecasts});
 }
 
-Future<StockOverview> loadStockOverview(int factoryId) async {
+Future<StockOverview> loadStockOverview(
+  int factoryId, {
+  bool includeArchived = false,
+}) async {
   final stockService = StockService();
   final demandService = DemandService();
-  final stockList = await stockService.getStockList(factoryId);
+  final stockList = await stockService.getStockList(
+    factoryId,
+    includeArchived: includeArchived,
+  );
   final forecasts = await demandService.getForecasts(factoryId);
 
   final activeForecasts = DemandForecast.activeOn(forecasts, DateTime.now());

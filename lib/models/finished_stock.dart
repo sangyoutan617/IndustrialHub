@@ -5,6 +5,7 @@ class FinishedStock {
 
   final String productName;
   final int currentQuantity;
+  final String productStatus;
 
   const FinishedStock({
     required this.stockId,
@@ -12,7 +13,10 @@ class FinishedStock {
     required this.productId,
     required this.productName,
     required this.currentQuantity,
+    this.productStatus = 'active',
   });
+
+  bool get isArchived => productStatus == 'archived';
 
   factory FinishedStock.fromJson(Map<String, dynamic> json) {
     final joinedProduct = json['products'] as Map<String, dynamic>?;
@@ -22,6 +26,7 @@ class FinishedStock {
       productId: json['product_id'] as int,
       productName: joinedProduct?['product_name'] as String? ?? 'Unknown product',
       currentQuantity: json['current_quantity'] as int,
+      productStatus: joinedProduct?['status'] as String? ?? 'active',
     );
   }
 

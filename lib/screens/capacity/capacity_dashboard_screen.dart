@@ -9,6 +9,7 @@ import '../../services/capacity_service.dart';
 import '../../services/data_event_service.dart';
 import '../../services/product_service.dart';
 import '../../widgets/ai_insight_card.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -159,23 +160,18 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
       _products.firstWhere((p) => p.productId == _selectedProductId);
 
   Widget _productPicker() {
-    return DropdownButtonFormField<int>(
-      initialValue: _selectedProductId,
-      isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Product'),
-      items: [
+    return AppDropdownField<int>(
+      idPrefix: 'product',
+      label: 'Product',
+      required: false,
+      value: _selectedProductId,
+      entries: [
         for (final product in _products)
-          DropdownMenuItem(
+          DropdownMenuEntry(
             value: product.productId,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                product.isGeneral
-                    ? '${product.productName} (auto-created)'
-                    : product.productName,
-              ),
-            ),
+            label: product.isGeneral
+                ? '${product.productName} (auto-created)'
+                : product.productName,
           ),
       ],
       onChanged: _setProduct,

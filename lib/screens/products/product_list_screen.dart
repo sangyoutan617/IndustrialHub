@@ -26,7 +26,11 @@ enum _LoadState { loading, error, ready }
 class _ProductListScreenState extends State<ProductListScreen> {
   final _service = ProductService();
   _LoadState _state = _LoadState.loading;
-  List<Product> _products = [];
+  List<Product> _allProducts = [];
+  bool _showArchived = false;
+
+  List<Product> get _visibleProducts =>
+      _allProducts.where((p) => p.isArchived == _showArchived).toList();
 
   @override
   void initState() {
@@ -37,10 +41,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
-      final products = await _service.getProducts(widget.factoryId);
+      final products = await _service.getProducts(
+        widget.factoryId,
+        includeArchived: true,
+      );
       if (!mounted) return;
       setState(() {
-        _products = products;
+        _allProducts = products;
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -70,50 +77,115 @@ class _ProductListScreenState extends State<ProductListScreen> {
     _load();
   }
 
-  Future<bool> _delete(Product product) async {
+  Future<bool> _archive(Product product) async {
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Remove product?',
+      title: 'Archive product?',
       message:
-          'This removes "${product.productName}" permanently. This cannot '
-          'be undone.',
+          '"${product.productName}" will be hidden from daily lists, but '
+          'its history is kept. You can unarchive it later.',
+      confirmLabel: 'Archive',
+      isDestructive: false,
     );
     if (!confirmed) return false;
-    try {
-      await _service.deleteProduct(
-        product.productId,
-        factoryId: widget.factoryId,
-      );
-      if (!mounted) return true;
-      _load();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Product removed')));
-      return true;
-    } on SupplyInUseException catch (e) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      return false;
-    } catch (_) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not delete product. Please try again.'),
-        ),
-      );
-      return false;
-    }
+    setState(
+      () => _allProducts = _allProducts
+          .map((p) => p.productId == product.productId ? _withArchived(p, true) : p)
+          .toList(),
+    );
+    _service
+        .archiveProduct(product.productId, factoryId: widget.factoryId)
+        .then((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Product archived')));
+        })
+        .catchError((Object e) {
+          if (!mounted) return;
+          setState(
+            () => _allProducts = _allProducts
+                .map(
+                  (p) => p.productId == product.productId
+                      ? _withArchived(p, false)
+                      : p,
+                )
+                .toList(),
+          );
+          final message = e is SupplyInUseException
+              ? e.message
+              : 'Could not archive product. Please try again.';
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
+        });
+    return true;
   }
+
+  void _unarchive(Product product) {
+    setState(
+      () => _allProducts = _allProducts
+          .map((p) => p.productId == product.productId ? _withArchived(p, false) : p)
+          .toList(),
+    );
+    _service
+        .reactivateProduct(product.productId, factoryId: widget.factoryId)
+        .then((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Product restored')));
+        })
+        .catchError((Object e) {
+          if (!mounted) return;
+          setState(
+            () => _allProducts = _allProducts
+                .map(
+                  (p) => p.productId == product.productId
+                      ? _withArchived(p, true)
+                      : p,
+                )
+                .toList(),
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not restore product. Please try again.'),
+            ),
+          );
+        });
+  }
+
+  Product _withArchived(Product p, bool archived) => Product(
+    productId: p.productId,
+    factoryId: p.factoryId,
+    productName: p.productName,
+    unit: p.unit,
+    isGeneral: p.isGeneral,
+    status: archived ? 'archived' : 'active',
+  );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Products')),
-      body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openForm,
-        child: const Icon(Icons.add),
+      appBar: AppBar(
+        title: Text(_showArchived ? 'Archived products' : 'Products'),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _showArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
+            ),
+            tooltip: _showArchived ? 'Show active products' : 'Show archived',
+            onPressed: () => setState(() => _showArchived = !_showArchived),
+          ),
+        ],
       ),
+      body: _buildBody(),
+      floatingActionButton: _showArchived
+          ? null
+          : FloatingActionButton(
+              onPressed: _openForm,
+              child: const Icon(Icons.add),
+            ),
     );
   }
 
@@ -127,21 +199,28 @@ class _ProductListScreenState extends State<ProductListScreen> {
           onRetry: _load,
         );
       case _LoadState.ready:
-        if (_products.isEmpty) {
+        final products = _visibleProducts;
+        if (products.isEmpty) {
           return RefreshIndicator(
             onRefresh: _load,
             child: ListView(
               children: [
                 const SizedBox(height: 80),
-                EmptyState(
-                  icon: Icons.category_outlined,
-                  title: 'No products yet',
-                  subtitle:
-                      'Add a product to assign machines, manpower, and raw '
-                      'materials to it.',
-                  actionLabel: 'Add product',
-                  onAction: _openForm,
-                ),
+                _showArchived
+                    ? const EmptyState(
+                        icon: Icons.archive_outlined,
+                        title: 'No archived products',
+                        subtitle: 'Products you archive will show up here.',
+                      )
+                    : EmptyState(
+                        icon: Icons.category_outlined,
+                        title: 'No products yet',
+                        subtitle:
+                            'Add a product to assign machines, manpower, and '
+                            'raw materials to it.',
+                        actionLabel: 'Add product',
+                        onAction: _openForm,
+                      ),
               ],
             ),
           );
@@ -150,72 +229,79 @@ class _ProductListScreenState extends State<ProductListScreen> {
           onRefresh: _load,
           child: ResponsiveGridList(
             padding: const EdgeInsets.all(8),
-            itemCount: _products.length,
+            itemCount: products.length,
             itemBuilder: (context, index) {
-              final product = _products[index];
+              final product = products[index];
+              final tile = Card(
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: product.isGeneral
+                        ? Theme.of(context).colorScheme.surfaceContainerHighest
+                        : Theme.of(context).colorScheme.primaryContainer,
+                    child: Icon(
+                      product.isGeneral
+                          ? Icons.inventory_2_outlined
+                          : Icons.category_outlined,
+                    ),
+                  ),
+                  title: Text(product.productName),
+                  subtitle: product.isGeneral
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.xs),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const StatusChip(
+                                label: 'General',
+                                status: AppStatus.neutral,
+                                dense: true,
+                              ),
+                              const SizedBox(width: AppSpacing.s),
+                              Expanded(
+                                child: Text(
+                                  'Auto-created catch-all',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Text(product.unit),
+                  onTap: _showArchived
+                      ? null
+                      : () => _openDetail(product),
+                  trailing: _showArchived
+                      ? IconButton(
+                          icon: const Icon(Icons.unarchive_outlined),
+                          tooltip: 'Restore',
+                          onPressed: () => _unarchive(product),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.archive_outlined),
+                          tooltip: 'Archive',
+                          onPressed: () => _archive(product),
+                        ),
+                ),
+              );
+              if (_showArchived) return tile;
               return Dismissible(
                 key: ValueKey(product.productId),
                 direction: DismissDirection.endToStart,
-                confirmDismiss: (_) => _delete(product),
+                confirmDismiss: (_) => _archive(product),
                 background: Container(
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.errorContainer,
+                    color: Theme.of(context).colorScheme.secondaryContainer,
                     borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                   child: Icon(
-                    Icons.delete_outline,
-                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    Icons.archive_outlined,
+                    color: Theme.of(context).colorScheme.onSecondaryContainer,
                   ),
                 ),
-                child: Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: product.isGeneral
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerHighest
-                          : Theme.of(context).colorScheme.primaryContainer,
-                      child: Icon(
-                        product.isGeneral
-                            ? Icons.inventory_2_outlined
-                            : Icons.category_outlined,
-                      ),
-                    ),
-                    title: Text(product.productName),
-                    subtitle: product.isGeneral
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: AppSpacing.xs),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const StatusChip(
-                                  label: 'General',
-                                  status: AppStatus.neutral,
-                                  dense: true,
-                                ),
-                                const SizedBox(width: AppSpacing.s),
-                                Expanded(
-                                  child: Text(
-                                    'Auto-created catch-all',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : Text(product.unit),
-                    onTap: () => _openDetail(product),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _delete(product),
-                    ),
-                  ),
-                ),
+                child: tile,
               );
             },
           ),

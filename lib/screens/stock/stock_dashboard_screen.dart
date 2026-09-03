@@ -4,7 +4,6 @@ import '../../core/theme.dart';
 import '../../models/demand_forecast.dart';
 import '../../services/data_event_service.dart';
 import '../../services/demand_service.dart';
-import '../../services/notification_service.dart';
 import '../../services/stock_service.dart';
 import '../../widgets/ai_insight_card.dart';
 import '../../widgets/confirm_dialog.dart';
@@ -29,35 +28,43 @@ class StockDashboardScreen extends StatefulWidget {
 
 enum _LoadState { loading, error, ready }
 
+enum _ProductFilter { active, archived, all }
+
 class _StockDashboardScreenState extends State<StockDashboardScreen> {
   final _demandService = DemandService();
   final _stockService = StockService();
 
   _LoadState _state = _LoadState.loading;
-  List<ProductCover> _covers = [];
+  List<ProductCover> _allCovers = [];
   List<DemandForecast> _forecasts = [];
   int _pendingMovements = 0;
+  _ProductFilter _productFilter = _ProductFilter.active;
+
+  List<ProductCover> get _covers =>
+      _allCovers.where((c) => !c.stock.isArchived).toList();
+
+  List<ProductCover> get _filteredCovers {
+    switch (_productFilter) {
+      case _ProductFilter.active:
+        return _allCovers.where((c) => !c.stock.isArchived).toList();
+      case _ProductFilter.archived:
+        return _allCovers.where((c) => c.stock.isArchived).toList();
+      case _ProductFilter.all:
+        return _allCovers;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _load();
-    NotificationService.instance.lastDelivery.addListener(_onDeliveryEvent);
     DataEventService.instance.changeEvent.addListener(_onDataEvent);
   }
 
   @override
   void dispose() {
-    NotificationService.instance.lastDelivery.removeListener(_onDeliveryEvent);
     DataEventService.instance.changeEvent.removeListener(_onDataEvent);
     super.dispose();
-  }
-
-  void _onDeliveryEvent() {
-    if (mounted) {
-      _load();
-      setState(() {});
-    }
   }
 
   void _onDataEvent() {
@@ -79,11 +86,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
       final syncFailures = await _stockService.syncPendingMovements(
         dropConflicts: showErrors,
       );
-      final overview = await loadStockOverview(widget.factoryId);
+      final overview = await loadStockOverview(
+        widget.factoryId,
+        includeArchived: true,
+      );
       final pending = await _stockService.pendingMovementCount();
       if (!mounted) return;
       setState(() {
-        _covers = overview.covers;
+        _allCovers = overview.covers;
         _forecasts = overview.forecasts;
         _pendingMovements = pending;
         _state = _LoadState.ready;
@@ -227,19 +237,11 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
     required List<ProductCover> overstockItems,
     required Widget? aiInsight,
   }) {
-    final delivery = NotificationService.instance.lastDelivery.value;
-    final showDeliveryBanner =
-        delivery != null && delivery.factoryId == widget.factoryId;
-
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          if (showDeliveryBanner) ...[
-            _buildDeliveryBanner(delivery),
-            const SizedBox(height: AppSpacing.l),
-          ],
           if (_pendingMovements > 0) ...[
             _buildPendingSyncBanner(),
             const SizedBox(height: AppSpacing.l),
@@ -261,76 +263,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           _buildCoverListSection(),
           const SizedBox(height: AppSpacing.l),
           _buildDemandSection(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDeliveryBanner(MaterialDeliveryEvent delivery) {
-    final theme = Theme.of(context);
-    final formattedQty = '${formatRate(delivery.quantity)} units';
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.m,
-        vertical: AppSpacing.s,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.successLight,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.mark_email_read_outlined,
-            color: AppColors.success,
-            size: 22,
-          ),
-          const SizedBox(width: AppSpacing.m),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Raw Material Delivered',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.success,
-                  ),
-                ),
-                Text(
-                  '$formattedQty of ${delivery.materialName} arrived in stock. Tap to update projections.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.success,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          FilledButton.tonal(
-            onPressed: () {
-              _load();
-              NotificationService.instance.clearDeliveryAlert();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Stock data refreshed with latest materials'),
-                ),
-              );
-            },
-            style: FilledButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-            ),
-            child: const Text('Update'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 16, color: AppColors.success),
-            tooltip: 'Dismiss',
-            onPressed: () {
-              NotificationService.instance.clearDeliveryAlert();
-            },
-          ),
         ],
       ),
     );
@@ -541,7 +473,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   }
 
   Widget _buildCoverListSection() {
-    if (_covers.isEmpty) {
+    if (_allCovers.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: EmptyState(
@@ -554,14 +486,29 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
         ),
       );
     }
+    final filtered = _filteredCovers;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Days of cover'),
-        for (final cover in _covers) ...[
-          _buildCoverCard(cover),
-          const SizedBox(height: AppSpacing.s),
-        ],
+        SectionHeader(
+          title: 'Inventory Overview',
+          trailing: _buildProductFilterDropdown(),
+        ),
+        if (filtered.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: EmptyState(
+              icon: Icons.filter_list_off,
+              message: _productFilter == _ProductFilter.archived
+                  ? 'No archived products.'
+                  : 'No products match this filter.',
+            ),
+          )
+        else
+          for (final cover in filtered) ...[
+            _buildCoverCard(cover),
+            const SizedBox(height: AppSpacing.s),
+          ],
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
@@ -581,6 +528,58 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildProductFilterDropdown() {
+    final scheme = Theme.of(context).colorScheme;
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<_ProductFilter>(
+        value: _productFilter,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        items: [
+          DropdownMenuItem(
+            value: _ProductFilter.all,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.list, size: 14, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                const Text('All'),
+              ],
+            ),
+          ),
+          const DropdownMenuItem(
+            value: _ProductFilter.active,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.circle, size: 10, color: AppColors.success),
+                SizedBox(width: 6),
+                Text('Active'),
+              ],
+            ),
+          ),
+          DropdownMenuItem(
+            value: _ProductFilter.archived,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.archive_outlined,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                const Text('Archived'),
+              ],
+            ),
+          ),
+        ],
+        onChanged: (value) {
+          if (value != null) setState(() => _productFilter = value);
+        },
+      ),
     );
   }
 
@@ -740,6 +739,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
   }
 
   Widget _buildCoverCard(ProductCover cover) {
+    if (cover.stock.isArchived) return _buildArchivedCard(cover);
     final theme = Theme.of(context);
     final isOutOfStock =
         cover.stock.currentQuantity == 0 && cover.demandGap == null;
@@ -824,9 +824,14 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               if (cover.daysOfCover != null) ...[
                 Text(
                   'Demand ${formatNumber(cover.requiredPerDay!)}/day · '
-                  '${cover.daysOfCover!.toStringAsFixed(1)} days of cover',
+                  '${formatDaysOfCover(cover.daysOfCover!)}',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: secondaryTextColor,
+                    color: isCoverCritical(cover.daysOfCover!)
+                        ? (isOutOfStock ? Colors.white : AppColors.danger)
+                        : secondaryTextColor,
+                    fontWeight: isCoverCritical(cover.daysOfCover!)
+                        ? FontWeight.w700
+                        : null,
                   ),
                 ),
                 if (cover.stockOutDate != null)
@@ -843,6 +848,50 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                     color: secondaryTextColor,
                   ),
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArchivedCard(ProductCover cover) {
+    final theme = Theme.of(context);
+    return Card(
+      child: InkWell(
+        onTap: () => _openDetail(cover),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.l),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cover.stock.productName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '${formatNumber(cover.stock.currentQuantity)} units in stock (historical)',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.s),
+              const StatusChip(
+                label: 'Archived',
+                status: AppStatus.neutral,
+                dense: true,
+              ),
             ],
           ),
         ),

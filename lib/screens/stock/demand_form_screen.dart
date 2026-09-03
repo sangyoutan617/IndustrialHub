@@ -5,6 +5,7 @@ import '../../models/demand_forecast.dart';
 import '../../models/product.dart';
 import '../../services/demand_service.dart';
 import '../../services/product_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
@@ -71,19 +72,6 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
             .where((f) => f.demandId != widget.forecast?.demandId)
             .map((f) => f.productId)
             .toSet();
-        final available = _isEditing
-            ? products
-            : products
-                  .where(
-                    (p) => !_productIdsWithForecast.contains(p.productId),
-                  )
-                  .toList();
-        _selectedProductId ??= available.isEmpty
-            ? null
-            : available.firstWhere(
-                (p) => !p.isGeneral,
-                orElse: () => available.first,
-              ).productId;
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -245,29 +233,23 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
         children: [
           ResponsiveFormFields(
             children: [
-              DropdownButtonFormField<int>(
-                initialValue: _selectedProductId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Product'),
-                items: [
+              AppDropdownField<int>(
+                idPrefix: 'product',
+                label: 'Select a product',
+                requiredMessage: 'Please select a product',
+                enabled: !_isEditing,
+                value: _selectedProductId,
+                entries: [
                   for (final product in _availableProducts)
-                    DropdownMenuItem(
+                    DropdownMenuEntry(
                       value: product.productId,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          product.isGeneral
-                              ? '${product.productName} (auto-created)'
-                              : product.productName,
-                        ),
-                      ),
+                      label: product.isGeneral
+                          ? '${product.productName} (auto-created)'
+                          : product.productName,
                     ),
                 ],
-                onChanged: _isEditing
-                    ? null
-                    : (value) => setState(() => _selectedProductId = value),
-                validator: (v) => v == null ? 'Required' : null,
+                onChanged: (value) =>
+                    setState(() => _selectedProductId = value),
               ),
               const SizedBox(height: AppSpacing.l),
               TextFormField(
@@ -281,6 +263,7 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                   labelText: 'Required units per day',
                   helperText:
                       'A number you set, or derive one from shipment history below',
+                  helperMaxLines: 2,
                 ),
                 validator: (v) {
                   final parsed = int.tryParse(v ?? '');

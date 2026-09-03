@@ -1,24 +1,10 @@
-import 'package:flutter/foundation.dart' show kIsWeb, ValueNotifier;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../core/formatters.dart';
 import '../models/factory.dart';
 import 'mrp_service.dart';
 import 'supply_service.dart';
-
-class MaterialDeliveryEvent {
-  final int factoryId;
-  final String materialName;
-  final double quantity;
-  final DateTime timestamp;
-
-  const MaterialDeliveryEvent({
-    required this.factoryId,
-    required this.materialName,
-    required this.quantity,
-    required this.timestamp,
-  });
-}
 
 class NotificationService {
   NotificationService._();
@@ -27,13 +13,6 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _initialised = false;
-
-  final ValueNotifier<MaterialDeliveryEvent?> lastDelivery =
-      ValueNotifier<MaterialDeliveryEvent?>(null);
-
-  void clearDeliveryAlert() {
-    lastDelivery.value = null;
-  }
 
   Future<void> init() async {
     if (kIsWeb || _initialised) return;
@@ -136,13 +115,6 @@ class NotificationService {
     required double quantity,
     String? factoryName,
   }) async {
-    lastDelivery.value = MaterialDeliveryEvent(
-      factoryId: factoryId,
-      materialName: materialName,
-      quantity: quantity,
-      timestamp: DateTime.now(),
-    );
-
     if (kIsWeb) return;
     await init();
 

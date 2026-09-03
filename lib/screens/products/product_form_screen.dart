@@ -105,6 +105,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Unit',
                       helperText: 'e.g. units, bottles, boxes, litres',
+                      helperMaxLines: 2,
                     ),
                     validator: (v) {
                       if (v != null && RegExp(r'[0-9]').hasMatch(v)) {

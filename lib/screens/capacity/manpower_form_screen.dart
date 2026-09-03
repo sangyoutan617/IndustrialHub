@@ -5,6 +5,7 @@ import '../../models/manpower.dart';
 import '../../models/product.dart';
 import '../../services/manpower_service.dart';
 import '../../services/product_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
@@ -177,38 +178,31 @@ class _ManpowerFormScreenState extends State<ManpowerFormScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Station name',
                   helperText: 'e.g. Filling, Wrapping, Packing',
+                  helperMaxLines: 2,
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: AppSpacing.l),
-              DropdownButtonFormField<int>(
-                initialValue: _selectedProductId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Product',
-                  helperText:
-                      'This station is one step in this product\'s labour '
-                      'flow — the slowest station caps the line',
-                ),
-                items: [
+              AppDropdownField<int>(
+                idPrefix: 'product',
+                label: 'Product',
+                helperText:
+                    'This station is one step in this product\'s labour '
+                    'flow — the slowest station caps the line',
+                helperMaxLines: 3,
+                value: _selectedProductId,
+                entries: [
                   for (final product in _products)
-                    DropdownMenuItem(
+                    DropdownMenuEntry(
                       value: product.productId,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          product.isGeneral
-                              ? '${product.productName} (auto-created)'
-                              : product.productName,
-                        ),
-                      ),
+                      label: product.isGeneral
+                          ? '${product.productName} (auto-created)'
+                          : product.productName,
                     ),
                 ],
                 onChanged: (value) =>
                     setState(() => _selectedProductId = value),
-                validator: (v) => v == null ? 'Required' : null,
               ),
               const FormBreak(SectionHeader(title: 'Station details')),
               TextFormField(

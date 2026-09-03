@@ -97,7 +97,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
     );
     if (!confirmed) return false;
     try {
-      await _service.deleteMachine(machine.machineId);
+      await _service.deleteMachine(machine.machineId, factoryId: widget.factoryId);
       _load();
       if (!mounted) return true;
       ScaffoldMessenger.of(
@@ -204,13 +204,23 @@ class _MachineListScreenState extends State<MachineListScreen> {
                         children: [
                           Row(
                             children: [
-                              StatusChip(
-                                label: chipLabel,
-                                status: chipStatus,
-                                dense: true,
+                              SizedBox(
+                                width: 96,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: StatusChip(
+                                      label: chipLabel,
+                                      status: chipStatus,
+                                      dense: true,
+                                    ),
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: AppSpacing.s),
-                              if (machine.isGroup) ...[
+                              if (machine.isGroup)
                                 Text(
                                   '×${machine.unitCount}',
                                   style: Theme.of(context).textTheme.labelMedium
@@ -220,16 +230,13 @@ class _MachineListScreenState extends State<MachineListScreen> {
                                         ).colorScheme.onSurfaceVariant,
                                       ),
                                 ),
-                                const SizedBox(width: AppSpacing.s),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  isActive
-                                      ? '${formatUnits(contribution)}/day'
-                                      : 'Excluded from capacity (${machine.status})',
-                                ),
-                              ),
                             ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isActive
+                                ? '${formatUnits(contribution)}/day'
+                                : 'Excluded from capacity (${machine.status})',
                           ),
                           const SizedBox(height: 2),
                           Text(

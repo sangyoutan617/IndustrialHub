@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/purchase_order.dart';
+import '../models/raw_material_movement.dart';
 import 'data_event_service.dart';
 
 class OrderService {
@@ -167,10 +168,11 @@ class OrderService {
 
     final material = await _client
         .from('raw_materials')
-        .select('current_stock')
+        .select('current_stock, factory_id')
         .eq('material_id', order.materialId)
         .single();
     final currentStock = (material['current_stock'] as num).toDouble();
+    final materialFactoryId = material['factory_id'] as int;
 
     await _client
         .from('raw_materials')
@@ -179,5 +181,14 @@ class OrderService {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('material_id', order.materialId);
+
+    await _client.from('raw_material_movements').insert({
+      'material_id': order.materialId,
+      'factory_id': materialFactoryId,
+      'movement_type': RawMaterialMovementType.receipt,
+      'quantity': order.quantity,
+      'movement_date': today,
+      'note': 'Purchase order #${order.poId} received',
+    });
   }
 }

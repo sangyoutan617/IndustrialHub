@@ -13,6 +13,7 @@ import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
 import '../../services/product_service.dart';
 import '../../services/stock_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
@@ -497,27 +498,22 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
 
     final headerSection = Column(
       children: [
-        DropdownButtonFormField<int>(
-          initialValue: _selectedProductId,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Product'),
-          items: [
-            const DropdownMenuItem(
+        AppDropdownField<int>(
+          idPrefix: 'product',
+          label: 'Product',
+          required: false,
+          value: _selectedProductId,
+          entries: [
+            const DropdownMenuEntry(
               value: _allProductsId,
-              child: Text('All products (combined)'),
+              label: 'All products (combined)',
             ),
             for (final product in _products)
-              DropdownMenuItem(
+              DropdownMenuEntry(
                 value: product.productId,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    product.isGeneral
-                        ? '${product.productName} (auto-created)'
-                        : product.productName,
-                  ),
-                ),
+                label: product.isGeneral
+                    ? '${product.productName} (auto-created)'
+                    : product.productName,
               ),
           ],
           onChanged: _setProduct,
@@ -874,28 +870,21 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DropdownButtonFormField<int>(
-                initialValue: _selectedProductId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Product'),
-                items: [
+              AppDropdownField<int>(
+                idPrefix: 'log-product',
+                label: 'Product',
+                value: _selectedProductId,
+                entries: [
                   for (final product in widget.products)
-                    DropdownMenuItem(
+                    DropdownMenuEntry(
                       value: product.productId,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          product.isGeneral
-                              ? '${product.productName} (auto-created)'
-                              : product.productName,
-                        ),
-                      ),
+                      label: product.isGeneral
+                          ? '${product.productName} (auto-created)'
+                          : product.productName,
                     ),
                 ],
                 onChanged: (value) =>
                     setState(() => _selectedProductId = value),
-                validator: (v) => v == null ? 'Required' : null,
               ),
               const SizedBox(height: 8),
               ListTile(

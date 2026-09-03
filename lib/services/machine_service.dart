@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/machine.dart';
+import 'data_event_service.dart';
 
 class MachineService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -27,7 +28,12 @@ class MachineService {
         })
         .select()
         .single();
-    return Machine.fromJson(row);
+    final result = Machine.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: machine.factoryId,
+      source: DataChangeSource.capacity,
+    );
+    return result;
   }
 
   Future<Machine> updateMachine(int machineId, Machine machine) async {
@@ -40,10 +46,21 @@ class MachineService {
         .eq('machine_id', machineId)
         .select()
         .single();
-    return Machine.fromJson(row);
+    final result = Machine.fromJson(row);
+    DataEventService.instance.notifyChanged(
+      factoryId: machine.factoryId,
+      source: DataChangeSource.capacity,
+    );
+    return result;
   }
 
-  Future<void> deleteMachine(int machineId) async {
+  Future<void> deleteMachine(int machineId, {int? factoryId}) async {
     await _client.from('machines').delete().eq('machine_id', machineId);
+    if (factoryId != null) {
+      DataEventService.instance.notifyChanged(
+        factoryId: factoryId,
+        source: DataChangeSource.capacity,
+      );
+    }
   }
 }

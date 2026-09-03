@@ -8,6 +8,7 @@ import '../../services/mrp_service.dart';
 import '../../services/product_service.dart';
 import '../../services/supplier_service.dart';
 import '../../services/supply_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/bottleneck_banner.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -208,23 +209,18 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
 
     final productPicker = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: DropdownButtonFormField<int>(
-        initialValue: _selectedProductId,
-        isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Product'),
-        items: [
+      child: AppDropdownField<int>(
+        idPrefix: 'product',
+        label: 'Product',
+        required: false,
+        value: _selectedProductId,
+        entries: [
           for (final product in _products)
-            DropdownMenuItem(
+            DropdownMenuEntry(
               value: product.productId,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  product.isGeneral
-                      ? '${product.productName} (auto-created)'
-                      : product.productName,
-                ),
-              ),
+              label: product.isGeneral
+                  ? '${product.productName} (auto-created)'
+                  : product.productName,
             ),
         ],
         onChanged: _setProduct,

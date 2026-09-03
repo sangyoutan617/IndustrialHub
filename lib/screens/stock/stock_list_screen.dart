@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../widgets/responsive_grid_list.dart';
 import '../../core/formatters.dart';
-import '../../core/theme.dart';
 import '../../models/finished_stock.dart';
 import '../../models/product.dart';
 import '../../services/product_service.dart';
 import '../../services/stock_service.dart';
-import '../../widgets/confirm_dialog.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -117,34 +116,6 @@ class _StockListScreenState extends State<StockListScreen> {
     }
   }
 
-  Future<bool> _delete(FinishedStock stock) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Remove product?',
-      message:
-          'This removes "${stock.productName}" and its entire movement history permanently. '
-          'This cannot be undone.',
-    );
-    if (!confirmed) return false;
-    try {
-      await _service.deleteStock(stock.stockId);
-      _load();
-      if (!mounted) return true;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Product removed')));
-      return true;
-    } catch (_) {
-      if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not delete product. Please try again.'),
-        ),
-      );
-      return false;
-    }
-  }
-
   Future<void> _openMovements(FinishedStock stock) async {
     await showStockMovementHistorySheet(
       context,
@@ -200,35 +171,13 @@ class _StockListScreenState extends State<StockListScreen> {
             itemCount: _stock.length,
             itemBuilder: (context, index) {
               final stock = _stock[index];
-              return Dismissible(
-                key: ValueKey(stock.stockId),
-                direction: DismissDirection.endToStart,
-                confirmDismiss: (_) => _delete(stock),
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.l),
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+              return Card(
+                child: ListTile(
+                  title: Text(stock.productName),
+                  subtitle: Text(
+                    '${formatUnits(stock.currentQuantity)} in stock',
                   ),
-                  child: Icon(
-                    Icons.delete_outline,
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                  ),
-                ),
-                child: Card(
-                  child: ListTile(
-                    title: Text(stock.productName),
-                    subtitle: Text(
-                      '${formatUnits(stock.currentQuantity)} in stock',
-                    ),
-                    onTap: () => _openMovements(stock),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _delete(stock),
-                    ),
-                  ),
+                  onTap: () => _openMovements(stock),
                 ),
               );
             },
@@ -257,7 +206,7 @@ class _NewProductDialog extends StatefulWidget {
 class _NewProductDialogState extends State<_NewProductDialog> {
   final _quantityController = TextEditingController(text: '0');
   final _formKey = GlobalKey<FormState>();
-  late int? _selectedProductId = widget.products.first.productId;
+  int? _selectedProductId;
 
   @override
   void dispose() {
@@ -289,27 +238,21 @@ class _NewProductDialogState extends State<_NewProductDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DropdownButtonFormField<int>(
-              initialValue: _selectedProductId,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Product'),
-              items: [
+            AppDropdownField<int>(
+              idPrefix: 'product',
+              label: 'Select a product',
+              requiredMessage: 'Please select a product',
+              value: _selectedProductId,
+              entries: [
                 for (final product in widget.products)
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: product.productId,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        product.isGeneral
-                            ? '${product.productName} (auto-created)'
-                            : product.productName,
-                      ),
-                    ),
+                    label: product.isGeneral
+                        ? '${product.productName} (auto-created)'
+                        : product.productName,
                   ),
               ],
               onChanged: (value) => setState(() => _selectedProductId = value),
-              validator: (v) => v == null ? 'Required' : null,
             ),
             const SizedBox(height: 12),
             TextFormField(

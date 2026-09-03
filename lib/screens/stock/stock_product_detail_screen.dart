@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
-import '../../services/product_service.dart';
 import '../../services/stock_service.dart';
-import '../../widgets/confirm_dialog.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
 import '../../widgets/stock_movement_history_sheet.dart';
-import '../../widgets/text_prompt_dialog.dart';
 import 'stock_cover_loader.dart';
 import 'stock_movement_form_screen.dart';
 
@@ -32,7 +29,6 @@ enum _LoadState { loading, error, notFound, ready }
 
 class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
   final _service = StockService();
-  final _productService = ProductService();
   _LoadState _state = _LoadState.loading;
   ProductCover? _cover;
 
@@ -62,58 +58,6 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
       debugPrint('stock: failed to load product detail: $e');
       if (!mounted) return;
       setState(() => _state = _LoadState.error);
-    }
-  }
-
-  Future<void> _rename() async {
-    final stock = _cover!.stock;
-    final newName = await showTextPromptDialog(
-      context,
-      title: 'Rename product',
-      label: 'Product name',
-      initialValue: stock.productName,
-    );
-    if (!mounted || newName == null || newName == stock.productName) return;
-    try {
-      await _productService.renameProduct(stock.productId, newName);
-      if (!mounted) return;
-      _load();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Product renamed')));
-    } catch (e) {
-      debugPrint('stock: failed to rename product: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not rename product. Please try again.'),
-        ),
-      );
-    }
-  }
-
-  Future<void> _delete() async {
-    final stock = _cover!.stock;
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Remove product?',
-      message:
-          'This removes "${stock.productName}" and its entire movement '
-          'history permanently. This cannot be undone.',
-    );
-    if (!confirmed) return;
-    try {
-      await _service.deleteStock(stock.stockId);
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      debugPrint('stock: failed to delete product: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not delete product. Please try again.'),
-        ),
-      );
     }
   }
 
@@ -154,20 +98,6 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
           alignment: Alignment.centerLeft,
           child: Text(_cover?.stock.productName ?? 'Product'),
         ),
-        actions: _state == _LoadState.ready
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined),
-                  tooltip: 'Rename product',
-                  onPressed: _rename,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Remove product',
-                  onPressed: _delete,
-                ),
-              ]
-            : null,
       ),
       body: _buildBody(),
     );
@@ -207,30 +137,31 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
             MetricRow(
               label: 'Current stock',
               value: formatUnits(stock.currentQuantity),
-              reserveBadgeSpace: true,
             ),
             MetricRow(
               label: 'Demand',
               value: cover.requiredPerDay != null
                   ? '${formatNumber(cover.requiredPerDay!)}/day'
                   : 'Not set',
-              reserveBadgeSpace: true,
             ),
             MetricRow(
               label: 'Days of cover',
               value: cover.daysOfCover != null
-                  ? formatDays(cover.daysOfCover!)
+                  ? formatDaysOfCover(cover.daysOfCover!)
                   : '—',
               status: cover.needsAttention ? AppStatus.danger : null,
-              statusLabel: cover.needsAttention ? 'Low' : null,
-              reserveBadgeSpace: true,
+              statusLabel: cover.needsAttention
+                  ? (cover.daysOfCover != null &&
+                            isCoverCritical(cover.daysOfCover!)
+                        ? 'Critical'
+                        : 'Low')
+                  : null,
             ),
             MetricRow(
               label: 'Predicted stock-out',
               value: cover.stockOutDate != null
                   ? formatDate(cover.stockOutDate!)
                   : 'Not projected',
-              reserveBadgeSpace: true,
             ),
           ],
         ),

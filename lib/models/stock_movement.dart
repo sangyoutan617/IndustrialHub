@@ -15,6 +15,7 @@ class StockMovement {
   final DateTime movementDate;
   final String? note;
   final bool isSimulated;
+  final String? productName;
 
   const StockMovement({
     required this.movementId,
@@ -24,9 +25,12 @@ class StockMovement {
     required this.movementDate,
     this.note,
     required this.isSimulated,
+    this.productName,
   });
 
   factory StockMovement.fromJson(Map<String, dynamic> json) {
+    final joinedStock = json['finished_stock'] as Map<String, dynamic>?;
+    final joinedProduct = joinedStock?['products'] as Map<String, dynamic>?;
     return StockMovement(
       movementId: json['movement_id'] as int,
       stockId: json['stock_id'] as int,
@@ -35,6 +39,7 @@ class StockMovement {
       movementDate: DateTime.parse(json['movement_date'] as String),
       note: json['note'] as String?,
       isSimulated: json['is_simulated'] as bool? ?? false,
+      productName: joinedProduct?['product_name'] as String?,
     );
   }
 

@@ -368,71 +368,89 @@ class _StockTrendScreenState extends State<StockTrendScreen> {
     );
   }
 
+  bool _isOutbound(String movementType) =>
+      movementType == StockMovementType.shipmentOut ||
+      movementType == StockMovementType.damaged;
+
   void _showDayDetail(DateTime day) {
-    final byType = <String, int>{};
-    for (final m in _movements) {
-      final d = DateTime(
-        m.movementDate.year,
-        m.movementDate.month,
-        m.movementDate.day,
-      );
-      if (d != day) continue;
-      final signed = switch (m.movementType) {
-        StockMovementType.productionIn => m.quantity.abs(),
-        StockMovementType.returned => m.quantity.abs(),
-        StockMovementType.shipmentOut => -m.quantity.abs(),
-        StockMovementType.damaged => -m.quantity.abs(),
-        _ => m.quantity,
-      };
-      byType.update(m.movementType, (v) => v + signed, ifAbsent: () => signed);
-    }
+    final dayMovements =
+        _movements.where((m) {
+          final d = DateTime(
+            m.movementDate.year,
+            m.movementDate.month,
+            m.movementDate.day,
+          );
+          return d == day;
+        }).toList()..sort(
+          (a, b) => (a.productName ?? '').compareTo(b.productName ?? ''),
+        );
 
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) {
         final scheme = Theme.of(context).colorScheme;
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.l,
-              0,
-              AppSpacing.l,
-              AppSpacing.l,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.75,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(formatDate(day), style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: AppSpacing.m),
-                if (byType.isEmpty)
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.l,
+                0,
+                AppSpacing.l,
+                AppSpacing.l,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    'No movement that day.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  )
-                else
-                  for (final type in StockMovementType.all)
-                    if (byType[type] != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(_typeLabels[type]!),
-                            Text(
-                              '${byType[type]! > 0 ? '+' : ''}${formatWhole(byType[type]!)}',
+                    formatDate(day),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.m),
+                  if (dayMovements.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'No movement that day.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: dayMovements.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final m = dayMovements[index];
+                          final isOut = _isOutbound(m.movementType);
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(m.productName ?? 'Unknown product'),
+                            subtitle: Text(
+                              m.note != null && m.note!.isNotEmpty
+                                  ? '${_typeLabels[m.movementType] ?? m.movementType} · ${m.note}'
+                                  : (_typeLabels[m.movementType] ??
+                                        m.movementType),
+                            ),
+                            trailing: Text(
+                              '${isOut ? '−' : '+'}${formatWhole(m.quantity.abs())}',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: byType[type]! >= 0
-                                    ? scheme.primary
-                                    : scheme.error,
+                                color: isOut ? scheme.error : scheme.primary,
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-              ],
+                    ),
+                ],
+              ),
             ),
           ),
         );

@@ -6,11 +6,15 @@ import 'supply_exceptions.dart';
 class ProductService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  Future<List<Product>> getProducts(int factoryId) async {
-    final rows = await _client
-        .from('products')
-        .select()
-        .eq('factory_id', factoryId)
+  Future<List<Product>> getProducts(
+    int factoryId, {
+    bool includeArchived = false,
+  }) async {
+    var query = _client.from('products').select().eq('factory_id', factoryId);
+    if (!includeArchived) {
+      query = query.eq('status', 'active');
+    }
+    final rows = await query
         .order('is_general', ascending: true)
         .order('product_name', ascending: true);
     return (rows as List)
@@ -60,6 +64,43 @@ class ProductService {
       source: DataChangeSource.capacity,
     );
     return result;
+  }
+
+  Future<void> archiveProduct(int productId, {required int factoryId}) async {
+    final activeDemand = await _client
+        .from('demand_forecast')
+        .select('demand_id')
+        .eq('product_id', productId)
+        .gt('required_per_day', 0)
+        .limit(1);
+    if ((activeDemand as List).isNotEmpty) {
+      throw const SupplyInUseException(
+        'Cannot archive product with active demand. Please complete or '
+        'remove the active demand target first.',
+      );
+    }
+    await _client
+        .from('products')
+        .update({'status': 'archived'})
+        .eq('product_id', productId);
+    DataEventService.instance.notifyChanged(
+      factoryId: factoryId,
+      source: DataChangeSource.capacity,
+    );
+  }
+
+  Future<void> reactivateProduct(
+    int productId, {
+    required int factoryId,
+  }) async {
+    await _client
+        .from('products')
+        .update({'status': 'active'})
+        .eq('product_id', productId);
+    DataEventService.instance.notifyChanged(
+      factoryId: factoryId,
+      source: DataChangeSource.capacity,
+    );
   }
 
   Future<void> deleteProduct(int productId, {required int factoryId}) async {

@@ -5,6 +5,7 @@ import '../../models/machine.dart';
 import '../../models/product.dart';
 import '../../services/machine_service.dart';
 import '../../services/product_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
@@ -196,33 +197,24 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: AppSpacing.l),
-              DropdownButtonFormField<int>(
-                initialValue: _selectedProductId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Product',
-                  helperText:
-                      'This machine\'s full capacity counts toward this '
-                      'product only',
-                ),
-                items: [
+              AppDropdownField<int>(
+                idPrefix: 'product',
+                label: 'Product',
+                helperText:
+                    'This machine\'s full capacity counts toward this '
+                    'product only',
+                value: _selectedProductId,
+                entries: [
                   for (final product in _products)
-                    DropdownMenuItem(
+                    DropdownMenuEntry(
                       value: product.productId,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          product.isGeneral
-                              ? '${product.productName} (auto-created)'
-                              : product.productName,
-                        ),
-                      ),
+                      label: product.isGeneral
+                          ? '${product.productName} (auto-created)'
+                          : product.productName,
                     ),
                 ],
                 onChanged: (value) =>
                     setState(() => _selectedProductId = value),
-                validator: (v) => v == null ? 'Required' : null,
               ),
               const FormBreak(SectionHeader(title: 'Machine details')),
               TextFormField(
@@ -261,6 +253,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                       'Use one row for a group of identical machines — '
                       'capacity counts all of them. Leave as 1 for a single '
                       'machine.',
+                  helperMaxLines: 3,
                 ),
                 validator: (v) => _requiredInt(v, min: 1, max: _maxUnitCount),
               ),
@@ -279,18 +272,19 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.l),
-              DropdownButtonFormField<String>(
-                initialValue: _status,
-                decoration: const InputDecoration(
-                  labelText: 'Status',
-                  helperText:
-                      'Downtime and Repair are normally set from the '
-                      'machine\'s own page — pick them here only to '
-                      'correct a stuck status',
-                ),
-                items: [
+              AppDropdownField<String>(
+                idPrefix: 'status',
+                label: 'Status',
+                required: false,
+                helperText:
+                    'Downtime and Repair are normally set from the '
+                    'machine\'s own page — pick them here only to '
+                    'correct a stuck status',
+                helperMaxLines: 3,
+                value: _status,
+                entries: [
                   for (final value in MachineStatus.all)
-                    DropdownMenuItem(value: value, child: Text(value)),
+                    DropdownMenuEntry(value: value, label: value),
                 ],
                 onChanged: (value) =>
                     setState(() => _status = value ?? MachineStatus.active),

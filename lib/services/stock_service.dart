@@ -9,16 +9,23 @@ class StockService {
   final SupabaseClient _client = Supabase.instance.client;
   final _queue = StockOfflineQueueService();
 
-  static const _selectWithProduct = '*, products(product_name)';
+  static const _selectWithProduct = '*, products(product_name, status)';
 
-  Future<List<FinishedStock>> getStockList(int factoryId) async {
+  Future<List<FinishedStock>> getStockList(
+    int factoryId, {
+    bool includeArchived = false,
+  }) async {
     final rows = await _client
         .from('finished_stock')
         .select(_selectWithProduct)
         .eq('factory_id', factoryId);
-    final list = (rows as List)
-        .map((row) => FinishedStock.fromJson(row as Map<String, dynamic>))
+    var list = (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map(FinishedStock.fromJson)
         .toList();
+    if (!includeArchived) {
+      list = list.where((s) => !s.isArchived).toList();
+    }
     list.sort((a, b) => a.productName.compareTo(b.productName));
     return list;
   }
@@ -61,16 +68,6 @@ class StockService {
     return createStock(factoryId, product, 0);
   }
 
-  Future<void> deleteStock(int stockId, {int? factoryId}) async {
-    await _client.from('finished_stock').delete().eq('stock_id', stockId);
-    if (factoryId != null) {
-      DataEventService.instance.notifyChanged(
-        factoryId: factoryId,
-        source: DataChangeSource.stock,
-      );
-    }
-  }
-
   Future<List<StockMovement>> getMovements(int stockId) async {
     final rows = await _client
         .from('stock_movements')
@@ -86,7 +83,7 @@ class StockService {
   Future<List<StockMovement>> getMovementsForFactory(int factoryId) async {
     final rows = await _client
         .from('stock_movements')
-        .select('*, finished_stock!inner(factory_id)')
+        .select('*, finished_stock!inner(factory_id, products(product_name))')
         .eq('finished_stock.factory_id', factoryId)
         .order('movement_date', ascending: false);
     return (rows as List)

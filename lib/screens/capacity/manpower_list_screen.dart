@@ -82,7 +82,7 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
     );
     if (!confirmed) return false;
     try {
-      await _service.deleteShift(shift.manpowerId);
+      await _service.deleteShift(shift.manpowerId, factoryId: widget.factoryId);
       _load();
       if (!mounted) return true;
       ScaffoldMessenger.of(

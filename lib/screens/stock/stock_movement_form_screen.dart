@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../core/theme.dart';
 import '../../models/stock_movement.dart';
 import '../../services/stock_service.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/responsive_form_fields.dart';
 
 class StockMovementFormScreen extends StatefulWidget {
@@ -116,15 +117,14 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
             children: [
               ResponsiveFormFields(
                 children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: _movementType,
-                    decoration: const InputDecoration(labelText: 'Movement type'),
-                    items: [
+                  AppDropdownField<String>(
+                    idPrefix: 'movement-type',
+                    label: 'Movement type',
+                    required: false,
+                    value: _movementType,
+                    entries: [
                       for (final type in StockMovementType.all)
-                        DropdownMenuItem(
-                          value: type,
-                          child: Text(_typeLabels[type]!),
-                        ),
+                        DropdownMenuEntry(value: type, label: _typeLabels[type]!),
                     ],
                     onChanged: (value) =>
                         setState(() => _movementType = value ?? _movementType),
@@ -161,6 +161,7 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                     decoration: InputDecoration(
                       labelText: 'Quantity',
                       helperText: _quantityHint,
+                      helperMaxLines: 2,
                     ),
                     validator: (v) {
                       final parsed = int.tryParse(v ?? '');
@@ -189,6 +190,7 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Date',
                       helperText: 'Movements are always recorded for today',
+                      helperMaxLines: 2,
                     ),
                     child: Text(
                       '${_movementDate.year}-${_movementDate.month.toString().padLeft(2, '0')}-${_movementDate.day.toString().padLeft(2, '0')}',
@@ -202,6 +204,7 @@ class _StockMovementFormScreenState extends State<StockMovementFormScreen> {
                       helperText: _isToday
                           ? null
                           : 'Required when recording for a different date',
+                      helperMaxLines: 2,
                     ),
                     validator: (v) {
                       if (!_isToday && (v == null || v.trim().isEmpty)) {

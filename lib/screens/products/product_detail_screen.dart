@@ -8,6 +8,7 @@ import '../../services/bom_service.dart';
 import '../../services/material_service.dart';
 import '../../services/product_service.dart';
 import '../../services/supply_exceptions.dart';
+import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
@@ -18,8 +19,13 @@ import 'product_form_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
+  final bool readOnly;
 
-  const ProductDetailScreen({super.key, required this.product});
+  const ProductDetailScreen({
+    super.key,
+    required this.product,
+    this.readOnly = false,
+  });
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -80,18 +86,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     Navigator.of(context).pop(true);
   }
 
-  Future<void> _delete() async {
+  Future<void> _archive() async {
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Remove product?',
+      title: 'Archive product?',
       message:
-          'This removes "${_product.productName}" permanently. This cannot '
-          'be undone.',
+          '"${_product.productName}" will be hidden from daily lists, but '
+          'its history is kept. You can unarchive it later.',
+      confirmLabel: 'Archive',
+      isDestructive: false,
     );
     if (!confirmed) return;
     setState(() => _busy = true);
     try {
-      await _productService.deleteProduct(
+      await _productService.archiveProduct(
         _product.productId,
         factoryId: _product.factoryId,
       );
@@ -106,7 +114,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not delete product. Please try again.'),
+          content: Text('Could not archive product. Please try again.'),
         ),
       );
     }
@@ -193,18 +201,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           alignment: Alignment.centerLeft,
           child: Text(_product.productName),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Edit product',
-            onPressed: _busy ? null : _edit,
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Remove product',
-            onPressed: _busy ? null : _delete,
-          ),
-        ],
+        actions: widget.readOnly
+            ? null
+            : [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Edit product',
+                  onPressed: _busy ? null : _edit,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.archive_outlined),
+                  tooltip: 'Archive product',
+                  onPressed: _busy ? null : _archive,
+                ),
+              ],
       ),
       body: _buildBody(),
     );
@@ -269,11 +279,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           const SizedBox(height: AppSpacing.l),
           SectionHeader(
             title: 'Material requirements',
-            trailing: TextButton.icon(
-              onPressed: () => _addOrEditRequirement(),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add'),
-            ),
+            trailing: widget.readOnly
+                ? null
+                : TextButton.icon(
+                    onPressed: () => _addOrEditRequirement(),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add'),
+                  ),
           ),
           if (_materials.isEmpty)
             const Padding(
@@ -313,11 +325,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       subtitle: Text(
         '${formatNumber(entry.quantityPerUnit)} ${material?.unit ?? ''} per unit',
       ),
-      onTap: () => _addOrEditRequirement(existing: entry),
-      trailing: IconButton(
-        icon: const Icon(Icons.delete_outline),
-        onPressed: () => _removeRequirement(entry),
-      ),
+      onTap: widget.readOnly
+          ? null
+          : () => _addOrEditRequirement(existing: entry),
+      trailing: widget.readOnly
+          ? null
+          : IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _removeRequirement(entry),
+            ),
     );
   }
 }
@@ -379,24 +395,18 @@ class _BomEntryDialogState extends State<_BomEntryDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DropdownButtonFormField<int>(
-              initialValue: _selectedMaterialId,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Material'),
-              items: [
+            AppDropdownField<int>(
+              idPrefix: 'material',
+              label: 'Material',
+              required: false,
+              enabled: !_isEditing,
+              value: _selectedMaterialId,
+              entries: [
                 for (final m in widget.materials)
-                  DropdownMenuItem(
-                    value: m.materialId,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(m.materialName),
-                    ),
-                  ),
+                  DropdownMenuEntry(value: m.materialId, label: m.materialName),
               ],
-              onChanged: _isEditing
-                  ? null
-                  : (value) => setState(() => _selectedMaterialId = value),
+              onChanged: (value) =>
+                  setState(() => _selectedMaterialId = value),
             ),
             const SizedBox(height: AppSpacing.m),
             TextFormField(

@@ -29,6 +29,16 @@ String formatMonth(DateTime d) => _monthYear.format(d);
 
 String formatDays(num v) => '${_oneDecimal.format(v)} days';
 
+bool isCoverCritical(num daysOfCover) => daysOfCover < 1.0;
+
+String formatDaysOfCover(num daysOfCover) {
+  if (isCoverCritical(daysOfCover)) {
+    final hours = (daysOfCover * 24).round();
+    return 'Critical (<${hours < 1 ? 1 : hours}h)';
+  }
+  return formatDays(daysOfCover);
+}
+
 String formatCurrency(num v) => 'RM ${_money.format(v)}';
 
 String formatPoNumber(int poId) => 'PO-${poId.toString().padLeft(4, '0')}';

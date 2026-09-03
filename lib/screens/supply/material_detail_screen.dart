@@ -389,42 +389,37 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
             children: [
               MetricRow(
                 label: 'Current stock',
-                value: '${formatNumber(material.currentStock)} ${material.unit}',
-                reserveBadgeSpace: true,
+                value:
+                    '${formatNumber(material.currentStock)} ${material.unit}',
               ),
               MetricRow(
                 label: 'Reorder level',
                 value: '${formatNumber(plan.reorderLevel)} ${material.unit}',
                 status: plan.belowReorderLevel ? AppStatus.danger : null,
                 statusLabel: plan.belowReorderLevel ? 'Below' : null,
-                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Days of cover',
                 value: plan.daysOfCover != null
                     ? formatDays(plan.daysOfCover!)
                     : '${MrpService.defaultHorizonDays}+ days',
-                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Expected stock-out',
                 value: plan.stockOutDate != null
                     ? formatDate(plan.stockOutDate!)
                     : 'Not projected',
-                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Latest safe order date',
                 value: plan.orderByDate != null
                     ? formatDate(plan.orderByDate!)
                     : '—',
-                reserveBadgeSpace: true,
               ),
               MetricRow(
                 label: 'Burn rate',
                 value:
                     '${formatRate(plan.burnRatePerDay)} ${material.unit}/day',
-                reserveBadgeSpace: true,
               ),
               if (plan.inboundTotal > 0)
                 MetricRow(
@@ -437,7 +432,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                   statusLabel: plan.overdueOrderCount > 0
                       ? '${plan.overdueOrderCount} overdue'
                       : null,
-                  reserveBadgeSpace: true,
                 ),
             ],
           ),
@@ -474,16 +468,34 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           child: Column(
             children: [
               for (final product in _usedInProducts)
-                ListTile(
-                  title: Text(product.productName),
-                  subtitle: product.isGeneral ? const Text('General') : null,
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ProductDetailScreen(product: product),
-                    ),
-                  ),
-                ),
+                product.isArchived
+                    ? ListTile(
+                        title: Text(
+                          product.productName,
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        subtitle: const Text('Archived'),
+                        subtitleTextStyle: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    : ListTile(
+                        title: Text(product.productName),
+                        subtitle: product.isGeneral
+                            ? const Text('General')
+                            : null,
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailScreen(
+                              product: product,
+                              readOnly: true,
+                            ),
+                          ),
+                        ),
+                      ),
             ],
           ),
         ),
@@ -561,26 +573,39 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                   ),
                 ),
               const SizedBox(height: AppSpacing.m),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _openComparison,
-                      child: const Text('Compare suppliers'),
-                    ),
-                  ),
-                  if (canReorder &&
-                      plan.suggestedQty != null &&
-                      plan.suggestedQty! > 0) ...[
-                    const SizedBox(width: AppSpacing.s),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     Expanded(
                       child: FilledButton(
-                        onPressed: _openReorderForm,
-                        child: const Text('Create purchase order'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primaryLight,
+                          foregroundColor: AppColors.primaryDark,
+                        ),
+                        onPressed: _openComparison,
+                        child: const Text(
+                          'Compare suppliers',
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
+                    if (canReorder &&
+                        plan.suggestedQty != null &&
+                        plan.suggestedQty! > 0) ...[
+                      const SizedBox(width: AppSpacing.s),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _openReorderForm,
+                          child: const Text(
+                            'Create purchase order',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ],
           ),

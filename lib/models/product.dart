@@ -5,6 +5,7 @@ class Product {
   final String unit;
 
   final bool isGeneral;
+  final String status;
 
   const Product({
     required this.productId,
@@ -12,7 +13,10 @@ class Product {
     required this.productName,
     this.unit = 'units',
     this.isGeneral = false,
+    this.status = 'active',
   });
+
+  bool get isArchived => status == 'archived';
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
@@ -21,6 +25,7 @@ class Product {
       productName: json['product_name'] as String,
       unit: json['unit'] as String? ?? 'units',
       isGeneral: json['is_general'] as bool? ?? false,
+      status: json['status'] as String? ?? 'active',
     );
   }
 

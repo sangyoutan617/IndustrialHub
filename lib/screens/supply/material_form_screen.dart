@@ -152,6 +152,7 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Unit',
                       helperText: 'e.g. kg, litres, rolls',
+                      helperMaxLines: 2,
                     ),
                     validator: (v) {
                       if (v != null && RegExp(r'[0-9]').hasMatch(v)) {
@@ -170,6 +171,7 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                     decoration: InputDecoration(
                       labelText: 'Unit cost (RM)',
                       helperText: 'Cost per ${_unitController.text.trim().isEmpty ? 'unit' : _unitController.text.trim()} — used for inventory value',
+                      helperMaxLines: 2,
                     ),
                     validator: (v) => _requiredNumber(v, min: 0, max: _maxUnitCost),
                   ),
