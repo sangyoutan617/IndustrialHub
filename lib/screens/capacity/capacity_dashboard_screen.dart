@@ -186,6 +186,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         : snapshot.machineCapacity <= snapshot.manpowerCapacity;
 
     final aiInsight = AiInsightCard(
+      cacheKey: 'capacity.${widget.factory.factoryId}.$_selectedProductId',
       buildPrompt: () => _buildBottleneckPrompt(snapshot),
       system: _bottleneckSystem,
     );

@@ -222,7 +222,11 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           ..sort((a, b) => b.daysOfCover!.compareTo(a.daysOfCover!));
 
     final aiInsight = withCover.isNotEmpty
-        ? AiInsightCard(buildPrompt: _buildStockPrompt, system: _stockSystem)
+        ? AiInsightCard(
+            cacheKey: 'stock.${widget.factoryId}',
+            buildPrompt: _buildStockPrompt,
+            system: _stockSystem,
+          )
         : null;
 
     return _buildPortrait(
