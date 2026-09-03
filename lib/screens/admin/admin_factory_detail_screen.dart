@@ -180,6 +180,11 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         .where((p) => p.bottleneck.hasData && !p.bottleneck.canMeetDemand)
         .toList();
 
+    final address = [
+      if (factory.location != null) factory.location!,
+      if (factory.state != null) factory.state!,
+    ].join(', ');
+
     final infoCard = Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -190,14 +195,10 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
               factory.factoryName,
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 4),
-            Text(
-              [
-                if (factory.location != null) factory.location!,
-                if (factory.state != null) factory.state!,
-              ].join(', '),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            if (address.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(address, style: Theme.of(context).textTheme.bodySmall),
+            ],
             if (factory.msicCode != null) ...[
               const SizedBox(height: 4),
               Text(
@@ -240,12 +241,15 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
     );
 
     final isAll = _selectedProductId == _allProductsId;
-    final healthOrBanner = isAll
-        ? _buildFactoryHealth()
-        : BottleneckBanner(
-            factoryId: factory.factoryId,
-            productId: _selectedProductId!,
-          );
+    final healthOrBanner = KeyedSubtree(
+      key: ValueKey(isAll),
+      child: isAll
+          ? _buildFactoryHealth()
+          : BottleneckBanner(
+              factoryId: factory.factoryId,
+              productId: _selectedProductId!,
+            ),
+    );
 
     final alertsSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,10 +310,20 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   }
 
   Widget _buildFactoryHealth() {
+    final scheme = Theme.of(context).colorScheme;
     final withDemand = _productBottlenecks
         .where((p) => p.bottleneck.hasData && p.bottleneck.requiredPerDay > 0)
         .toList();
     final meeting = withDemand.where((p) => p.bottleneck.canMeetDemand).length;
+    final allMet = withDemand.isNotEmpty && meeting == withDemand.length;
+    var totalAchievable = 0.0;
+    var totalDemand = 0.0;
+    for (final p in withDemand) {
+      totalAchievable += p.bottleneck.achievable;
+      totalDemand += p.bottleneck.requiredPerDay;
+    }
+    final shortfall = totalDemand - totalAchievable;
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Card(
@@ -318,18 +332,66 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Factory health',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                withDemand.isEmpty
-                    ? 'No product has a demand target and capacity data yet.'
-                    : '$meeting of ${withDemand.length} products meeting demand',
-                style: Theme.of(context).textTheme.bodySmall,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Factory health',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  if (withDemand.isNotEmpty)
+                    StatusChip(
+                      label: allMet ? 'On track' : 'Bottleneck',
+                      status: allMet ? AppStatus.success : AppStatus.warning,
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Products meeting demand',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      withDemand.isEmpty
+                          ? '—'
+                          : '$meeting / ${withDemand.length}',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: scheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      withDemand.isEmpty
+                          ? 'No product has a demand target and capacity data yet.'
+                          : allMet
+                          ? 'Total output ${formatWhole(totalAchievable)} · demand ${formatWhole(totalDemand)}'
+                          : 'Total output ${formatWhole(totalAchievable)} · demand ${formatWhole(totalDemand)} · short by ${formatWhole(shortfall)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               for (final pb in _productBottlenecks) ...[
                 _healthRow(pb),
                 const SizedBox(height: 10),

@@ -15,7 +15,7 @@ class AiInsightCard extends StatefulWidget {
     super.key,
     required this.buildPrompt,
     this.system,
-    this.autoLoad = true,
+    this.autoLoad = false,
   });
 
   @override

@@ -1,6 +1,5 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/empty_state.dart';
@@ -128,57 +127,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 ),
               ],
             ),
-            if (stats.ipiReadings.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'National IPI (latest, DOSM)',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final reading in stats.ipiReadings)
-                    Chip(
-                      label: Text(
-                        '${reading.divisionName ?? 'Div. ${reading.division}'}: ${reading.productionIndex.toStringAsFixed(1)}',
-                      ),
-                    ),
-                ],
-              ),
-            ],
-            if (stats.productivity.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Productivity benchmark (DOSM, by MSIC category)',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              for (final p in stats.productivity)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    '${p.category}: ${p.belowPeerMedianCount} of ${p.factoryCount} factories below the peer median '
-                    'output/worker (avg ${p.avgOutputPerWorker.toStringAsFixed(2)} units/day/worker)'
-                    '${p.benchmark.valueAddedPerWorker != null ? ' — DOSM RM ${formatWhole(p.benchmark.valueAddedPerWorker!)}/worker/year for context' : ''}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              Text(
-                'DOSM productivity is value-added (RM/year); this app measures physical units/day. Without a selling '
-                'price the two cannot be merged into one ratio, so "below benchmark" compares each factory against '
-                'the peer median within its own MSIC category instead.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
           ],
         ),
       ),
