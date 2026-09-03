@@ -463,6 +463,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                           cover.stock.productName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: AppStatus.danger.color),
                         ),
                       ),
                       Text(
@@ -522,6 +523,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                           cover.stock.productName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: AppStatus.info.color),
                         ),
                       ),
                       Text(
@@ -569,7 +571,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
           child: OutlinedButton.icon(
             onPressed: _openStockList,
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Log stock movement'),
+            label: const Text('Finished stock'),
           ),
         ),
         const SizedBox(height: AppSpacing.s),
