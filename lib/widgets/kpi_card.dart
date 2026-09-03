@@ -139,6 +139,7 @@ class MetricRow extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: AppSpacing.m),
           Flexible(
             child: Text(
               value,

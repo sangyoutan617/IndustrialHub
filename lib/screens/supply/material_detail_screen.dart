@@ -207,7 +207,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
                     ),
                     decoration: InputDecoration(
                       labelText: 'Amount (${material.unit})',
-                      helperText: 'Select + to add stock, - to deduct stock',
                     ),
                     validator: (v) {
                       final parsed = double.tryParse((v ?? '').trim());
@@ -522,11 +521,15 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
         )
       else
         Card(
-          child: Column(
-            children: [
-              for (final m in _movements.take(8))
-                _ledgerTile(m, material.unit, theme),
-            ],
+          child: SizedBox(
+            height: 240,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                for (final m in _movements.take(20))
+                  _ledgerTile(m, material.unit, theme),
+              ],
+            ),
           ),
         ),
       const SectionHeader(title: 'Recommended action'),

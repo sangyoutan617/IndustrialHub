@@ -342,13 +342,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(
-          title: 'Attention required',
-          trailing: TextButton(
-            onPressed: () => setState(() => _needsActionOnly = true),
-            child: const Text('View all risks'),
-          ),
-        ),
+        const SectionHeader(title: 'Attention required'),
         for (final plan in attentionItems) _buildAttentionCard(plan),
       ],
     );
@@ -376,7 +370,10 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                       plan.material.materialName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w700, color: riskStatus.color),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: riskStatus.color,
+                      ),
                     ),
                     Text(
                       plan.daysOfCover != null
@@ -387,7 +384,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: riskStatus.color),
             ],
           ),
         ),

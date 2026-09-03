@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/formatters.dart';
 import '../../core/supplier_validators.dart';
 import '../../core/theme.dart';
 import '../../models/raw_material.dart';
@@ -12,6 +13,17 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
 import '../../widgets/status.dart';
+
+const _maxUnitPrice = 99999999.99;
+
+final _priceInputFormatter = TextInputFormatter.withFunction((
+  oldValue,
+  newValue,
+) {
+  if (newValue.text.isEmpty) return newValue;
+  final pattern = RegExp(r'^\d{0,8}(\.\d{0,2})?$');
+  return pattern.hasMatch(newValue.text) ? newValue : oldValue;
+});
 
 class SupplierFormScreen extends StatefulWidget {
   final int factoryId;
@@ -48,6 +60,9 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
   );
   late final _leadTimeController = TextEditingController(
     text: (widget.supplier?.leadTimeDays ?? 7).toString(),
+  );
+  late final _priceController = TextEditingController(
+    text: widget.supplier?.unitPrice?.toString() ?? '',
   );
   late double _rating = widget.supplier?.reliabilityRating ?? 3;
 
@@ -112,6 +127,7 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _leadTimeController.dispose();
+    _priceController.dispose();
     super.dispose();
   }
 
@@ -139,6 +155,9 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
         email: _emailController.text.trim().isEmpty
             ? null
             : _emailController.text.trim(),
+        unitPrice: _priceController.text.trim().isEmpty
+            ? null
+            : double.parse(_priceController.text.trim()),
       );
       if (_isEditing) {
         await _supplierService.updateSupplier(
@@ -279,6 +298,32 @@ class _SupplierFormScreenState extends State<SupplierFormScreen> {
                     ),
                     onChanged: (_) => setState(() {}),
                     validator: SupplierValidators.validateLeadTime,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _priceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [_priceInputFormatter],
+                    decoration: const InputDecoration(
+                      labelText: 'Unit price (RM)',
+                      helperText:
+                          'Quoted price for this material — prefills new '
+                          'purchase orders, still editable there',
+                    ),
+                    validator: (v) {
+                      final trimmed = v?.trim() ?? '';
+                      if (trimmed.isEmpty) return 'Required';
+                      final parsed = double.tryParse(trimmed);
+                      if (parsed == null || parsed < 0) {
+                        return 'Enter a valid price';
+                      }
+                      if (parsed > _maxUnitPrice) {
+                        return 'Must not exceed ${formatCurrency(_maxUnitPrice)}';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 20),
                   FormBreak(Text(

@@ -10,6 +10,7 @@ class Supplier {
   final String? contactPerson;
   final String? phone;
   final String? email;
+  final double? unitPrice;
 
   const Supplier({
     required this.supplierId,
@@ -22,6 +23,7 @@ class Supplier {
     this.contactPerson,
     this.phone,
     this.email,
+    this.unitPrice,
   });
 
   factory Supplier.fromJson(Map<String, dynamic> json) {
@@ -36,6 +38,7 @@ class Supplier {
       contactPerson: json['contact_person'] as String?,
       phone: json['phone'] as String?,
       email: json['email'] as String?,
+      unitPrice: (json['unit_price'] as num?)?.toDouble(),
     );
   }
 
@@ -49,6 +52,7 @@ class Supplier {
       'contact_person': contactPerson,
       'phone': phone,
       'email': email,
+      'unit_price': unitPrice,
     };
   }
 }

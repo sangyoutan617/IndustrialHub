@@ -203,6 +203,7 @@ class _MaterialFormScreenState extends State<MaterialFormScreen> {
                           'Extra buffer kept on top of supplier lead time when '
                           'deciding the latest safe reorder date '
                           '(max $_maxSafetyStockDays days)',
+                      helperMaxLines: 3,
                     ),
                     validator: (v) {
                       final parsed = int.tryParse(v ?? '');

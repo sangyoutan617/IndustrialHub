@@ -130,6 +130,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
             _quantityController.text = prefill.quantity!.toStringAsFixed(0);
           }
           _applyLeadTimeToExpectedDelivery();
+          _applySupplierPrice();
         } else if (_materials.isNotEmpty) {
           _selectedMaterialId = _materials.first.materialId;
           _autoSelectSupplierForMaterial();
@@ -164,6 +165,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final options = _suppliersForSelectedMaterial;
     _selectedSupplierId = options.isNotEmpty ? options.first.supplierId : null;
     _applyLeadTimeToExpectedDelivery();
+    _applySupplierPrice();
   }
 
   void _selectMaterial(int? materialId) {
@@ -177,6 +179,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     setState(() {
       _selectedSupplierId = supplierId;
       _applyLeadTimeToExpectedDelivery();
+      _applySupplierPrice();
     });
   }
 
@@ -185,6 +188,13 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     _expectedDelivery = supplier != null
         ? _orderDate.add(Duration(days: MrpService.effectiveLeadDays(supplier)))
         : null;
+  }
+
+  void _applySupplierPrice() {
+    final price = _selectedSupplier?.unitPrice;
+    if (price != null) {
+      _priceController.text = price.toString();
+    }
   }
 
   @override
