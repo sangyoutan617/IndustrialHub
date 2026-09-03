@@ -12,6 +12,7 @@ import '../../widgets/loading_indicator.dart';
 import '../../widgets/responsive_form_fields.dart';
 
 const _maxUnitCount = 100;
+const _maxRatedOutput = 100000.0;
 
 final _hoursInputFormatter = TextInputFormatter.withFunction((
   oldValue,
@@ -136,12 +137,15 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
     }
   }
 
+  String _trim(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+
   String? _requiredNumber(String? value, {double min = 0, double? max}) {
     if (value == null || value.trim().isEmpty) return 'Required';
     final parsed = double.tryParse(value);
     if (parsed == null) return 'Enter a valid number';
-    if (parsed < min) return 'Must be at least $min';
-    if (max != null && parsed > max) return 'Must be at most $max';
+    if (parsed < min) return 'Must be at least ${_trim(min)}';
+    if (max != null && parsed > max) return 'Must be at most ${_trim(max)}';
     return null;
   }
 
@@ -224,7 +228,8 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Rated output (units/hour)',
                 ),
-                validator: (v) => _requiredNumber(v, min: 0),
+                validator: (v) =>
+                    _requiredNumber(v, min: 0, max: _maxRatedOutput),
               ),
               const SizedBox(height: AppSpacing.l),
               TextFormField(

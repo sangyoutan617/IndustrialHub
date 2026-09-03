@@ -48,6 +48,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   Future<void> _load() async {
     setState(() => _state = _LoadState.loading);
     try {
+      _factory = await _factoryService.getFactory(widget.factory.factoryId);
       final msicCode = _factory.msicCode;
       if (msicCode == null || msicCode.isEmpty) {
         setState(() => _state = _LoadState.needsMsic);

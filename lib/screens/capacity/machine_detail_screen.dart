@@ -39,7 +39,10 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
   String? _productName;
   List<MachineDowntimeLog> _log = [];
   bool _acting = false;
+  bool _showAllLogs = false;
   int _loadToken = 0;
+
+  static const _logPreviewCount = 5;
 
   @override
   void initState() {
@@ -493,7 +496,23 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
           else
             Card(
               child: Column(
-                children: [for (final entry in _log) _logTile(entry, theme)],
+                children: [
+                  for (final entry
+                      in _showAllLogs
+                          ? _log
+                          : _log.take(_logPreviewCount))
+                    _logTile(entry, theme),
+                  if (_log.length > _logPreviewCount)
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _showAllLogs = !_showAllLogs),
+                      child: Text(
+                        _showAllLogs
+                            ? 'Show less'
+                            : 'View ${_log.length - _logPreviewCount} more',
+                      ),
+                    ),
+                ],
               ),
             ),
         ],

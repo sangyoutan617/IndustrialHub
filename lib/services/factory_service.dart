@@ -14,6 +14,15 @@ class FactoryService {
         .toList();
   }
 
+  Future<Factory> getFactory(int factoryId) async {
+    final row = await _client
+        .from('factories')
+        .select()
+        .eq('factory_id', factoryId)
+        .single();
+    return Factory.fromJson(row);
+  }
+
   Future<Factory> createFactory(
     String factoryName, {
     String? location,

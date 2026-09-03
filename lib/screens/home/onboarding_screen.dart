@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/malaysian_states.dart';
+import '../../core/profile_validators.dart';
 import '../../models/msic_code.dart';
 import '../../services/capacity_service.dart';
 import '../../services/factory_service.dart';
@@ -148,29 +150,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   TextFormField(
                     controller: _nameController,
                     textCapitalization: TextCapitalization.words,
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(
+                        ProfileValidators.maxNameLength,
+                      ),
+                    ],
                     decoration: const InputDecoration(labelText: 'Full name'),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+                    validator: ProfileValidators.validateName,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _jobTitleController,
                     textCapitalization: TextCapitalization.words,
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(
+                        ProfileValidators.maxJobTitleLength,
+                      ),
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Job title (e.g. Factory Manager)',
                     ),
+                    validator: ProfileValidators.validateJobTitle,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _companyController,
                     textCapitalization: TextCapitalization.words,
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(
+                        ProfileValidators.maxCompanyLength,
+                      ),
+                    ],
                     decoration: const InputDecoration(labelText: 'Company'),
+                    validator: ProfileValidators.validateCompany,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(
+                        ProfileValidators.maxPhoneLength,
+                      ),
+                    ],
                     decoration: const InputDecoration(labelText: 'Phone'),
+                    validator: ProfileValidators.validatePhone,
                   ),
                   const SizedBox(height: 28),
                   FormBreak(_sectionLabel('Your factory', textTheme, scheme)),
