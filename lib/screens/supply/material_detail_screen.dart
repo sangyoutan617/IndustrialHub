@@ -292,7 +292,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stock Inventory', overflow: TextOverflow.ellipsis),
+        title: const Text('Stock Inventory'),
         actions: _state == _LoadState.ready
             ? [
                 IconButton(
@@ -365,8 +365,6 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
           Expanded(
             child: Text(
               material.materialName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleLarge,
             ),
           ),
@@ -477,7 +475,7 @@ class _MaterialDetailScreenState extends State<MaterialDetailScreen> {
             children: [
               for (final product in _usedInProducts)
                 ListTile(
-                  title: Text(product.productName, overflow: TextOverflow.ellipsis),
+                  title: Text(product.productName),
                   subtitle: product.isGeneral ? const Text('General') : null,
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(

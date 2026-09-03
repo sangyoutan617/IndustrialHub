@@ -509,11 +509,14 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
             for (final product in _products)
               DropdownMenuItem(
                 value: product.productId,
-                child: Text(
-                  product.isGeneral
-                      ? '${product.productName} (auto-created)'
-                      : product.productName,
-                  overflow: TextOverflow.ellipsis,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    product.isGeneral
+                        ? '${product.productName} (auto-created)'
+                        : product.productName,
+                  ),
                 ),
               ),
           ],
@@ -879,11 +882,14 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                   for (final product in widget.products)
                     DropdownMenuItem(
                       value: product.productId,
-                      child: Text(
-                        product.isGeneral
-                            ? '${product.productName} (auto-created)'
-                            : product.productName,
-                        overflow: TextOverflow.ellipsis,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          product.isGeneral
+                              ? '${product.productName} (auto-created)'
+                              : product.productName,
+                        ),
                       ),
                     ),
                 ],

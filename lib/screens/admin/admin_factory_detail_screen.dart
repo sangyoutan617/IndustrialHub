@@ -149,9 +149,10 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.factory.factoryName,
-          overflow: TextOverflow.ellipsis,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(widget.factory.factoryName),
         ),
       ),
       body: _buildBody(),
@@ -215,11 +216,14 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
           for (final product in _products)
             DropdownMenuItem(
               value: product.productId,
-              child: Text(
-                product.isGeneral
-                    ? '${product.productName} (auto-created)'
-                    : product.productName,
-                overflow: TextOverflow.ellipsis,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  product.isGeneral
+                      ? '${product.productName} (auto-created)'
+                      : product.productName,
+                ),
               ),
             ),
         ],

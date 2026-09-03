@@ -218,8 +218,6 @@ class _PurchaseOrderDetailScreenState extends State<PurchaseOrderDetailScreen> {
         Expanded(
           child: Text(
             widget.materialName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.titleLarge,
           ),
         ),

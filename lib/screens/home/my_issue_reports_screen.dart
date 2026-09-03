@@ -183,11 +183,7 @@ class _MyIssueReportsScreenState extends State<MyIssueReportsScreen> {
                 ),
                 child: Card(
                   child: ListTile(
-                    title: Text(
-                      report.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    title: Text(report.title),
                     subtitle: Text(formatDate(report.createdAt)),
                     trailing: StatusChip(
                       label: issueReportStatusLabel(report.status),

@@ -204,11 +204,14 @@ class _SimulatorScreenState extends State<SimulatorScreen> {
               for (final product in _products)
                 DropdownMenuItem(
                   value: product.productId,
-                  child: Text(
-                    product.isGeneral
-                        ? '${product.productName} (auto-created)'
-                        : product.productName,
-                    overflow: TextOverflow.ellipsis,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      product.isGeneral
+                          ? '${product.productName} (auto-created)'
+                          : product.productName,
+                    ),
                   ),
                 ),
             ],

@@ -188,7 +188,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_product.productName, overflow: TextOverflow.ellipsis),
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(_product.productName),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),
@@ -231,8 +235,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               Expanded(
                 child: Text(
                   _product.productName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -307,11 +309,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget _bomTile(BomEntry entry) {
     final material = _materialsById[entry.materialId];
     return ListTile(
-      title: Text(
-        material?.materialName ?? 'Unknown material',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      title: Text(material?.materialName ?? 'Unknown material'),
       subtitle: Text(
         '${formatNumber(entry.quantityPerUnit)} ${material?.unit ?? ''} per unit',
       ),
@@ -389,7 +387,11 @@ class _BomEntryDialogState extends State<_BomEntryDialog> {
                 for (final m in widget.materials)
                   DropdownMenuItem(
                     value: m.materialId,
-                    child: Text(m.materialName, overflow: TextOverflow.ellipsis),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(m.materialName),
+                    ),
                   ),
               ],
               onChanged: _isEditing

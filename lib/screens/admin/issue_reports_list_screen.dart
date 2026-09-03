@@ -94,15 +94,9 @@ class _IssueReportsListScreenState extends State<IssueReportsListScreen> {
               final report = _reports[index];
               return Card(
                 child: ListTile(
-                  title: Text(
-                    report.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  title: Text(report.title),
                   subtitle: Text(
                     '${report.submitterLabel} · ${formatDate(report.createdAt)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   trailing: StatusChip(
                     label: issueReportStatusLabel(report.status),

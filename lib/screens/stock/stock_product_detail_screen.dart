@@ -149,9 +149,10 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _cover?.stock.productName ?? 'Product',
-          overflow: TextOverflow.ellipsis,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(_cover?.stock.productName ?? 'Product'),
         ),
         actions: _state == _LoadState.ready
             ? [
@@ -246,8 +247,6 @@ class _StockProductDetailScreenState extends State<StockProductDetailScreen> {
             children: [
               Text(
                 stock.productName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleLarge,
               ),
               const SizedBox(height: AppSpacing.xs),

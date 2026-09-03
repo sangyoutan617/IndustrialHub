@@ -196,11 +196,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
                 child: Card(
                   child: ListTile(
                     onTap: () => _openDetail(machine),
-                    title: Text(
-                      machine.machineName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    title: Text(machine.machineName),
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.xs),
                       child: Column(
@@ -231,7 +227,6 @@ class _MachineListScreenState extends State<MachineListScreen> {
                                   isActive
                                       ? '${formatUnits(contribution)}/day'
                                       : 'Excluded from capacity (${machine.status})',
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -242,8 +237,6 @@ class _MachineListScreenState extends State<MachineListScreen> {
                                 ? '${_productNames[machine.productId] ?? 'Unknown product'} · ${machine.stageLabel} stage'
                                 : (_productNames[machine.productId] ??
                                       'Unknown product'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   color: Theme.of(

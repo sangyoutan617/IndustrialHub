@@ -490,7 +490,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
             fontSize: 22,
             fontWeight: FontWeight.w800,
           ),
-          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 2),
         Text(
@@ -558,9 +557,14 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
             for (final p in data.products)
               DropdownMenuItem(
                 value: p.productId,
-                child: Text(
-                  p.isGeneral ? '${p.productName} (auto-created)' : p.productName,
-                  overflow: TextOverflow.ellipsis,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    p.isGeneral
+                        ? '${p.productName} (auto-created)'
+                        : p.productName,
+                  ),
                 ),
               ),
           ],
@@ -1001,7 +1005,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
                 p.product.isGeneral
                     ? '${p.product.productName} (auto-created)'
                     : p.product.productName,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: pal.textPrimary,
                   fontSize: 13,
@@ -1198,7 +1201,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
                 Expanded(
                   child: Text(
                     label,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: pal.textSecondary,
                       fontSize: 10,

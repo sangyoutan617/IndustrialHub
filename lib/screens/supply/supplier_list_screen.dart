@@ -383,11 +383,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
                             child: Card(
                               child: ListTile(
                                 isThreeLine: contact != null,
-                                title: Text(
-                                  supplier.supplierName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                title: Text(supplier.supplierName),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [

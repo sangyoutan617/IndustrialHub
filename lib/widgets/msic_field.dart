@@ -44,8 +44,6 @@ class MsicField extends StatelessWidget {
         child: Text(
           selected?.description ??
               (codes.isEmpty ? 'Loading…' : 'Select an industry'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
           style: selected == null
               ? TextStyle(color: scheme.onSurfaceVariant)
               : null,

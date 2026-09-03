@@ -167,11 +167,14 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
         for (final product in _products)
           DropdownMenuItem(
             value: product.productId,
-            child: Text(
-              product.isGeneral
-                  ? '${product.productName} (auto-created)'
-                  : product.productName,
-              overflow: TextOverflow.ellipsis,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                product.isGeneral
+                    ? '${product.productName} (auto-created)'
+                    : product.productName,
+              ),
             ),
           ),
       ],
@@ -360,11 +363,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                 MachineListScreen(factoryId: widget.factory.factoryId),
               ),
               icon: const Icon(Icons.settings_outlined),
-              label: const Text(
-                'Machines',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              label: const Text('Machines'),
             ),
           ),
           const SizedBox(width: 12),
@@ -374,11 +373,7 @@ class _CapacityDashboardScreenState extends State<CapacityDashboardScreen> {
                 ManpowerListScreen(factoryId: widget.factory.factoryId),
               ),
               icon: const Icon(Icons.people_outline),
-              label: const Text(
-                'Manpower',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              label: const Text('Manpower'),
             ),
           ),
         ],

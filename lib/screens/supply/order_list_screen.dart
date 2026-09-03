@@ -282,8 +282,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     ),
                     Text(
                       materialName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     Text(

@@ -184,11 +184,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                             : Icons.category_outlined,
                       ),
                     ),
-                    title: Text(
-                      product.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    title: Text(product.productName),
                     subtitle: product.isGeneral
                         ? Padding(
                             padding: const EdgeInsets.only(top: AppSpacing.xs),
@@ -204,8 +200,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                 Expanded(
                                   child: Text(
                                     'Auto-created catch-all',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodySmall,

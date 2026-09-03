@@ -368,8 +368,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   children: [
                     Text(
                       plan.material.materialName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: riskStatus.color,
@@ -655,8 +653,6 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                   children: [
                     Text(
                       material.materialName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 2),

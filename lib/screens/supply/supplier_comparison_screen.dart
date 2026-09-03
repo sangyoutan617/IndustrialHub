@@ -69,9 +69,10 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Compare suppliers — ${widget.materialName}',
-          overflow: TextOverflow.ellipsis,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text('Compare suppliers — ${widget.materialName}'),
         ),
       ),
       body: _buildBody(),
@@ -120,8 +121,6 @@ class _SupplierComparisonScreenState extends State<SupplierComparisonScreen> {
                 Expanded(
                   child: Text(
                     c.supplier.supplierName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),

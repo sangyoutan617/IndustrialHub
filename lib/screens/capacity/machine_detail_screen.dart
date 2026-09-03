@@ -350,8 +350,6 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
               Expanded(
                 child: Text(
                   machine.machineName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge,
                 ),
               ),

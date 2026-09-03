@@ -461,8 +461,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                       Expanded(
                         child: Text(
                           cover.stock.productName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: AppStatus.danger.color),
                         ),
                       ),
@@ -521,8 +519,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                       Expanded(
                         child: Text(
                           cover.stock.productName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: AppStatus.info.color),
                         ),
                       ),
@@ -629,11 +625,7 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
               ),
               child: Card(
                 child: ListTile(
-                  title: Text(
-                    forecast.productName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  title: Text(forecast.productName),
                   subtitle: Text(
                     '${formatNumber(forecast.requiredPerDay)} units/day required',
                   ),
@@ -774,8 +766,6 @@ class _StockDashboardScreenState extends State<StockDashboardScreen> {
                   Expanded(
                     child: Text(
                       cover.stock.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: primaryTextColor,

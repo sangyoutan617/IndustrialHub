@@ -219,11 +219,7 @@ class _StockListScreenState extends State<StockListScreen> {
                 ),
                 child: Card(
                   child: ListTile(
-                    title: Text(
-                      stock.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    title: Text(stock.productName),
                     subtitle: Text(
                       '${formatUnits(stock.currentQuantity)} in stock',
                     ),
@@ -301,11 +297,14 @@ class _NewProductDialogState extends State<_NewProductDialog> {
                 for (final product in widget.products)
                   DropdownMenuItem(
                     value: product.productId,
-                    child: Text(
-                      product.isGeneral
-                          ? '${product.productName} (auto-created)'
-                          : product.productName,
-                      overflow: TextOverflow.ellipsis,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        product.isGeneral
+                            ? '${product.productName} (auto-created)'
+                            : product.productName,
+                      ),
                     ),
                   ),
               ],

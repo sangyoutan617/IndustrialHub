@@ -253,11 +253,14 @@ class _DemandFormScreenState extends State<DemandFormScreen> {
                   for (final product in _availableProducts)
                     DropdownMenuItem(
                       value: product.productId,
-                      child: Text(
-                        product.isGeneral
-                            ? '${product.productName} (auto-created)'
-                            : product.productName,
-                        overflow: TextOverflow.ellipsis,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          product.isGeneral
+                              ? '${product.productName} (auto-created)'
+                              : product.productName,
+                        ),
                       ),
                     ),
                 ],

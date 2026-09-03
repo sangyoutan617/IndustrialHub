@@ -194,11 +194,7 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
       ),
       child: Card(
         child: ListTile(
-          title: Text(
-            shift.shiftName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          title: Text(shift.shiftName),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -209,8 +205,6 @@ class _ManpowerListScreenState extends State<ManpowerListScreen> {
               ),
               Text(
                 _productNames[shift.productId] ?? 'Unknown product',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
