@@ -79,10 +79,9 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
         _products = products;
         _selectedProductId ??= products.isEmpty
             ? null
-            : products.firstWhere(
-                (p) => !p.isGeneral,
-                orElse: () => products.first,
-              ).productId;
+            : products
+                  .firstWhere((p) => !p.isGeneral, orElse: () => products.first)
+                  .productId;
         _state = _LoadState.ready;
       });
     } catch (_) {

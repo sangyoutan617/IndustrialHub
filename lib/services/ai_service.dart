@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AiService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  static const _maxAttempts = 3;
+  static const _maxAttempts = 1;
 
   Future<String> generate(String prompt, {String? system}) async {
     for (var attempt = 1; attempt <= _maxAttempts; attempt++) {

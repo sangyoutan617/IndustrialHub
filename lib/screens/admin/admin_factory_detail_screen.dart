@@ -27,6 +27,8 @@ class AdminFactoryDetailScreen extends StatefulWidget {
 
 enum _LoadState { loading, error, ready }
 
+const _allProductsId = -1;
+
 class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   final _supplyService = SupplyService();
   final _bottleneckService = BottleneckService();
@@ -58,7 +60,10 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         setState(() => _state = _LoadState.error);
         return;
       }
-      final selected = _selectedProductId != null
+      final isAll = _selectedProductId == _allProductsId;
+      final selected = isAll
+          ? null
+          : _selectedProductId != null
           ? products.firstWhere(
               (p) => p.productId == _selectedProductId,
               orElse: () => _defaultProduct(products),
@@ -85,7 +90,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
 
       setState(() {
         _products = products;
-        _selectedProductId = selected.productId;
+        _selectedProductId = isAll ? _allProductsId : selected!.productId;
         _productBottlenecks = productBottlenecks;
         _lowStockPlans = lowStock;
         _state = _LoadState.ready;
@@ -98,7 +103,6 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
   void _setProduct(int? productId) {
     if (productId == null || productId == _selectedProductId) return;
     setState(() => _selectedProductId = productId);
-    _load();
   }
 
   Future<void> _raisePurchaseOrder(MaterialPlan plan) async {
@@ -177,6 +181,11 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         .where((p) => p.bottleneck.hasData && !p.bottleneck.canMeetDemand)
         .toList();
 
+    final address = [
+      if (factory.location != null) factory.location!,
+      if (factory.state != null) factory.state!,
+    ].join(', ');
+
     final infoCard = Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -187,14 +196,10 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
               factory.factoryName,
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 4),
-            Text(
-              [
-                if (factory.location != null) factory.location!,
-                if (factory.state != null) factory.state!,
-              ].join(', '),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            if (address.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(address, style: Theme.of(context).textTheme.bodySmall),
+            ],
             if (factory.msicCode != null) ...[
               const SizedBox(height: 4),
               Text(
@@ -215,6 +220,10 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         required: false,
         value: _selectedProductId,
         entries: [
+          const DropdownMenuEntry(
+            value: _allProductsId,
+            label: 'All products',
+          ),
           for (final product in _products)
             DropdownMenuEntry(
               value: product.productId,
@@ -227,9 +236,15 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
       ),
     );
 
-    final bottleneckBanner = BottleneckBanner(
-      factoryId: factory.factoryId,
-      productId: _selectedProductId!,
+    final isAll = _selectedProductId == _allProductsId;
+    final healthOrBanner = KeyedSubtree(
+      key: ValueKey(isAll),
+      child: isAll
+          ? _buildFactoryHealth()
+          : BottleneckBanner(
+              factoryId: factory.factoryId,
+              productId: _selectedProductId!,
+            ),
     );
 
     final alertsSection = Column(
@@ -279,7 +294,7 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
           infoCard,
           const SizedBox(height: 8),
           productPicker,
-          bottleneckBanner,
+          healthOrBanner,
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: alertsSection,
@@ -287,6 +302,144 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
           const SizedBox(height: 16),
         ],
       ),
+    );
+  }
+
+  Widget _buildFactoryHealth() {
+    final scheme = Theme.of(context).colorScheme;
+    final withDemand = _productBottlenecks
+        .where((p) => p.bottleneck.hasData && p.bottleneck.requiredPerDay > 0)
+        .toList();
+    final meeting = withDemand.where((p) => p.bottleneck.canMeetDemand).length;
+    final allMet = withDemand.isNotEmpty && meeting == withDemand.length;
+    var totalAchievable = 0.0;
+    var totalDemand = 0.0;
+    for (final p in withDemand) {
+      totalAchievable += p.bottleneck.achievable;
+      totalDemand += p.bottleneck.requiredPerDay;
+    }
+    final shortfall = totalDemand - totalAchievable;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Factory health',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  if (withDemand.isNotEmpty)
+                    StatusChip(
+                      label: allMet ? 'On track' : 'Bottleneck',
+                      status: allMet ? AppStatus.success : AppStatus.warning,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Products meeting demand',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      withDemand.isEmpty
+                          ? '—'
+                          : '$meeting / ${withDemand.length}',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: scheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      withDemand.isEmpty
+                          ? 'No product has a demand target and capacity data yet.'
+                          : allMet
+                          ? 'Total output ${formatWhole(totalAchievable)} · demand ${formatWhole(totalDemand)}'
+                          : 'Total output ${formatWhole(totalAchievable)} · demand ${formatWhole(totalDemand)} · short by ${formatWhole(shortfall)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: scheme.onPrimaryContainer.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              for (final pb in _productBottlenecks) ...[
+                _healthRow(pb),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _healthRow(ProductBottleneck pb) {
+    final b = pb.bottleneck;
+    final AppStatus status;
+    final String detail;
+    if (!b.hasData) {
+      status = AppStatus.neutral;
+      detail = 'No capacity data';
+    } else if (b.requiredPerDay <= 0) {
+      status = AppStatus.neutral;
+      detail = 'No demand target';
+    } else if (b.canMeetDemand) {
+      status = AppStatus.success;
+      detail = 'Meets demand';
+    } else {
+      status = AppStatus.danger;
+      detail =
+          'Short ${formatWhole(b.shortfall!)}/day · '
+          '${_resourceLabel(b.limiter ?? b.bottleneckResource)}';
+    }
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: status.color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            pb.product.productName,
+            style: Theme.of(context).textTheme.bodyMedium,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(detail, style: Theme.of(context).textTheme.bodySmall),
+      ],
     );
   }
 
@@ -302,5 +455,4 @@ class _AdminFactoryDetailScreenState extends State<AdminFactoryDetailScreen> {
         return resource;
     }
   }
-
 }

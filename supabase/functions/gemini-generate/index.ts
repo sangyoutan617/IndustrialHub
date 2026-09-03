@@ -1,27 +1,16 @@
-// Shared AI narration endpoint used by every module's AiInsightCard.
-// Holds the Gemini key server-side; the client only ever sends numbers/text
-// and receives a plain-language string back. See the "Shared AI service"
-// section of the README for the full design.
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
 
-// "gemini-1.5-flash" was retired since the plan was written. Using the
-// "-latest" alias instead of a pinned version so this doesn't need a
-// redeploy every time Google rotates the flash-tier model underneath it.
-const GEMINI_MODEL = "gemini-flash-latest";
+const GEMINI_MODEL = "gemini-flash-lite-latest";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Supabase's platform-level JWT verification (config.toml verify_jwt = true)
-  // already rejects anonymous calls before this runs. This check is a
-  // defensive second layer, not the only gate.
   const auth = req.headers.get("Authorization");
   if (!auth) {
     return new Response(JSON.stringify({ error: "unauthorized" }), {

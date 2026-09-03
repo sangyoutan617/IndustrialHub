@@ -98,7 +98,9 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       }
       final productId =
           _selectedProductId ??
-          products.firstWhere((p) => !p.isGeneral, orElse: () => products.first).productId;
+          products
+              .firstWhere((p) => !p.isGeneral, orElse: () => products.first)
+              .productId;
       final rows = productId == _allProductsId
           ? await _service.getTrendAllProducts(
               widget.factory.factoryId,
@@ -530,8 +532,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
               ButtonSegment(value: _Granularity.month, label: Text('Month')),
             ],
             selected: {_granularity},
-            onSelectionChanged: (selection) =>
-                _setGranularity(selection.first),
+            onSelectionChanged: (selection) => _setGranularity(selection.first),
           ),
         ),
         if (_summaryLine != null) ...[
@@ -566,6 +567,19 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
           ],
           const SizedBox(height: 96),
         ],
+      ),
+    );
+  }
+
+  void _showDowntimeBarDetail(_DowntimeBar bar) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          bar.hours > 0
+              ? '${bar.label} — ${bar.hours.toStringAsFixed(1)}h downtime'
+              : '${bar.label} — no downtime',
+        ),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -610,46 +624,48 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                 children: [
                   for (var i = 0; i < bars.length; i++)
                     Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 1),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Container(
-                              height: maxHours > 0
-                                  ? (bars[i].hours / maxHours * 92).clamp(
-                                      bars[i].hours > 0 ? 3.0 : 0.0,
-                                      92.0,
-                                    )
-                                  : 0.0,
-                              decoration: BoxDecoration(
-                                color: bars[i] == peak && peak.hours > 0
-                                    ? Theme.of(context).colorScheme.onSurface
-                                    : Theme.of(context).colorScheme.primary,
-                                borderRadius: BorderRadius.circular(2),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _showDowntimeBarDetail(bars[i]),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 1),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Container(
+                                height: maxHours > 0
+                                    ? (bars[i].hours / maxHours * 92).clamp(
+                                        bars[i].hours > 0 ? 3.0 : 0.0,
+                                        92.0,
+                                      )
+                                    : 0.0,
+                                decoration: BoxDecoration(
+                                  color: bars[i] == peak && peak.hours > 0
+                                      ? Theme.of(context).colorScheme.onSurface
+                                      : Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            SizedBox(
-                              height: 44,
-                              child:
-                                  (bars[i].hours > 0 || i % labelEvery == 0)
-                                  ? Transform.rotate(
-                                      angle: -0.9,
-                                      alignment: Alignment.topRight,
-                                      child: Text(
-                                        bars[i].hours > 0
-                                            ? '${bars[i].label} ${bars[i].hours.toStringAsFixed(1)}h'
-                                            : bars[i].label,
-                                        maxLines: 1,
-                                        softWrap: false,
-                                        overflow: TextOverflow.visible,
-                                        style: const TextStyle(fontSize: 7),
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              SizedBox(
+                                height: 44,
+                                child:
+                                    (bars[i].hours > 0 || i % labelEvery == 0)
+                                    ? Transform.rotate(
+                                        angle: -0.9,
+                                        alignment: Alignment.topRight,
+                                        child: Text(
+                                          bars[i].label,
+                                          maxLines: 1,
+                                          softWrap: false,
+                                          overflow: TextOverflow.visible,
+                                          style: const TextStyle(fontSize: 7),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -681,13 +697,15 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
             ),
             const SizedBox(height: 16),
             SizedBox(
-              height: 220,
+              height: 260,
               child: LineChart(
                 LineChartData(
                   gridData: const FlGridData(show: false),
                   borderData: FlBorderData(show: false),
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
+                      fitInsideVertically: true,
+                      fitInsideHorizontally: true,
                       getTooltipItems: (touchedSpots) {
                         return touchedSpots.map((spot) {
                           final i = spot.x.toInt();
@@ -699,10 +717,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                               : 'Ceiling';
                           return LineTooltipItem(
                             '$label  ·  $name ${spot.y.toStringAsFixed(0)}',
-                            const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                            ),
+                            const TextStyle(color: Colors.white, fontSize: 11),
                           );
                         }).toList();
                       },
@@ -716,7 +731,10 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
                       sideTitles: SideTitles(showTitles: false),
                     ),
                     leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false, reservedSize: 0),
+                      sideTitles: SideTitles(
+                        showTitles: false,
+                        reservedSize: 0,
+                      ),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
