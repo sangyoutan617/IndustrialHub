@@ -203,6 +203,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
 
     final aiInsight = plans.isNotEmpty
         ? AiInsightCard(
+            cacheKey: 'supply.${widget.factoryId}',
             buildPrompt: () => _buildSupplyPrompt(overview),
             system: _supplySystem,
           )

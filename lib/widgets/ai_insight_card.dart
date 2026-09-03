@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme.dart';
 import '../l10n/app_localizations.dart';
 import '../services/ai_service.dart';
@@ -9,11 +10,14 @@ class AiInsightCard extends StatefulWidget {
   final String Function() buildPrompt;
   final String? system;
 
+  final String cacheKey;
+
   final bool autoLoad;
 
   const AiInsightCard({
     super.key,
     required this.buildPrompt,
+    required this.cacheKey,
     this.system,
     this.autoLoad = false,
   });
@@ -28,40 +32,55 @@ class _AiInsightCardState extends State<AiInsightCard> {
   final _aiService = AiService();
   _AiState _state = _AiState.idle;
   String? _text;
+  bool _restored = false;
+
+  String get _prefsKey => 'ai_insight.${widget.cacheKey}';
 
   @override
   void initState() {
     super.initState();
-    if (widget.autoLoad) {
-      (() async {
-        await _loadCachedOrGenerate();
-      })();
-    }
+    _restore();
   }
 
-  Future<void> _loadCachedOrGenerate() async {
-    final cached = _cache[widget.buildPrompt()];
-    if (cached != null) {
+  Future<void> _restore() async {
+    var stored = _cache[widget.cacheKey];
+    if (stored == null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        stored = prefs.getString(_prefsKey);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    if (stored != null) {
+      _cache[widget.cacheKey] = stored;
       setState(() {
-        _text = cached;
+        _text = stored;
         _state = _AiState.ready;
+        _restored = true;
       });
       return;
     }
-    await _generate();
+    setState(() => _restored = true);
+    if (widget.autoLoad) await _generate();
   }
 
   Future<void> _generate() async {
     setState(() => _state = _AiState.loading);
-    final prompt = widget.buildPrompt();
     try {
-      final text = await _aiService.generate(prompt, system: widget.system);
+      final text = await _aiService.generate(
+        widget.buildPrompt(),
+        system: widget.system,
+      );
       if (!mounted) return;
-      _cache[prompt] = text;
+      _cache[widget.cacheKey] = text;
       setState(() {
         _text = text;
         _state = _AiState.ready;
       });
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_prefsKey, text);
+      } catch (_) {}
     } catch (_) {
       if (!mounted) return;
       setState(() => _state = _AiState.unavailable);
@@ -74,6 +93,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
     final l10n = AppLocalizations.of(context);
     switch (_state) {
       case _AiState.idle:
+        if (!_restored) return const SizedBox.shrink();
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -83,7 +103,7 @@ class _AiInsightCardState extends State<AiInsightCard> {
                 const SizedBox(width: AppSpacing.m),
                 Expanded(child: Text(l10n.aiGetExplanation)),
                 FilledButton(
-                  onPressed: _loadCachedOrGenerate,
+                  onPressed: _generate,
                   child: Text(l10n.aiGenerateInsight),
                 ),
               ],

@@ -360,6 +360,8 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     final result = data.bottleneck;
     final aiInsight = result.hasData
         ? AiInsightCard(
+            cacheKey:
+                'home.${widget.factory.factoryId}.${data.selectedProduct.productId}',
             buildPrompt: () => _buildProductPrompt(data),
             system: _productSystem,
           )
@@ -383,6 +385,7 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
         const SizedBox(height: 16),
         if (hasAnyData) ...[
           AiInsightCard(
+            cacheKey: 'home.${widget.factory.factoryId}.all',
             buildPrompt: () => _buildProductPrompt(data),
             system: _productSystem,
           ),
