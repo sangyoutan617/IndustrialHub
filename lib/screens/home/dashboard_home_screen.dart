@@ -124,7 +124,9 @@ class _AllSummary {
       meetingCount: meeting,
       noDataCount: all.where((p) => !p.bottleneck.hasData).length,
       noDemandCount: all
-          .where((p) => p.bottleneck.hasData && p.bottleneck.requiredPerDay <= 0)
+          .where(
+            (p) => p.bottleneck.hasData && p.bottleneck.requiredPerDay <= 0,
+          )
           .length,
     );
   }
@@ -196,7 +198,9 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
 
   void _onDataEvent() {
     final event = DataEventService.instance.changeEvent.value;
-    if (mounted && event != null && event.factoryId == widget.factory.factoryId) {
+    if (mounted &&
+        event != null &&
+        event.factoryId == widget.factory.factoryId) {
       setState(() => _future = _load());
     }
   }
@@ -217,7 +221,8 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     if (products.isEmpty) {
       throw StateError('No products configured for this factory.');
     }
-    final isAll = products.length > 1 &&
+    final isAll =
+        products.length > 1 &&
         (_selectedProductId == null || _selectedProductId == _allProductsId);
     final selected = !isAll && _selectedProductId != null
         ? products.firstWhere(
@@ -231,11 +236,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       factoryId,
       selected.productId,
     );
-    final snapshot = await _capacityService.getSnapshot(
-      factoryId,
-      productId: selected.productId,
-    );
-    final outputPerWorker = _capacityService.outputPerWorker(snapshot);
 
     final allResults = await Future.wait(
       products.map(
@@ -246,6 +246,32 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       for (var i = 0; i < products.length; i++)
         ProductBottleneck(product: products[i], bottleneck: allResults[i]),
     ];
+
+    double? outputPerWorker;
+    if (isAll) {
+      final snapshots = await Future.wait(
+        products.map(
+          (p) =>
+              _capacityService.getSnapshot(factoryId, productId: p.productId),
+        ),
+      );
+      final totalWorkers = snapshots.fold<int>(
+        0,
+        (sum, s) =>
+            sum + s.shifts.fold<int>(0, (w, shift) => w + shift.workerCount),
+      );
+      final totalCapacity = snapshots.fold<double>(
+        0,
+        (sum, s) => sum + s.effectiveCapacity,
+      );
+      outputPerWorker = totalWorkers == 0 ? null : totalCapacity / totalWorkers;
+    } else {
+      final snapshot = await _capacityService.getSnapshot(
+        factoryId,
+        productId: selected.productId,
+      );
+      outputPerWorker = _capacityService.outputPerWorker(snapshot);
+    }
 
     MsicCode? msic;
     ProductivityBenchmark? productivity;
@@ -390,7 +416,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-
   static const _productSystem =
       'You are a factory operations assistant. You are given figures that '
       'have already been computed — never invent or recalculate numbers. In '
@@ -402,7 +427,9 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       'headings, under 80 words.';
 
   String _buildProductPrompt(_HomeData data) {
-    final withData = data.allBottlenecks.where((p) => p.bottleneck.hasData).toList();
+    final withData = data.allBottlenecks
+        .where((p) => p.bottleneck.hasData)
+        .toList();
     final noDataCount = data.allBottlenecks.length - withData.length;
     final short = withData.where((p) => !p.bottleneck.canMeetDemand).toList()
       ..sort(
@@ -449,7 +476,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     return buffer.toString();
   }
 
-
   Widget _buildHeader(
     BottleneckResult result,
     _HomeData data,
@@ -461,18 +487,14 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     if (allSummary != null) {
       final n = allSummary.demandProductCount;
       final healthy = n > 0 && allSummary.meetingCount == n;
-      dotColor = n == 0
-          ? pal.textSecondary
-          : (healthy ? pal.ok : pal.alert);
+      dotColor = n == 0 ? pal.textSecondary : (healthy ? pal.ok : pal.alert);
       label = n == 0
           ? 'No demand targets set'
           : '${allSummary.meetingCount} of $n products meeting demand';
     } else {
       final hasData = result.hasData;
       final healthy = hasData && result.canMeetDemand;
-      dotColor = !hasData
-          ? pal.textSecondary
-          : (healthy ? pal.ok : pal.alert);
+      dotColor = !hasData ? pal.textSecondary : (healthy ? pal.ok : pal.alert);
       label = !hasData
           ? 'Awaiting production data'
           : (healthy
@@ -573,7 +595,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       ),
     );
   }
-
 
   Widget _buildHeroCard(BottleneckResult result, _Palette pal) {
     if (!result.hasData) {
@@ -1014,7 +1035,9 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
             ),
             const SizedBox(width: 8),
             Text(
-              ok ? 'Meets demand' : 'Short ${formatUnits(b.shortfall ?? 0)}/day',
+              ok
+                  ? 'Meets demand'
+                  : 'Short ${formatUnits(b.shortfall ?? 0)}/day',
               style: TextStyle(
                 color: color,
                 fontSize: 12,
@@ -1110,7 +1133,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       ],
     );
   }
-
 
   Widget _buildCeilingGrid(BottleneckResult result, _Palette pal) {
     final isMaterialLimiter = result.limiter == 'RAW MATERIAL';
@@ -1254,7 +1276,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
     );
   }
 
-
   Widget _buildOpenDataCard(_HomeData data, _Palette pal) {
     final hasMsic =
         widget.factory.msicCode != null && widget.factory.msicCode!.isNotEmpty;
@@ -1366,7 +1387,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       ),
     );
   }
-
 
   Widget _buildActionCenter(BottleneckResult result, _Palette pal) {
     final actions = _actionsFor(result, pal);
@@ -1535,7 +1555,6 @@ class _DashboardHomeScreenState extends State<DashboardHomeScreen>
       ),
     );
   }
-
 
   Widget _card({
     required _Palette pal,

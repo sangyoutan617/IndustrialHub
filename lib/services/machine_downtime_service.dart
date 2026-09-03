@@ -95,39 +95,44 @@ class MachineDowntimeService {
   }
 
   Future<void> startRepair(int machineId, int factoryId) async {
-    final openLogId = await _openLogId(machineId);
-    if (openLogId != null) {
+    final openLogIds = await _openLogIds(machineId);
+    if (openLogIds.isNotEmpty) {
       await _client
           .from('machine_downtime_log')
-          .update({'repair_started_at': DateTime.now().toUtc().toIso8601String()})
-          .eq('log_id', openLogId);
+          .update({
+            'repair_started_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .inFilter('log_id', openLogIds);
     }
     await _setStatus(machineId, MachineStatus.repair);
     _notify(factoryId);
   }
 
   Future<void> markRepaired(int machineId, int factoryId) async {
-    final openLogId = await _openLogId(machineId);
-    if (openLogId != null) {
+    final openLogIds = await _openLogIds(machineId);
+    if (openLogIds.isNotEmpty) {
       await _client
           .from('machine_downtime_log')
           .update({'repaired_at': DateTime.now().toUtc().toIso8601String()})
-          .eq('log_id', openLogId);
+          .inFilter('log_id', openLogIds);
     }
     await _setStatus(machineId, MachineStatus.active);
     _notify(factoryId);
   }
 
-  Future<int?> _openLogId(int machineId) async {
-    final row = await _client
+  Future<void> setStatus(int machineId, int factoryId, String status) async {
+    await _setStatus(machineId, status);
+    _notify(factoryId);
+  }
+
+  Future<List<int>> _openLogIds(int machineId) async {
+    final rows = await _client
         .from('machine_downtime_log')
         .select('log_id')
         .eq('machine_id', machineId)
         .filter('repaired_at', 'is', null)
-        .order('log_id', ascending: false)
-        .limit(1)
-        .maybeSingle();
-    return row == null ? null : row['log_id'] as int;
+        .order('log_id', ascending: false);
+    return (rows as List).map((row) => row['log_id'] as int).toList();
   }
 
   Future<void> _setStatus(int machineId, String status) {

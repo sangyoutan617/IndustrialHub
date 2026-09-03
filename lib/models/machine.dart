@@ -36,6 +36,7 @@ class Machine {
   bool get isActive => status == MachineStatus.active;
   bool get isDowntime => status == MachineStatus.downtime;
   bool get isRepair => status == MachineStatus.repair;
+  bool get isUnderMaintenance => status == MachineStatus.underMaintenance;
 
   bool get isGroup => unitCount > 1;
 

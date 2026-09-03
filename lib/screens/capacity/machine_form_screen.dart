@@ -53,7 +53,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
   late final _stageController = TextEditingController(
     text: widget.machine?.stageLabel,
   );
-  late String _status = widget.machine?.status ?? MachineStatus.active;
+  late final String _status = widget.machine?.status ?? MachineStatus.active;
   int? _selectedProductId;
   bool _isSaving = false;
 
@@ -78,10 +78,9 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
         _products = products;
         _selectedProductId ??= products.isEmpty
             ? null
-            : products.firstWhere(
-                (p) => !p.isGeneral,
-                orElse: () => products.first,
-              ).productId;
+            : products
+                  .firstWhere((p) => !p.isGeneral, orElse: () => products.first)
+                  .productId;
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -277,23 +276,6 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                       'machine at its step.',
                   helperMaxLines: 3,
                 ),
-              ),
-              const SizedBox(height: AppSpacing.l),
-              DropdownButtonFormField<String>(
-                initialValue: _status,
-                decoration: const InputDecoration(
-                  labelText: 'Status',
-                  helperText:
-                      'Downtime and Repair are normally set from the '
-                      'machine\'s own page — pick them here only to '
-                      'correct a stuck status',
-                ),
-                items: [
-                  for (final value in MachineStatus.all)
-                    DropdownMenuItem(value: value, child: Text(value)),
-                ],
-                onChanged: (value) =>
-                    setState(() => _status = value ?? MachineStatus.active),
               ),
               const SizedBox(height: AppSpacing.xl),
               FormBreak(

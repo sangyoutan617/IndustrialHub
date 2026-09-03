@@ -7,6 +7,7 @@ import '../../models/msic_code.dart';
 import '../../services/capacity_service.dart';
 import '../../services/daily_production_service.dart';
 import '../../services/factory_service.dart';
+import '../../services/product_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/loading_indicator.dart';
@@ -26,6 +27,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   final _capacityService = CapacityService();
   final _factoryService = FactoryService();
   final _productionService = DailyProductionService();
+  final _productService = ProductService();
 
   _LoadState _state = _LoadState.loading;
   late Factory _factory = widget.factory;
@@ -52,7 +54,19 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
         return;
       }
 
-      final snapshot = await _capacityService.getSnapshot(_factory.factoryId);
+      final products = await _productService.getProducts(_factory.factoryId);
+      final snapshots = await Future.wait(
+        products.map(
+          (p) => _capacityService.getSnapshot(
+            _factory.factoryId,
+            productId: p.productId,
+          ),
+        ),
+      );
+      final effectiveCapacity = snapshots.fold<double>(
+        0,
+        (sum, s) => sum + s.effectiveCapacity,
+      );
       final msic = await _capacityService.getMsicByCode(msicCode);
       final ipiTrend = await _capacityService.getIpiTrend(
         msic?.division ??
@@ -70,7 +84,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
             );
 
       setState(() {
-        _effectiveCapacity = snapshot.effectiveCapacity;
+        _effectiveCapacity = effectiveCapacity;
         _msic = msic;
         _ipiTrend = ipiTrend;
         _monthlyOutput = monthlyOutput;
@@ -372,13 +386,10 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
               gridData: const FlGridData(show: false),
               borderData: FlBorderData(show: false),
               lineBarsData: [
-                _series(
-                  [
-                    for (var i = 0; i < _ipiTrend.length; i++)
-                      FlSpot(i.toDouble(), _ipiTrend[i].productionIndex),
-                  ],
-                  Theme.of(context).colorScheme.tertiary,
-                ),
+                _series([
+                  for (var i = 0; i < _ipiTrend.length; i++)
+                    FlSpot(i.toDouble(), _ipiTrend[i].productionIndex),
+                ], Theme.of(context).colorScheme.tertiary),
               ],
             ),
           ),
@@ -426,20 +437,14 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
                 ],
               ),
               lineBarsData: [
-                _series(
-                  [
-                    for (var i = 0; i < points.length; i++)
-                      FlSpot(i.toDouble(), points[i].sectorIndex),
-                  ],
-                  scheme.tertiary,
-                ),
-                _series(
-                  [
-                    for (var i = 0; i < points.length; i++)
-                      FlSpot(i.toDouble(), points[i].factoryIndex),
-                  ],
-                  scheme.primary,
-                ),
+                _series([
+                  for (var i = 0; i < points.length; i++)
+                    FlSpot(i.toDouble(), points[i].sectorIndex),
+                ], scheme.tertiary),
+                _series([
+                  for (var i = 0; i < points.length; i++)
+                    FlSpot(i.toDouble(), points[i].factoryIndex),
+                ], scheme.primary),
               ],
             ),
           ),

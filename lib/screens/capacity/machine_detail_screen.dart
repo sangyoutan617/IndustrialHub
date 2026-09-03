@@ -7,6 +7,7 @@ import '../../services/capacity_service.dart';
 import '../../services/machine_downtime_service.dart';
 import '../../services/machine_service.dart';
 import '../../services/product_service.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
@@ -74,12 +75,10 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
               orElse: () => products.first,
             )
             .productName;
-      } catch (_) {
-      }
+      } catch (_) {}
       try {
         log = await _downtimeService.getLog(widget.machineId);
-      } catch (_) {
-      }
+      } catch (_) {}
 
       if (!mounted || token != _loadToken) return;
       setState(() {
@@ -123,7 +122,9 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not log downtime. Please try again.')),
+        const SnackBar(
+          content: Text('Could not log downtime. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _acting = false);
@@ -160,7 +161,9 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update this entry. Please try again.')),
+        const SnackBar(
+          content: Text('Could not update this entry. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _acting = false);
@@ -263,9 +266,7 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
     final reason = reasonController.text.trim();
     return (
       hours: double.parse(hoursController.text.trim()),
-      machinesDown: isGroup
-          ? int.parse(machinesDownController.text.trim())
-          : 1,
+      machinesDown: isGroup ? int.parse(machinesDownController.text.trim()) : 1,
       reason: reason.isEmpty ? null : reason,
     );
   }
@@ -281,6 +282,72 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
     'Machine back to Active',
     'Could not update this machine. Please try again.',
   );
+
+  Future<void> _markMaintained() => _runAction(
+    () => _downtimeService.setStatus(
+      _machine!.machineId,
+      widget.factoryId,
+      MachineStatus.active,
+    ),
+    'Machine back to Active',
+    'Could not update this machine. Please try again.',
+  );
+
+  Future<void> _selectStatus() async {
+    final machine = _machine!;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.build_circle_outlined),
+              title: const Text('Under Maintenance'),
+              onTap: () =>
+                  Navigator.pop(context, MachineStatus.underMaintenance),
+            ),
+            ListTile(
+              leading: const Icon(Icons.report_problem_outlined),
+              title: const Text('Downtime'),
+              onTap: () => Navigator.pop(context, MachineStatus.downtime),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+
+    if (machine.isGroup) {
+      if (!mounted) return;
+      final label = selected == MachineStatus.downtime
+          ? 'Downtime'
+          : 'Under Maintenance';
+      final confirmed = await showConfirmDialog(
+        context,
+        title: 'Take all ${machine.unitCount} units offline?',
+        message:
+            '"${machine.machineName}" is a group of ${machine.unitCount} '
+            'machines sharing one status. Marking it $label takes the whole '
+            'group offline — its capacity drops to zero, not a share of it '
+            '— until it\'s marked repaired or maintained again.',
+        confirmLabel: 'Mark $label',
+        isDestructive: false,
+      );
+      if (!confirmed) return;
+    }
+
+    await _runAction(
+      () => _downtimeService.setStatus(
+        machine.machineId,
+        widget.factoryId,
+        selected,
+      ),
+      'Status updated',
+      'Could not update this machine. Please try again.',
+    );
+  }
 
   Future<void> _runAction(
     Future<void> Function() action,
@@ -388,10 +455,7 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
                       value: '${machine.unitCount}',
                     ),
                   if (machine.stageLabel != null)
-                    MetricRow(
-                      label: 'Stage',
-                      value: machine.stageLabel!,
-                    ),
+                    MetricRow(label: 'Stage', value: machine.stageLabel!),
                   MetricRow(
                     label: 'Capacity contribution',
                     value: machine.isActive
@@ -437,27 +501,50 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
   }
 
   Widget _actionSection(Machine machine) {
-    final Widget button;
-    if (machine.isDowntime) {
-      button = FilledButton.icon(
+    if (machine.isActive) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: _acting ? null : _selectStatus,
+          icon: const Icon(Icons.swap_horiz, size: 18),
+          label: const Text('Select status'),
+        ),
+      );
+    }
+
+    final Widget primary;
+    if (machine.isUnderMaintenance) {
+      primary = FilledButton.icon(
+        onPressed: _acting ? null : _markMaintained,
+        icon: const Icon(Icons.check_circle_outline, size: 18),
+        label: const Text('Mark maintained'),
+      );
+    } else if (machine.isDowntime) {
+      primary = FilledButton.icon(
         onPressed: _acting ? null : _startRepair,
         icon: const Icon(Icons.build_outlined, size: 18),
         label: const Text('Start repair'),
       );
-    } else if (machine.isRepair) {
-      button = FilledButton.icon(
+    } else {
+      primary = FilledButton.icon(
         onPressed: _acting ? null : _markRepaired,
         icon: const Icon(Icons.check_circle_outline, size: 18),
         label: const Text('Mark repaired'),
       );
-    } else {
-      button = OutlinedButton.icon(
-        onPressed: _acting ? null : _logDowntime,
-        icon: const Icon(Icons.report_problem_outlined, size: 18),
-        label: const Text('Log downtime'),
-      );
     }
-    return Align(alignment: Alignment.centerLeft, child: button);
+
+    return Wrap(
+      spacing: AppSpacing.s,
+      runSpacing: AppSpacing.s,
+      children: [
+        primary,
+        OutlinedButton.icon(
+          onPressed: _acting ? null : _logDowntime,
+          icon: const Icon(Icons.report_problem_outlined, size: 18),
+          label: const Text('Log downtime'),
+        ),
+      ],
+    );
   }
 
   int _openPartialUnitsDown(Machine machine) {
@@ -503,7 +590,10 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
   (AppStatus, String) _statusStyle(String status) {
     return switch (status) {
       MachineStatus.active => (AppStatus.success, 'Active'),
-      MachineStatus.underMaintenance => (AppStatus.warning, 'Under Maintenance'),
+      MachineStatus.underMaintenance => (
+        AppStatus.warning,
+        'Under Maintenance',
+      ),
       MachineStatus.downtime => (AppStatus.danger, 'Downtime'),
       MachineStatus.repair => (AppStatus.warning, 'Repair'),
       _ => (AppStatus.neutral, status),

@@ -2,13 +2,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
-import '../../models/factory.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/loading_indicator.dart';
 import '../../widgets/status.dart';
-import 'admin_factory_detail_screen.dart';
 
 enum _LoadState { loading, error, ready }
 
@@ -51,21 +49,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
 
   Color _factoryColor(FactoryStat stat) => _factoryStatus(stat).color;
 
-  String _resourceLabel(String? resource) {
-    switch (resource) {
-      case 'MACHINE':
-        return 'Machine';
-      case 'MANPOWER':
-        return 'Manpower';
-      case 'RAW MATERIAL':
-        return 'Raw material';
-      case null:
-        return '—';
-      default:
-        return resource;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -93,20 +76,14 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
   }
 
   Widget _buildReady(CrossFactoryStats stats) {
-    final benchmarkCard = _buildBenchmarkCard(stats);
-    final chartCard = _buildChartCard(stats);
-    final tableCard = _buildTableCard(stats);
-
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.l),
         children: [
-          benchmarkCard,
+          _buildBenchmarkCard(stats),
           const SizedBox(height: AppSpacing.l),
-          chartCard,
-          const SizedBox(height: AppSpacing.l),
-          tableCard,
+          _buildChartCard(stats),
         ],
       ),
     );
@@ -225,80 +202,133 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
               spacing: 12,
               runSpacing: 4,
               children: [
-                _legendDot('At risk (some products short)', AppStatus.danger.color),
+                _legendDot(
+                  'At risk (some products short)',
+                  AppStatus.danger.color,
+                ),
                 _legendDot('On track', AppStatus.success.color),
                 _legendDot('No data', AppStatus.neutral.color),
               ],
             ),
             const SizedBox(height: 16),
             SizedBox(
-              height: 220,
-              child: BarChart(
-                BarChartData(
-                  maxY: 100,
-                  gridData: const FlGridData(show: false),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        getTitlesWidget: (value, meta) =>
-                            Text('${value.toInt()}%', style: Theme.of(context).textTheme.labelSmall),
-                      ),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 32,
-                        getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index < 0 || index >= bars.length) {
-                            return const SizedBox.shrink();
-                          }
-                          final name = bars[index].factory.factoryName;
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              name.length > 8
-                                  ? '${name.substring(0, 8)}…'
-                                  : name,
-                              style: Theme.of(context).textTheme.labelSmall,
+              height: _plotHeight + _labelHeight,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFixedYAxis(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: _barSlotWidth * bars.length,
+                        child: BarChart(
+                          BarChartData(
+                            maxY: 100,
+                            gridData: const FlGridData(show: false),
+                            borderData: FlBorderData(show: false),
+                            barTouchData: BarTouchData(
+                              touchTooltipData: BarTouchTooltipData(
+                                fitInsideHorizontally: true,
+                                fitInsideVertically: true,
+                                getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                  final stat = bars[group.x.toInt()];
+                                  return BarTooltipItem(
+                                    '${stat.factory.factoryName}\n',
+                                    const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                    children: [
+                                      TextSpan(
+                                        text: stat.productsWithData == 0
+                                            ? 'No data'
+                                            : '${stat.productsMeetingDemand}/${stat.productsWithData} meeting demand '
+                                                  '(${rod.toY.toStringAsFixed(0)}%)',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
                             ),
-                          );
-                        },
+                            titlesData: FlTitlesData(
+                              topTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              rightTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              leftTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              bottomTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                            ),
+                            barGroups: [
+                              for (var i = 0; i < bars.length; i++)
+                                BarChartGroupData(
+                                  x: i,
+                                  barRods: [
+                                    BarChartRodData(
+                                      toY: bars[i].productsWithData == 0
+                                          ? 0
+                                          : bars[i].productsMeetingDemand /
+                                                bars[i].productsWithData *
+                                                100,
+                                      color: _factoryColor(bars[i]),
+                                      width: 28,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                  barGroups: [
-                    for (var i = 0; i < bars.length; i++)
-                      BarChartGroupData(
-                        x: i,
-                        barRods: [
-                          BarChartRodData(
-                            toY: bars[i].productsWithData == 0
-                                ? 0
-                                : bars[i].productsMeetingDemand /
-                                      bars[i].productsWithData *
-                                      100,
-                            color: _factoryColor(bars[i]),
-                            width: 18,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  static const _plotHeight = 180.0;
+  static const _labelHeight = 8.0;
+  static const _barSlotWidth = 48.0;
+
+  Widget _buildFixedYAxis() {
+    final style = Theme.of(context).textTheme.labelSmall;
+    return SizedBox(
+      height: _plotHeight + _labelHeight,
+      width: 34,
+      child: Column(
+        children: [
+          SizedBox(
+            height: _plotHeight,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('100%', style: style),
+                Text('75%', style: style),
+                Text('50%', style: style),
+                Text('25%', style: style),
+                Text('0%', style: style),
+              ],
+            ),
+          ),
+          SizedBox(height: _labelHeight),
+        ],
       ),
     );
   }
@@ -315,63 +345,6 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         const SizedBox(width: 4),
         Text(label, style: Theme.of(context).textTheme.labelSmall),
       ],
-    );
-  }
-
-  Widget _buildTableCard(CrossFactoryStats stats) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'All factories',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('Factory')),
-                  DataColumn(label: Text('Products'), numeric: true),
-                  DataColumn(label: Text('Meeting demand'), numeric: true),
-                  DataColumn(label: Text('Short'), numeric: true),
-                  DataColumn(label: Text('Common bottleneck')),
-                ],
-                rows: [
-                  for (final stat in stats.factories)
-                    DataRow(
-                      onSelectChanged: (_) => _openDetail(stat.factory),
-                      cells: [
-                        DataCell(Text(stat.factory.factoryName)),
-                        DataCell(Text('${stat.productsWithData}')),
-                        DataCell(Text('${stat.productsMeetingDemand}')),
-                        DataCell(Text('${stat.productsShort}')),
-                        DataCell(
-                          StatusChip(
-                            label: _resourceLabel(stat.dominantBottleneckResource),
-                            status: _factoryStatus(stat),
-                            dense: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openDetail(Factory factory) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AdminFactoryDetailScreen(factory: factory),
-      ),
     );
   }
 }
