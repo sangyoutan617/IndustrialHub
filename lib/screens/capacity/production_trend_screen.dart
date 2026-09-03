@@ -4,11 +4,15 @@ import '../../core/theme.dart';
 import '../../models/bom_entry.dart';
 import '../../models/daily_production.dart';
 import '../../models/factory.dart';
+import '../../models/machine.dart';
+import '../../models/manpower.dart';
 import '../../models/product.dart';
 import '../../models/raw_material.dart';
 import '../../models/stock_movement.dart';
 import '../../services/bom_service.dart';
 import '../../services/daily_production_service.dart';
+import '../../services/machine_service.dart';
+import '../../services/manpower_service.dart';
 import '../../services/material_movement_service.dart';
 import '../../services/material_service.dart';
 import '../../services/product_service.dart';
@@ -53,6 +57,8 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   final _productService = ProductService();
   final _bomService = BomService();
   final _stockService = StockService();
+  final _machineService = MachineService();
+  final _manpowerService = ManpowerService();
 
   static const _allProductsId = -1;
 
@@ -60,6 +66,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
   _Granularity _granularity = _Granularity.day;
   List<DailyProduction> _raw = [];
   List<Product> _products = [];
+  Map<int, double> _maxDowntimeByProduct = {};
   int? _selectedProductId;
   bool _isLogging = false;
 
@@ -111,17 +118,44 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
               productId: productId,
               days: _fetchDays,
             );
+      final machines = await _machineService.getMachines(
+        widget.factory.factoryId,
+      );
+      final shifts = await _manpowerService.getShifts(widget.factory.factoryId);
       if (!mounted) return;
       setState(() {
         _products = products;
         _selectedProductId = productId;
         _raw = rows;
+        _maxDowntimeByProduct = {
+          for (final p in products)
+            p.productId: ?_maxDowntimeFor(p.productId, machines, shifts),
+        };
         _state = _LoadState.ready;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  double? _maxDowntimeFor(
+    int productId,
+    List<Machine> machines,
+    List<Manpower> shifts,
+  ) {
+    final machineHours = machines
+        .where((m) => m.productId == productId)
+        .fold<double>(0, (s, m) => s + m.operatingHoursPerDay * m.unitCount);
+    final workerHours = shifts
+        .where((s) => s.productId == productId)
+        .fold<double>(0, (s, m) => s + m.workerCount * m.shiftHours);
+    final positives = [
+      machineHours,
+      workerHours,
+    ].where((v) => v > 0).toList();
+    if (positives.isEmpty) return null;
+    return positives.reduce((a, b) => a < b ? a : b);
   }
 
   String get _granularityLabel => switch (_granularity) {
@@ -148,6 +182,7 @@ class _ProductionTrendScreenState extends State<ProductionTrendScreen> {
       builder: (_) => _LogProductionDialog(
         products: _products,
         initialProductId: _isViewingAll ? null : _selectedProductId,
+        maxDowntimeByProduct: _maxDowntimeByProduct,
       ),
     );
     if (result == null) return;
@@ -830,8 +865,13 @@ class _LogProductionResult {
 class _LogProductionDialog extends StatefulWidget {
   final List<Product> products;
   final int? initialProductId;
+  final Map<int, double> maxDowntimeByProduct;
 
-  const _LogProductionDialog({required this.products, this.initialProductId});
+  const _LogProductionDialog({
+    required this.products,
+    required this.maxDowntimeByProduct,
+    this.initialProductId,
+  });
 
   @override
   State<_LogProductionDialog> createState() => _LogProductionDialogState();
@@ -852,6 +892,13 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
     _downtimeController.dispose();
     super.dispose();
   }
+
+  double? get _downtimeCap => _selectedProductId == null
+      ? null
+      : widget.maxDowntimeByProduct[_selectedProductId];
+
+  String _formatHours(double h) =>
+      h == h.roundToDouble() ? h.toStringAsFixed(0) : h.toStringAsFixed(1);
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -932,8 +979,11 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Total downtime hours',
+                  helperText: _downtimeCap != null
+                      ? 'At most ${_formatHours(_downtimeCap!)} h (machine/worker hours available that day)'
+                      : null,
                 ),
                 validator: (v) {
                   final trimmed = (v ?? '').trim();
@@ -941,6 +991,10 @@ class _LogProductionDialogState extends State<_LogProductionDialog> {
                   final parsed = double.tryParse(trimmed);
                   if (parsed == null || parsed < 0) {
                     return 'Enter a non-negative number';
+                  }
+                  final cap = _downtimeCap;
+                  if (cap != null && parsed > cap) {
+                    return 'At most ${_formatHours(cap)} h for this product';
                   }
                   return null;
                 },
